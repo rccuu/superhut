@@ -19,7 +19,7 @@ class _ScorePageState extends State<ScorePage> {
   String selectedId = "all";
   bool first = true;
 
-  void ShowLoadingDialog() {
+  void _showLoadingDialog() {
     showDialog(
       barrierDismissible: false,
       context: context,
@@ -38,23 +38,48 @@ class _ScorePageState extends State<ScorePage> {
     );
   }
 
+  void _applyScoreData(Map<String, Object> scoreMap, {String? semesterId}) {
+    setState(() {
+      if (semesterId != null) {
+        selectedId = semesterId;
+      }
+      scoreList = scoreMap['achievement'] as List<Score>;
+      zxf = scoreMap['yxzxf'] as String;
+      zxfjd = scoreMap['zxfjd'] as String;
+      pjjd = scoreMap['pjxfjd'] as String;
+    });
+  }
+
+  Future<void> _refreshScoresForSelection(String semesterId) async {
+    final navigator = Navigator.of(context);
+    _showLoadingDialog();
+
+    final scoreMap = await getScore(semesterId == "all" ? "" : semesterId);
+    if (!mounted) {
+      return;
+    }
+
+    navigator.pop(true);
+    _applyScoreData(scoreMap, semesterId: semesterId);
+  }
+
   Future<void> getTimeList() async {
     if (first) {
       Map timeMap = await semesterIdfc();
+      if (!mounted) {
+        return;
+      }
       setState(() {
         semesterId = timeMap['idlist'];
         nowSemesterId = timeMap['nowid'];
       });
-        Map scoreMap = await getScore(nowSemesterId);
-        setState(() {
-          selectedId = nowSemesterId;
-          scoreList = scoreMap['achievement'];
-          zxf = scoreMap['yxzxf'];
-          zxfjd = scoreMap['zxfjd'];
-          pjjd = scoreMap['pjxfjd'];
-        });
 
+      final scoreMap = await getScore(nowSemesterId);
+      if (!mounted) {
+        return;
+      }
 
+      _applyScoreData(scoreMap, semesterId: nowSemesterId);
       first = false;
     } else {
       return;
@@ -79,29 +104,11 @@ class _ScorePageState extends State<ScorePage> {
             actions: [
               DropdownButton(
                 onChanged: (v) async {
+                  final targetSemesterId = v.toString();
                   setState(() {
-                    selectedId = v.toString();
+                    selectedId = targetSemesterId;
                   });
-                  ShowLoadingDialog();
-                  if (selectedId == "all") {
-                    Map scoreMap = await getScore("");
-                    Navigator.of(context).pop(true);
-                    setState(() {
-                      scoreList = scoreMap['achievement'];
-                      zxf = scoreMap['yxzxf'];
-                      zxfjd = scoreMap['zxfjd'];
-                      pjjd = scoreMap['pjxfjd'];
-                    });
-                  } else {
-                    Map scoreMap = await getScore(selectedId);
-                    Navigator.of(context).pop(true);
-                    setState(() {
-                      scoreList = scoreMap['achievement'];
-                      zxf = scoreMap['yxzxf'];
-                      zxfjd = scoreMap['zxfjd'];
-                      pjjd = scoreMap['pjxfjd'];
-                    });
-                  }
+                  await _refreshScoresForSelection(targetSemesterId);
                 },
                 borderRadius: BorderRadius.circular(10),
                 menuWidth: 150,
@@ -124,18 +131,17 @@ class _ScorePageState extends State<ScorePage> {
             child: ListView.builder(
               itemCount: scoreList.length + 1,
               itemBuilder: (context, index) {
-                print(scoreList.length);
                 if (scoreList.isEmpty) {
                   return Column(
                     children: [
-                      BigTopCard(),
-                      SizedBox(height: 10),
-                      Text("当前学期没有成绩"),
+                      _buildTopCard(),
+                      const SizedBox(height: 10),
+                      const Text("当前学期没有成绩"),
                     ],
                   );
                 }
                 if (index == 0) {
-                  return BigTopCard();
+                  return _buildTopCard();
                 } else {
                   var ins = index - 1;
                   return Card.filled(
@@ -260,7 +266,7 @@ class _ScorePageState extends State<ScorePage> {
     );
   }
 
-  Widget BigTopCard() {
+  Widget _buildTopCard() {
     return Card.filled(
       color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(

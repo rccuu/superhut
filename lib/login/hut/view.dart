@@ -9,7 +9,7 @@ class HutLoginPage extends StatefulWidget {
   const HutLoginPage({super.key});
 
   @override
-  _HutLoginPageState createState() => _HutLoginPageState();
+  State<HutLoginPage> createState() => _HutLoginPageState();
 }
 
 class _HutLoginPageState extends State<HutLoginPage> {

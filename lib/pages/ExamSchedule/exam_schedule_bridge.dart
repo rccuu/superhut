@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:superhut/utils/withhttp.dart';
 
-import '../../utils/token.dart';
 
 Future<List> getSchedule() async {
   await configureDioFromStorage();

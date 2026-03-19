@@ -4,7 +4,7 @@ bool isGet = false, isRoomGet = false;
 List<Building> buildingList = [];
 List<Room> roomList = [];
 
-Future<List<Building>> GetBuilding() async {
+Future<List<Building>> getBuildingList() async {
   if (isGet) {
     return buildingList;
   }

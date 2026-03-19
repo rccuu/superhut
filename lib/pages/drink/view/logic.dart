@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:qr_code_scanner/qr_code_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/pages/drink/login/view.dart';
 
@@ -11,71 +10,60 @@ import 'state.dart';
 
 class FunctionDrinkLogic extends GetxController {
   final FunctionDrinkState state = FunctionDrinkState();
-  final drinkApi = DrinkApi();
+  final DrinkApi drinkApi = DrinkApi();
 
   @override
-  onInit() {
+  void onInit() {
     super.onInit();
-    checkLogin();
-    // 获取token
-    drinkApi.getToken().then((value) {
-      state.tokenController.text = value;
-    });
+    unawaited(_initialize());
   }
 
   @override
-  void dispose() {
+  void onClose() {
     state.deviceStatusTimer?.cancel();
     state.tokenController.dispose();
-    state.deviceStatusTimer?.cancel();
-    Get.delete<FunctionDrinkLogic>();
-    super.dispose();
+    super.onClose();
+  }
+
+  Future<void> _initialize() async {
+    await checkLogin();
+    state.tokenController.text = await drinkApi.getToken();
   }
 
   /// 判断是否需要跳转登录
-  void checkLogin() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool isLogin = prefs.getBool("hui798IsLogin") ?? false;
+  Future<void> checkLogin() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final bool isLogin = prefs.getBool("hui798IsLogin") ?? false;
     if (!isLogin) {
-      Get.off(DrinkLoginPage());
-      //Get.to(DrinkLoginPage());
-    } else {
-      getDeviceList();
+      Get.off(const DrinkLoginPage());
+      return;
     }
+
+    await getDeviceList();
   }
 
   /// 获取喝水设备列表
   Future<void> getDeviceList() async {
-    await drinkApi.deviceList().then((value) async {
-      if (value.isNotEmpty && value[0]["name"] == "Account failure") {
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        await prefs.setBool("hui798IsLogin", false);
-        state.deviceList.clear();
-        setChoiceDevice(-1);
-        state.drinkStatus.value = false;
-        update();
-        Get.off(DrinkLoginPage());
-        return;
-      }
-
-      state.deviceList.value = value;
-      setChoiceDevice(state.deviceList.isNotEmpty ? 0 : -1);
+    final List<Map> value = await drinkApi.deviceList();
+    if (value.isNotEmpty && value[0]["name"] == "Account failure") {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setBool("hui798IsLogin", false);
+      state.deviceList.clear();
+      setChoiceDevice(-1);
+      state.drinkStatus.value = false;
       update();
-    });
+      Get.off(const DrinkLoginPage());
+      return;
+    }
+
+    state.deviceList.value = value;
+    setChoiceDevice(state.deviceList.isNotEmpty ? 0 : -1);
+    update();
   }
 
   /// 收藏或取消收藏设备
-  Future<bool> favoDevice(
-    String id,
-    bool isUnFavo,
-    BuildContext context,
-  ) async {
-    print(
-      "QHJqqYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY",
-    );
-    return await drinkApi.favoDevice(id: id, isUnFavo: isUnFavo).then((value) {
-      return value;
-    });
+  Future<bool> favoDevice(String id, bool isUnFavo) async {
+    return drinkApi.favoDevice(id: id, isUnFavo: isUnFavo);
   }
 
   /// 格式化设备名称
@@ -94,104 +82,76 @@ class FunctionDrinkLogic extends GetxController {
   }
 
   /// 开始喝水
-  void startDrink(context) {
-    drinkApi
-        .startDrink(id: state.deviceList[state.choiceDevice.value]["id"])
-        .then((value) {
-          if (value) {
-            int count = 0;
-            state.drinkStatus.value = true;
-            getDeviceList();
-            state.deviceStatusTimer = Timer.periodic(
-              const Duration(seconds: 1),
-              (timer) async {
-                bool isAvailable = await drinkApi.isAvailableDevice(
-                  id: state.deviceList[state.choiceDevice.value]["id"],
-                );
-                if (isAvailable && count > 3) {
-                  state.drinkStatus.value = false;
-                  state.deviceStatusTimer?.cancel();
-                  update();
-                } else if (isAvailable) {
-                  count++;
-                }
-              },
-            );
-          } else {
-            Get.snackbar(
-              '失败',
-              '开启失败',
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: Colors.red,
-              colorText: Colors.white,
-              duration: Duration(seconds: 3),
-              margin: EdgeInsets.all(10),
-              borderRadius: 10,
-              icon: Icon(Icons.error, color: Colors.white),
-            );
-          }
+  Future<void> startDrink() async {
+    final String deviceId =
+        state.deviceList[state.choiceDevice.value]["id"].toString();
+    final bool value = await drinkApi.startDrink(id: deviceId);
+    if (value) {
+      int count = 0;
+      state.drinkStatus.value = true;
+      unawaited(getDeviceList());
+      state.deviceStatusTimer = Timer.periodic(const Duration(seconds: 1), (
+        timer,
+      ) async {
+        final bool isAvailable = await drinkApi.isAvailableDevice(id: deviceId);
+        if (isAvailable && count > 3) {
+          state.drinkStatus.value = false;
+          state.deviceStatusTimer?.cancel();
           update();
-        });
+        } else if (isAvailable) {
+          count++;
+        }
+      });
+    } else {
+      Get.snackbar(
+        '失败',
+        '开启失败',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: Duration(seconds: 3),
+        margin: EdgeInsets.all(10),
+        borderRadius: 10,
+        icon: Icon(Icons.error, color: Colors.white),
+      );
+    }
+    update();
   }
 
   /// 结束喝水
-  void endDrink(context) {
-    drinkApi
-        .endDrink(id: state.deviceList[state.choiceDevice.value]["id"])
-        .then((value) {
-          if (value) {
-            state.deviceStatusTimer?.cancel();
-            state.drinkStatus.value = false;
-          } else {
-            Get.snackbar(
-              '失败',
-              '结算失败',
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: Colors.red,
-              colorText: Colors.white,
-              duration: Duration(seconds: 3),
-              margin: EdgeInsets.all(10),
-              borderRadius: 10,
-              icon: Icon(Icons.error, color: Colors.white),
-            );
-          }
-          update();
-        });
+  Future<void> endDrink() async {
+    final String deviceId =
+        state.deviceList[state.choiceDevice.value]["id"].toString();
+    final bool value = await drinkApi.endDrink(id: deviceId);
+    if (value) {
+      state.deviceStatusTimer?.cancel();
+      state.drinkStatus.value = false;
+    } else {
+      Get.snackbar(
+        '失败',
+        '结算失败',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: Duration(seconds: 3),
+        margin: EdgeInsets.all(10),
+        borderRadius: 10,
+        icon: Icon(Icons.error, color: Colors.white),
+      );
+    }
+    update();
   }
 
   /// 删除相对应的device
   void removeDeviceByName(String name) {
     state.deviceList.removeWhere((element) => element["name"] == name);
-    update();
-  }
-
-  /// 扫描二维码逻辑
-  void scanQRCode(BuildContext context) async {
-    final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
-    QRViewController? controller;
-
-    var result = await Get.to(
-      () => QRView(
-        key: qrKey,
-        onQRViewCreated: (QRViewController qrController) {
-          controller = qrController;
-          controller!.scannedDataStream.listen((scanData) {
-            controller?.stopCamera();
-            Get.back(result: scanData);
-          });
-        },
-      ),
-    );
-
-    if (result != null) {
-      String enc = (result as Barcode).code!;
-      enc = enc.split("/").last;
-      bool isFavo = await favoDevice(enc, false, context);
-
-      if (isFavo) {
-        getDeviceList();
-      }
+    if (state.deviceList.isEmpty) {
+      state.choiceDevice.value = -1;
+      state.drinkStatus.value = false;
+    } else if (state.choiceDevice.value >= state.deviceList.length) {
+      state.choiceDevice.value = state.deviceList.length - 1;
     }
+    update();
   }
 
   /// 设置token

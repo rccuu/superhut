@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/welcomepage/view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../bridge/getCoursePage.dart';
+import '../../bridge/get_course_page.dart';
+import '../../core/services/app_auth_storage.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/hut_user_api.dart';
 import '../../utils/token.dart';
@@ -21,7 +22,6 @@ class UserPage extends StatefulWidget {
 class _UserPageState extends State<UserPage> {
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     getBalance();
   }
@@ -32,9 +32,8 @@ class _UserPageState extends State<UserPage> {
   /// 获取余额
   Future<void> getBalance() async {
     await hutUserApi.getCardBalance().then((value) {
-      balance = value.toString() ?? '--';
       setState(() {
-        balance = balance;
+        balance = value.isEmpty ? '--' : value;
       });
     });
   }
@@ -51,13 +50,13 @@ class _UserPageState extends State<UserPage> {
 
   Future<Map> getBaseData() async {
     final prefs = await SharedPreferences.getInstance();
-    String name =  prefs.getString('name') ?? "人类";
-    String entranceYear =  prefs.getString('entranceYear') ?? "0001";
-    String academyName =  prefs.getString('academyName') ?? "地球学院";
+    String name = prefs.getString('name') ?? "人类";
+    String entranceYear = prefs.getString('entranceYear') ?? "0001";
+    String academyName = prefs.getString('academyName') ?? "地球学院";
     String clsName = prefs.getString('clsName') ?? "地球1班";
-    String yxzxf =  prefs.getString('yxzxf') ?? "-";
-    String zxfjd =  prefs.getString('zxfjd') ?? "-";
-    String pjxfjd =  prefs.getString('pjxfjd') ?? "-";
+    String yxzxf = prefs.getString('yxzxf') ?? "-";
+    String zxfjd = prefs.getString('zxfjd') ?? "-";
+    String pjxfjd = prefs.getString('pjxfjd') ?? "-";
     Map data = {
       "name": name,
       "entranceYear": entranceYear,
@@ -161,6 +160,9 @@ class _UserPageState extends State<UserPage> {
                         textColor: Colors.black87,
                         onTap: () async {
                           await renewToken(context);
+                          if (!context.mounted) {
+                            return;
+                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -182,6 +184,9 @@ class _UserPageState extends State<UserPage> {
                         textColor: Colors.black87,
                         onTap: () async {
                           await renewToken(context);
+                          if (!context.mounted) {
+                            return;
+                          }
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -282,8 +287,16 @@ class _UserPageState extends State<UserPage> {
                   icon: Ionicons.refresh_outline,
                   title: "刷新课表",
                   onTap: () async {
-                    await renewToken(context);
-                    // print("跳转");
+                    final renewed = await renewToken(context);
+                    if (!context.mounted) {
+                      return;
+                    }
+                    if (!renewed) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('课表刷新失败，请重新登录后重试')),
+                      );
+                      return;
+                    }
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => Getcoursepage(renew: true),
@@ -296,17 +309,17 @@ class _UserPageState extends State<UserPage> {
                   icon: Ionicons.log_out_outline,
                   title: "退出登录",
                   onTap: () async {
-                    final prefs = await SharedPreferences.getInstance();
-                    prefs.setString('user', "");
-                    prefs.setString('password', "");
-                    await prefs.setBool('isFirstOpen', true);
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (context) => WelcomepagePage(),
-                        ),
-                      );
-                    });
+                    final storage = AppAuthStorage.instance;
+                    await storage.clearAllAuthData();
+                    await storage.setFirstOpen(true);
+                    if (!context.mounted) {
+                      return;
+                    }
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => WelcomepagePage(),
+                      ),
+                    );
                   },
                 ),
 
@@ -349,7 +362,7 @@ class _UserPageState extends State<UserPage> {
           Text(
             title,
             style: TextStyle(
-              color: textColor.withOpacity(0.7),
+              color: textColor.withValues(alpha: 0.7),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -367,7 +380,7 @@ class _UserPageState extends State<UserPage> {
               ),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withValues(alpha: 0.5),
                   shape: BoxShape.circle,
                 ),
                 padding: EdgeInsets.all(4),

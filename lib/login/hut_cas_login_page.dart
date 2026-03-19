@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 import 'package:superhut/utils/token.dart';
 
+import '../core/services/app_auth_storage.dart';
+import '../core/services/app_logger.dart';
 import 'hut_login_system.dart';
 
 class HutCasLoginPage extends StatefulWidget {
@@ -21,12 +23,12 @@ class HutCasLoginPage extends StatefulWidget {
   final String cookieKey;
 
   const HutCasLoginPage({
-    Key? key,
+    super.key,
     this.onLoginComplete,
     this.popOnSuccess = true,
     this.tokenKey = 'token',
     this.cookieKey = 'my_client_ticket',
-  }) : super(key: key);
+  });
 
   @override
   State<HutCasLoginPage> createState() => _HutCasLoginPageState();
@@ -37,6 +39,7 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
   bool _isLoading = true;
   String _idToken = '';
   String? _errorMessage;
+  bool _hasSavedCasSession = false;
 
   @override
   void initState() {
@@ -56,13 +59,19 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
         }
       });
 
-       */
+      */
       await _api.refreshToken();
       _idToken = await _api.getToken();
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _isLoading = false;
         _errorMessage = '获取认证令牌失败: $e';
@@ -72,35 +81,56 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
 
   // 保存获取到的新token和cookie
   Future<void> _saveTokenAndCookie(Map<String, String> data) async {
+    final token = (data['token'] ?? '').trim();
+    final myClientTicket = (data['my_client_ticket'] ?? '').trim();
+
+    if (token.isEmpty) {
+      AppLogger.debug('忽略空的CAS教务token');
+      return;
+    }
+    if (token == _idToken) {
+      AppLogger.debug('忽略中间态HUT token，等待CAS最终教务token');
+      return;
+    }
+    if (_hasSavedCasSession) {
+      return;
+    }
+
+    _hasSavedCasSession = true;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      
-      String token = data['token'] ?? '';
-      String myClientTicket = data['my_client_ticket'] ?? '';
-      
-      // 保存token
-      if (token.isNotEmpty) {
-        await prefs.setString(widget.tokenKey, token);
-      }
-      
-      // 保存cookie
-      if (myClientTicket.isNotEmpty) {
-        await prefs.setString(widget.cookieKey, myClientTicket);
+      final prefs = AppAuthStorage.instance;
+
+      await prefs.saveJwxtSession(token: token, cookie: myClientTicket);
+      if (widget.tokenKey != 'token' ||
+          widget.cookieKey != 'my_client_ticket') {
+        final sharedPrefs = await SharedPreferences.getInstance();
+        await sharedPrefs.setString(widget.tokenKey, token);
+        if (myClientTicket.isNotEmpty) {
+          await sharedPrefs.setString(widget.cookieKey, myClientTicket);
+        } else {
+          await sharedPrefs.remove(widget.cookieKey);
+        }
       }
 
       if (widget.onLoginComplete != null) {
-        widget.onLoginComplete!(data);
+        widget.onLoginComplete!({
+          'token': token,
+          'my_client_ticket': myClientTicket,
+        });
       }
 
       if (widget.popOnSuccess && mounted) {
-        Navigator.of(context).pop(data);
+        Navigator.of(
+          context,
+        ).pop({'token': token, 'my_client_ticket': myClientTicket});
       }
-    } catch (e) {
-      if (mounted) {
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(content: Text('保存token和cookie失败: $e'), backgroundColor: Colors.red),
-        // );
-      }
+    } catch (error, stackTrace) {
+      _hasSavedCasSession = false;
+      AppLogger.error(
+        'Failed to save CAS token and cookie',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -108,7 +138,7 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('HUT统一认证'),leading: SizedBox(),),
+        appBar: AppBar(title: const Text('HUT统一认证'), leading: SizedBox()),
         body: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -124,7 +154,7 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
 
     if (_errorMessage != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('HUT统一认证'),leading: SizedBox(),),
+        appBar: AppBar(title: const Text('HUT统一认证'), leading: SizedBox()),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -165,27 +195,26 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
 
 // 使用示例
 class HutCasLoginExample extends StatelessWidget {
-  const HutCasLoginExample({Key? key}) : super(key: key);
+  const HutCasLoginExample({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ElevatedButton(
       onPressed: () async {
-        final result = await Navigator.of(context).push(
+        final result = await Navigator.of(context).push<Map<String, String>>(
           MaterialPageRoute(
-            builder: (context) => const HutCasLoginPage(tokenKey: 'token', cookieKey: 'my_client_ticket'),
+            builder:
+                (context) => const HutCasLoginPage(
+                  tokenKey: 'token',
+                  cookieKey: 'my_client_ticket',
+                ),
           ),
         );
-        String token = result['token'] ?? '';
-        String myClientTicket = result['my_client_ticket'] ?? '';
-        print('获取到的教务系统Token: $token');
-        print('获取到的my_client_ticket: $myClientTicket');
-        if (result != null && result is Map<String, String>) {
-          // 使用获取到的token和cookie
-          String token = result['token'] ?? '';
-          String myClientTicket = result['my_client_ticket'] ?? '';
-          print('获取到的教务系统Token: $token');
-          print('获取到的my_client_ticket: $myClientTicket');
+        if (result != null) {
+          final token = result['token'] ?? '';
+          final myClientTicket = result['my_client_ticket'] ?? '';
+          AppLogger.debug('CAS token acquired: $token');
+          AppLogger.debug('CAS cookie acquired: $myClientTicket');
         }
       },
       child: const Text('登录教务系统'),
@@ -195,27 +224,29 @@ class HutCasLoginExample extends StatelessWidget {
 
 // 另一种使用方式 - 获取token和cookie不返回
 class HutCasTokenRetriever {
-  static Future<Map<String, String>?> getJwxtTokenAndCookie(BuildContext context) async {
-    // 先检查是否有缓存的token
-    final prefs = await SharedPreferences.getInstance();
-    final cachedToken = prefs.getString('token') ?? '';
-    final cachedCookie = prefs.getString('my_client_ticket') ?? '';
-    print('开始');
+  static Future<Map<String, String>?> getJwxtTokenAndCookie(
+    BuildContext context,
+  ) async {
+    final storage = AppAuthStorage.instance;
+    final cachedToken = await storage.readJwxtToken();
+    final cachedCookie = await storage.readJwxtCookie();
     if (cachedToken.isNotEmpty) {
-      // 使用token.dart中的checkTokenValid方法验证token有效性
-      bool isTokenValid = await checkTokenValid();
-      print(isTokenValid);
+      final isTokenValid = await checkTokenValid();
       if (isTokenValid) {
-        return {
-          'token': cachedToken,
-          'my_client_ticket': cachedCookie,
-        };
+        return {'token': cachedToken, 'my_client_ticket': cachedCookie};
       }
-      // Token无效，需要重新登录
     }
-    print('流程');
-    // 如果没有缓存或缓存无效，进行登录流程
+
     final completer = Completer<Map<String, String>?>();
+    void completeOnce(Map<String, String>? value) {
+      if (!completer.isCompleted) {
+        completer.complete(value);
+      }
+    }
+
+    if (!context.mounted) {
+      return null;
+    }
 
     Navigator.of(context)
         .push(
@@ -224,16 +255,13 @@ class HutCasTokenRetriever {
                 (context) => HutCasLoginPage(
                   popOnSuccess: true,
                   onLoginComplete: (data) {
-                    completer.complete(data);
+                    completeOnce(data);
                   },
                 ),
           ),
         )
         .then((value) {
-          // 如果用户取消或返回，且completer尚未完成，则完成completer为null
-          if (!completer.isCompleted) {
-            completer.complete(value as Map<String, String>?);
-          }
+          completeOnce(value as Map<String, String>?);
         });
 
     return completer.future;

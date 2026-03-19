@@ -1,37 +1,30 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
-import 'package:superhut/pages/Commentary/CommentaryPage3.dart';
 
-import 'CommentaryApi.dart';
+import 'commentary_api.dart';
+import 'commentary_question_page.dart';
 
-class commentaryPage2 extends StatefulWidget {
+class CommentaryCourseListPage extends StatefulWidget {
   final String pj01id;
   final String batchId;
   final String pj05id;
 
-  const commentaryPage2({
+  const CommentaryCourseListPage({
+    super.key,
     required this.batchId,
     required this.pj01id,
     required this.pj05id,
   });
 
   @override
-  State<commentaryPage2> createState() => _commentaryPage2State();
+  State<CommentaryCourseListPage> createState() =>
+      _CommentaryCourseListPageState();
 }
 
-class _commentaryPage2State extends State<commentaryPage2> {
-  //获取列表
-  Future<List> getList() async {
-    print("YE");
-    print('成功');
-    print(widget.pj01id);
-    List CommentaryList = await getCommentaryList(
-      widget.pj01id,
-      widget.batchId,
-      widget.pj05id,
-    );
-    return CommentaryList;
+class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
+  Future<List<CommentaryPayload>> _getCommentaryItems() async {
+    return getCommentaryList(widget.pj01id, widget.batchId, widget.pj05id);
   }
 
   @override
@@ -39,25 +32,58 @@ class _commentaryPage2State extends State<commentaryPage2> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: Text('学生教评'),
+        title: const Text('学生教评'),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
       body: EnhancedFutureBuilder(
-        future: getList(),
+        future: _getCommentaryItems(),
         rememberFutureResult: false,
-        whenDone: (List theCommentaryList) {
+        whenDone: (List commentaryList) {
+          final typedCommentaryList = List<CommentaryPayload>.from(
+            commentaryList,
+          );
           return Container(
-            margin: EdgeInsets.only(left: 10, right: 10),
+            margin: const EdgeInsets.symmetric(horizontal: 10),
             child: ListView.builder(
-              itemCount: theCommentaryList.length,
+              itemCount: typedCommentaryList.length,
               itemBuilder: (BuildContext context, int index) {
-                Map theCommentary = theCommentaryList[index];
+                final commentary = typedCommentaryList[index];
+                final isSubmitted = commentary['isSubmitCode'] == '1';
+
                 return GestureDetector(
+                  onTap: () async {
+                    if (isSubmitted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('已经评教过啦~不能重复评教')),
+                      );
+                      return;
+                    }
+
+                    final didSubmit = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => CommentaryQuestionPage(
+                              batchId: widget.batchId,
+                              courseId: commentary['courseNumber'].toString(),
+                              evaluationCategoriesId:
+                                  commentary['evaluationCategoriesId']
+                                      .toString(),
+                              teacherId: commentary['teacherId'].toString(),
+                              noticeId: commentary['noticeId'].toString(),
+                            ),
+                      ),
+                    );
+
+                    if (didSubmit == true && mounted) {
+                      setState(() {});
+                    }
+                  },
                   child: Card.filled(
                     color: Theme.of(context).colorScheme.surfaceContainer,
                     child: Padding(
-                      padding: EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(10),
                       child: Flex(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         direction: Axis.horizontal,
@@ -68,7 +94,7 @@ class _commentaryPage2State extends State<commentaryPage2> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  theCommentary['courseName'],
+                                  commentary['courseName'].toString(),
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -76,9 +102,9 @@ class _commentaryPage2State extends State<commentaryPage2> {
                                         Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
-                                SizedBox(height: 5),
+                                const SizedBox(height: 5),
                                 Text(
-                                  '课程编号：${theCommentary['courseNumber']}',
+                                  '课程编号：${commentary['courseNumber']}',
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.normal,
@@ -86,11 +112,9 @@ class _commentaryPage2State extends State<commentaryPage2> {
                                         Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
-                                SizedBox(height: 5),
-
-                                SizedBox(height: 5),
+                                const SizedBox(height: 10),
                                 Text(
-                                  '授课教师：${theCommentary['teacherName']}',
+                                  '授课教师：${commentary['teacherName']}',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.normal,
@@ -98,21 +122,17 @@ class _commentaryPage2State extends State<commentaryPage2> {
                                         Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
-                                SizedBox(height: 5),
+                                const SizedBox(height: 5),
                                 Chip(
                                   label: Text(
-                                    theCommentary['isSubmitCode'] == '1'
-                                        ? '已评教'
-                                        : '未评教',
-                                    style: TextStyle(color: Colors.white),
+                                    isSubmitted ? '已评教' : '未评教',
+                                    style: const TextStyle(color: Colors.white),
                                   ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(50),
                                   ),
                                   backgroundColor:
-                                      theCommentary['isSubmitCode'] == '1'
-                                          ? Colors.green
-                                          : Colors.red,
+                                      isSubmitted ? Colors.green : Colors.red,
                                 ),
                               ],
                             ),
@@ -121,32 +141,6 @@ class _commentaryPage2State extends State<commentaryPage2> {
                       ),
                     ),
                   ),
-                  onTap: () {
-                    if (theCommentary['isSubmitCode'] == '1') {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text('已经评教过啦~不能重复评教')));
-                      return;
-                    }
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder:
-                            (context) => commentaryPage3(
-                              batchId: widget.batchId,
-                              courseId: theCommentary['courseNumber'],
-                              evaluationCategoriesId:
-                                  theCommentary['evaluationCategoriesId'],
-                              teacherId: theCommentary['teacherId'],
-                              noticeId: theCommentary['noticeId'],
-                            ),
-                      ),
-                    ).then((v) {
-                      setState(() {
-                        getList();
-                      });
-                    });
-                  },
                 );
               },
             ),

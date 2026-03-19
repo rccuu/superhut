@@ -3,8 +3,10 @@ import 'dart:typed_data';
 
 import 'package:encrypt/encrypt.dart' as encrypt;
 
+import '../core/services/app_logger.dart';
+
 // 密钥
-final String Sw = "qzkj1kjghd=876&*";
+final String sw = "qzkj1kjghd=876&*";
 
 // 模拟 U 函数
 String U(dynamic data) {
@@ -72,10 +74,10 @@ void main() {
   final password = "cc80212562";
 
   // 加密密码
-  final encryptedPassword = encryptPassword(password, Sw);
-  print('加密后的密码：  $encryptedPassword');
+  final encryptedPassword = encryptPassword(password, sw);
+  AppLogger.debug('加密后的密码：  $encryptedPassword');
 
   // 二次Base64编码
   final pwd = base64Encode(utf8.encode(encryptedPassword));
-  print('加密并Base64 编码后的密码：  $pwd');
+  AppLogger.debug('加密并Base64 编码后的密码：  $pwd');
 }

@@ -4,6 +4,8 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
+import '../../../core/services/app_logger.dart';
+
 class Type1Webview extends StatefulWidget {
   final String serviceUrl, serviceName;
 
@@ -26,14 +28,14 @@ class _Type1WebviewState extends State<Type1Webview> {
 
   String enCodeUrl(String url) {
     String encoded = Uri.encodeComponent(url);
-    print(encoded);
+    AppLogger.debug('Type1 encoded service url: $encoded');
     return encoded;
   }
 
   Future<bool> getDetail() async {
     token = await api.getToken();
     resultUrl = "$baseUrl${enCodeUrl(widget.serviceUrl)}&idToken=$token";
-    print(resultUrl);
+    AppLogger.debug('Type1 result url prepared: $resultUrl');
     return true;
   }
 
@@ -78,7 +80,7 @@ class _Type1WebviewState extends State<Type1Webview> {
                   setState(() {
                     _isPageLoading = true;
                   });
-                  print('Start loading: $url');
+                  AppLogger.debug('Type1 start loading: $url');
                 },
 
                 onLoadStop: (controller, url) {
@@ -90,15 +92,15 @@ class _Type1WebviewState extends State<Type1Webview> {
               if (_isPageLoading)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                           LoadingAnimationWidget.inkDrop(
-                        color: Theme.of(context).primaryColor,
-          size: 40,
-          ),
+                          LoadingAnimationWidget.inkDrop(
+                            color: Theme.of(context).primaryColor,
+                            size: 40,
+                          ),
                           const SizedBox(height: 16),
                           Text(
                             '加载中...',

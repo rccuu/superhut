@@ -6,11 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/login/hut/view.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
+import '../../core/services/app_auth_storage.dart';
+import '../../core/services/app_logger.dart';
 import 'state.dart';
 
 class FunctionHotWaterLogic extends GetxController {
   final FunctionHotWaterState state = FunctionHotWaterState();
   final hutUserApi = HutUserApi();
+  final AppAuthStorage _storage = AppAuthStorage.instance;
 
   // Local storage for user information
   final Map<String, dynamic> _hutUserInfo = {
@@ -34,27 +37,29 @@ class FunctionHotWaterLogic extends GetxController {
 
   // Method to save user info to storage
   Future<void> saveUserInfo() async {
-    // Excluding password from persistent storage for security
-    Map<String, dynamic> storageInfo = Map.from(_hutUserInfo);
+    final storageInfo = Map<String, dynamic>.from(_hutUserInfo)
+      ..remove('password');
     final prefs = await SharedPreferences.getInstance();
-    prefs.setString('hutUserInfo', storageInfo.toString());
-    // Store the data securely
-    // This is a simplified implementation
+    await prefs.setString('hutUserInfo', storageInfo.toString());
   }
 
-  // Method to load user info from storage
+  Future<void> _populateUserInfoFromStorage() async {
+    _hutUserInfo["token"] = await _storage.readHutToken();
+    _hutUserInfo["deviceId"] = await _storage.readHutDeviceId();
+    _hutUserInfo["username"] = await _storage.readHutUsername();
+    _hutUserInfo["password"] = await _storage.readHutPassword();
+    _hutUserInfo["hutIsLogin"] = await _storage.isHutLoggedIn();
+  }
+
   Future<void> loadUserInfo() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _hutUserInfo["token"] = prefs.getString('hutToken') ?? "";
-      _hutUserInfo["deviceId"] = prefs.getString('deviceId') ?? "";
-      _hutUserInfo["username"] = prefs.getString('hutUsername') ?? "";
-      _hutUserInfo["password"] = prefs.getString('hutPassword') ?? "";
-      _hutUserInfo["hutIsLogin"] = prefs.getBool('hutIsLogin') ?? false;
-      //  print(_hutUserInfo["username"]);
-    } catch (e) {
-      // Handle errors
-      print("Error loading user info: $e");
+      await _populateUserInfoFromStorage();
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Error loading HUT user info',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -69,12 +74,7 @@ class FunctionHotWaterLogic extends GetxController {
 
   /// 判断是否需要跳转登录
   Future<void> checkLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    _hutUserInfo["token"] = prefs.getString('hutToken') ?? "";
-    _hutUserInfo["deviceId"] = prefs.getString('deviceId') ?? "";
-    _hutUserInfo["username"] = prefs.getString('hutUsername') ?? "";
-    _hutUserInfo["password"] = prefs.getString('hutPassword') ?? "";
-    _hutUserInfo["hutIsLogin"] = prefs.getBool('hutIsLogin') ?? false;
+    await _populateUserInfoFromStorage();
 
     if (_hutUserInfo["hutIsLogin"] == false) {
       Future.delayed(const Duration(milliseconds: 100), () {
@@ -124,6 +124,7 @@ class FunctionHotWaterLogic extends GetxController {
           }
         }
         // 登录失败处理：重置登录状态并清除设备信息
+        await _storage.setHutLoginStatus(false);
         setHutUserInfo("hutIsLogin", false);
         state.deviceList.clear();
         setChoiceDevice(-1);
@@ -158,7 +159,7 @@ class FunctionHotWaterLogic extends GetxController {
     await hutUserApi
         .checkHotWaterDevice()
         .then((value) {
-          print(value);
+          AppLogger.debug('Open hot water devices: $value');
           if (value.isNotEmpty) {
             state.waterStatus.value = true;
             state.choiceDevice.value = state.deviceList.indexWhere(
@@ -202,7 +203,7 @@ class FunctionHotWaterLogic extends GetxController {
         )
         .then((value) {
           state.isLoading.value = false;
-          if (value['success']&&value['result']=="000000") {
+          if (value['success'] && value['result'] == "000000") {
             Get.snackbar(
               '提示',
               '开启设备成功！',

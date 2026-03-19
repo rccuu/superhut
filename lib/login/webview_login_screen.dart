@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import '../bridge/getCoursePage.dart';
+import '../bridge/get_course_page.dart';
+import '../core/services/app_auth_storage.dart';
 import '../utils/token.dart';
 
 class WebViewLoginScreen extends StatefulWidget {
@@ -13,6 +13,7 @@ class WebViewLoginScreen extends StatefulWidget {
   final String password;
   final String showText;
   final bool renew;
+  final bool navigateToCoursePageOnSuccess;
 
   const WebViewLoginScreen({
     super.key,
@@ -20,10 +21,11 @@ class WebViewLoginScreen extends StatefulWidget {
     required this.password,
     required this.showText,
     required this.renew,
+    this.navigateToCoursePageOnSuccess = true,
   });
 
   @override
-  _WebViewLoginScreenState createState() => _WebViewLoginScreenState();
+  State<WebViewLoginScreen> createState() => _WebViewLoginScreenState();
 }
 
 class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
@@ -40,20 +42,18 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
   void _startTimeoutTimer() {
     _timeoutTimer = Timer(const Duration(seconds: 12), () {
       if (!_hasResponse) {
-        Navigator.of(context).pop();
-        _showErrorMessage('连接超时，请检查网络后重试');
+        final navigator = Navigator.of(context);
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        navigator.pop(false);
+        messenger?.showSnackBar(
+          const SnackBar(
+            content: Text('连接超时，请检查网络后重试'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     });
-  }
-
-  void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   @override
@@ -72,38 +72,48 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
           ..addJavaScriptChannel(
             'TokenChannel',
             onMessageReceived: (message) async {
-              final prefs = await SharedPreferences.getInstance();
-              prefs.setString('user', widget.userNo);
-              prefs.setString('password', widget.password);
-              prefs.setString('loginType', 'jwxt');
-              await prefs.setBool('isFirstOpen', false);
+              final storage = AppAuthStorage.instance;
+              await storage.saveJwxtCredentials(
+                username: widget.userNo,
+                password: widget.password,
+              );
+              await storage.saveLoginType('jwxt');
+              await storage.setFirstOpen(false);
               _handleResponse();
-              saveToken(message.message);
-              Navigator.of(context).pop();
-              if (widget.renew) {
-              } else {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => Getcoursepage(renew: false),
-                    ),
-                  );
-                });
+              await saveToken(message.message);
+              if (!mounted) {
+                return;
               }
-              //Navigator.push(
-              //   context,
-              //  MaterialPageRoute(
-              //    builder: (_) => TokenDisplayPage(token: message.message,renew: widget.renew,),
-              //  ),
-              //);
+              final navigator = Navigator.of(context);
+              if (widget.renew || !widget.navigateToCoursePageOnSuccess) {
+                navigator.pop(true);
+                return;
+              }
+              navigator.pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (context) => const Getcoursepage(renew: false),
+                ),
+                (route) => false,
+              );
             },
           )
           ..addJavaScriptChannel(
             'ErrorChannel',
             onMessageReceived: (message) {
               _handleResponse();
-              Navigator.of(context).pop();
-              _showErrorMessage('登录失败：${message.message}');
+              if (!mounted) {
+                return;
+              }
+              final navigator = Navigator.of(context);
+              final messenger = ScaffoldMessenger.maybeOf(context);
+              navigator.pop(false);
+              messenger?.showSnackBar(
+                SnackBar(
+                  content: Text('登录失败：${message.message}'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
             },
           )
           ..loadRequest(Uri.parse('https://jwxtsj.hut.edu.cn/sjd/#/login'))

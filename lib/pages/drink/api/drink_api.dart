@@ -60,7 +60,6 @@ class DrinkApi {
       "un": phone,
     };
     Response response = await _dio.post(url, data: data);
-    print(response.data);
     return response.data["code"] == 0;
   }
 

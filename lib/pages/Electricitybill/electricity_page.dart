@@ -6,8 +6,9 @@ import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/services/app_logger.dart';
 import '../../utils/hut_user_api.dart';
-import 'electricityApi.dart';
+import 'electricity_api.dart';
 
 class ElectricityPage extends StatefulWidget {
   const ElectricityPage({super.key});
@@ -17,11 +18,15 @@ class ElectricityPage extends StatefulWidget {
 }
 
 class _ElectricityPageState extends State<ElectricityPage> {
+  static const double _maxRechargeAmount = 10000;
+  static final RegExp _amountPattern = RegExp(r'^\d+(\.\d{1,2})?$');
+
   String setRoomName = "未知房间";
   String nowRoomId = '';
   String roomCount = '-';
-  var electricityApi = ElectricityApi();
-  Map baseInfo = {}, nowRoomInfo = {};
+  final ElectricityApi electricityApi = ElectricityApi();
+  Map<String, dynamic> baseInfo = {};
+  Map<String, dynamic> nowRoomInfo = {};
   final hutUserApi = HutUserApi();
   String balance = "-";
   bool isRoomLoading = false, isinit = false;
@@ -30,7 +35,6 @@ class _ElectricityPageState extends State<ElectricityPage> {
 
   @override
   void dispose() {
-    // TODO: implement dispose
     _paymentController.dispose();
     super.dispose();
   }
@@ -39,17 +43,18 @@ class _ElectricityPageState extends State<ElectricityPage> {
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     getBalance();
   }
 
   Future<void> getBalance() async {
-    await hutUserApi.getCardBalance().then((value) {
-      balance = value.toString() ?? '--';
-      setState(() {
-        balance = balance;
-      });
+    final cardBalance = await hutUserApi.getCardBalance();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      balance = cardBalance;
     });
   }
 
@@ -57,82 +62,223 @@ class _ElectricityPageState extends State<ElectricityPage> {
     if (isinit) {
       return true;
     }
-    //初始化API
+
     await electricityApi.onInit();
-    baseInfo = await electricityApi.getHistory();
-    nowRoomInfo = await electricityApi.getSingleRoomInfo(baseInfo["roomid"]);
-    setState(() {
-      setRoomName = nowRoomInfo["roomName"];
-      roomCount = nowRoomInfo["eleTail"];
-      nowRoomId = baseInfo["roomid"];
-    });
-    isinit = true;
-    return true;
-  }
-
-  Future<bool> getNewRoomInfo(String roomIds) async {
-    nowRoomInfo = await electricityApi.getSingleRoomInfo(roomIds);
-    setState(() {
-      setRoomName = nowRoomInfo["roomName"];
-      roomCount = nowRoomInfo["eleTail"];
-      nowRoomId = roomIds;
-    });
-    setState(() {
-      setRoomName = nowRoomInfo["roomName"];
-      roomCount = nowRoomInfo["eleTail"];
-      nowRoomId = roomIds;
-    });
-
-    return true;
-  }
-
-  Future<List> getRoomList() async {
-    List roomList = await electricityApi.getRoomList();
-    return roomList;
-  }
-
-  //充值逻辑处理
-  Future<bool> chargeMoney() async {
-    //确认充值房间
-    var _roomToChargeName = setRoomName;
-    var _roomToChargeId = nowRoomId;
-    var _payment = _paymentController.text;
-    _paymentController.clear();
-    //充值前检测
-    if (double.parse(balance) < double.parse(_payment)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('余额不足')));
-      return false;
-    }
-    //二次检测
-    bool firstCheck = await electricityApi.checkBeforeRecharge(_roomToChargeId);
-    print('FirstCheck');
-    print(firstCheck);
-    if (firstCheck != true) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('未知错误')));
-      return false;
-    }
-    //创建订单
-    Map _orderInfo = await electricityApi.createOrder(
-      _roomToChargeId,
-      _payment,
-      _roomToChargeName,
+    final history = Map<String, dynamic>.from(
+      await electricityApi.getHistory(),
     );
-    print("the orderInfo::::$_orderInfo");
-    //完成充值
-   // electricityApi.finishRecharge(
-   //   _orderInfo['payorderno'],
-   //   _payment,
-   //   _roomToChargeName,
-   // );
-    //充值成功
-    getNewRoomInfo(_roomToChargeId);
-    getBalance();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('充值成功')));
+    final roomInfo = Map<String, dynamic>.from(
+      await electricityApi.getSingleRoomInfo(history['roomid'].toString()),
+    );
+    if (!mounted) {
+      return false;
+    }
+
+    setState(() {
+      baseInfo = history;
+      nowRoomInfo = roomInfo;
+      setRoomName = roomInfo['roomName'].toString();
+      roomCount = roomInfo['eleTail'].toString();
+      nowRoomId = history['roomid'].toString();
+      isinit = true;
+    });
     return true;
+  }
+
+  Future<bool> getNewRoomInfo(String roomId) async {
+    final roomInfo = Map<String, dynamic>.from(
+      await electricityApi.getSingleRoomInfo(roomId),
+    );
+    if (!mounted) {
+      return false;
+    }
+
+    setState(() {
+      nowRoomInfo = roomInfo;
+      setRoomName = roomInfo['roomName'].toString();
+      roomCount = roomInfo['eleTail'].toString();
+      nowRoomId = roomId;
+    });
+    return true;
+  }
+
+  Future<List<dynamic>> getRoomList() async {
+    return electricityApi.getRoomList();
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String? _validatePaymentInput(String paymentText) {
+    if (paymentText.isEmpty) {
+      return '充值金额不能为空';
+    }
+
+    final amount = double.tryParse(paymentText);
+    if (amount == null) {
+      return '请输入有效的数字格式';
+    }
+    if (amount <= 0) {
+      return '金额必须大于0元';
+    }
+    if (!_amountPattern.hasMatch(paymentText)) {
+      return '最多支持两位小数';
+    }
+    if (amount > _maxRechargeAmount) {
+      return '单次充值不能超过${_maxRechargeAmount.toInt()}元';
+    }
+
+    return null;
+  }
+
+  String? _validateAlertAmount(String amountText) {
+    if (amountText.isEmpty) {
+      return '预警金额不能为空';
+    }
+
+    final amount = double.tryParse(amountText);
+    if (amount == null) {
+      return '请输入有效的预警金额';
+    }
+    if (amount <= 0) {
+      return '预警金额必须大于0元';
+    }
+    if (!_amountPattern.hasMatch(amountText)) {
+      return '预警金额最多支持两位小数';
+    }
+
+    return null;
+  }
+
+  Future<bool> chargeMoney(String payment) async {
+    final roomToChargeName = setRoomName;
+    final roomToChargeId = nowRoomId;
+    final balanceAmount = double.tryParse(balance) ?? 0;
+    final paymentAmount = double.tryParse(payment);
+
+    if (paymentAmount == null) {
+      _showSnackBar('请输入有效的数字格式');
+      return false;
+    }
+    if (roomToChargeId.isEmpty) {
+      _showSnackBar('暂未获取到房间信息');
+      return false;
+    }
+    if (balanceAmount < paymentAmount) {
+      _showSnackBar('余额不足');
+      return false;
+    }
+
+    final firstCheck = await electricityApi.checkBeforeRecharge(roomToChargeId);
+    if (!mounted) {
+      return false;
+    }
+    if (!firstCheck) {
+      _showSnackBar('未知错误');
+      return false;
+    }
+
+    await electricityApi.createOrder(roomToChargeId, payment, roomToChargeName);
+    await Future.wait([getNewRoomInfo(roomToChargeId), getBalance()]);
+    _paymentController.clear();
+    _showSnackBar('充值成功');
+    return true;
+  }
+
+  Future<void> _handleChargePressed() async {
+    if (isChargeLoading) {
+      return;
+    }
+
+    final payment = _paymentController.text.trim();
+    final validationMessage = _validatePaymentInput(payment);
+    if (validationMessage != null) {
+      _showSnackBar(validationMessage);
+      return;
+    }
+
+    setState(() {
+      isChargeLoading = true;
+    });
+
+    try {
+      await chargeMoney(payment);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Electricity recharge failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _showSnackBar('充值失败，请稍后重试');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isChargeLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleRoomPickerPressed() async {
+    if (isRoomLoading) {
+      return;
+    }
+
+    setState(() {
+      isRoomLoading = true;
+    });
+
+    try {
+      final roomList = await getRoomList();
+      if (!mounted) {
+        return;
+      }
+
+      _showAllRoomBottomSheet(roomList);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to load electricity room list',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _showSnackBar('房间列表加载失败，请稍后重试');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isRoomLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveAlertSettings(String alertAmount) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('enableBillWarning', true);
+    await prefs.setString('enableRoomId', nowRoomId);
+    await prefs.setString('enableRoomName', setRoomName);
+    await prefs.setDouble('enableBill', double.parse(alertAmount));
+  }
+
+  Future<void> _disableAlertSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('enableBillWarning', false);
+  }
+
+  Future<_ElectricityAlertSettings> _loadAlertSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _ElectricityAlertSettings(
+      isEnabled: prefs.getBool('enableBillWarning') ?? false,
+      roomId: prefs.getString('enableRoomId') ?? '',
+      roomName: prefs.getString('enableRoomName') ?? '',
+      bill: prefs.getDouble('enableBill') ?? 0,
+    );
   }
 
   @override
@@ -238,12 +384,11 @@ class _ElectricityPageState extends State<ElectricityPage> {
                   ),
                   SizedBox(height: 8),
                   TextField(
-                    
                     controller: _paymentController,
                     keyboardType: TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    style: TextStyle(fontSize: 32,color: Colors.white),
+                    style: TextStyle(fontSize: 32, color: Colors.white),
                     maxLength: 10,
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
@@ -277,78 +422,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
                     ],
                   ),
                   TextButton(
-                    onPressed: () async {
-                      
-                      if(isChargeLoading == true){
-                        return;
-                      }
-                      setState(() {
-                        isChargeLoading =true;
-                      });
-                      //_launchUrl();
-                      if (_paymentController.text.isEmpty) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('充值金额不能为空')));
-                        setState(() {
-                          isChargeLoading =false;
-                        });
-                        return;
-                        
-                      }
-                      // 层级校验 2: 数字格式校验
-                      final amount = double.tryParse(_paymentController.text);
-                      if (amount == null) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('请输入有效的数字格式')));
-                        setState(() {
-                          isChargeLoading =false;
-                        });
-                        return;
-                      }
-
-                      // 层级校验 3: 正数校验
-                      if (amount <= 0) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('金额必须大于0元')));
-                        setState(() {
-                          isChargeLoading =false;
-                        });
-                        return;
-                      }
-
-                      // 层级校验 4: 小数位校验
-                      final decimalPattern = RegExp(r'^-?\d+(\.\d{1,2})?$');
-                      if (!decimalPattern.hasMatch(_paymentController.text)) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text('最多支持两位小数')));
-                        setState(() {
-                          isChargeLoading =false;
-                        });
-                        return;
-                      }
-
-                      // 层级校验 5: 最大金额限制
-                      const maxAmount = 10000.0;
-                      if (amount > maxAmount) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('单次充值不能超过$maxAmount元')),
-                        );
-                        setState(() {
-                          isChargeLoading =false;
-                        });
-                        return;
-                      }
-                      await chargeMoney();
-                      isinit = false;
-                      await getHisRoomInfo();
-                      setState(() {
-                        isChargeLoading = false;
-                      });
-                    },
+                    onPressed: _handleChargePressed,
                     style: ButtonStyle(
                       backgroundColor: WidgetStateProperty.all(
                         Colors.green.shade200,
@@ -360,10 +434,13 @@ class _ElectricityPageState extends State<ElectricityPage> {
                         ),
                       ),
                     ),
-                    child: isChargeLoading?LoadingAnimationWidget.inkDrop(
-                      color: Colors.white,
-                      size: 10,
-                    ):Text('充值'),
+                    child:
+                        isChargeLoading
+                            ? LoadingAnimationWidget.inkDrop(
+                              color: Colors.white,
+                              size: 10,
+                            )
+                            : Text('充值'),
                   ),
                 ],
               ),
@@ -391,29 +468,13 @@ class _ElectricityPageState extends State<ElectricityPage> {
                           size: 20,
                         )
                         : Icon(Icons.chevron_right, color: Colors.grey),
-                onTap: () async {
-                  setState(() {
-                    isRoomLoading = true;
-                  });
-                  List roomList = await getRoomList();
-                  _showAllRoomBottomSheet(context, roomList);
-                  setState(() {
-                    isRoomLoading = false;
-                  });
-                },
+                onTap: _handleRoomPickerPressed,
               ),
             ),
             _buildFunctionItem(
               icon: Ionicons.alert_circle_outline,
               title: "电费预警",
-              onTap: () async {
-                _showAlertBottomSheet(context);
-                // await renewToken(context);
-                // print("跳转");
-                //Navigator.of(context).push(
-                //   MaterialPageRoute(builder: (context) => Getcoursepage(renew: true))
-                // );
-              },
+              onTap: _showAlertBottomSheet,
             ),
           ],
         ),
@@ -422,7 +483,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
   }
 
   // 显示所有充值房间
-  void _showAllRoomBottomSheet(BuildContext context, List RoomList) {
+  void _showAllRoomBottomSheet(List<dynamic> roomList) {
     String searchQuery = ""; // 搜索关键词状态
 
     showCupertinoModalBottomSheet(
@@ -435,7 +496,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
             builder: (context, setState) {
               // 根据搜索词过滤房间列表
               final filteredRooms =
-                  RoomList.where((room) {
+                  roomList.whereType<Map<dynamic, dynamic>>().where((room) {
                     final name = room['acname'].toString().toLowerCase();
                     final guid = room['acguid'].toString().toLowerCase();
                     final query = searchQuery.toLowerCase();
@@ -496,24 +557,24 @@ class _ElectricityPageState extends State<ElectricityPage> {
                       ),
 
                       // 房间列表
-                      Container(
+                      SizedBox(
                         height: 400,
                         child: ListView.builder(
                           itemCount: filteredRooms.length,
                           itemBuilder: (BuildContext context, int index) {
                             final room = filteredRooms[index];
+                            final roomName = room['acname'].toString();
+                            final roomId = room['acguid'].toString();
                             return ListTile(
                               leading: Icon(
                                 Ionicons.shapes_outline,
                                 color: Colors.blue,
                               ),
-                              title: Text(room['acname']),
+                              title: Text(roomName),
                               //subtitle: Text(room['acguid']),
-                              onTap: () {
-                                getNewRoomInfo(room['acguid']);
-                                Navigator.pop(context);
-
-                                // 这里可以添加房间选择后的处理逻辑
+                              onTap: () async {
+                                Navigator.of(context).pop();
+                                await getNewRoomInfo(roomId);
                               },
                             );
                           },
@@ -532,24 +593,25 @@ class _ElectricityPageState extends State<ElectricityPage> {
 
   //显示预警设置
   // 显示添加设备页面(底部弹窗形式)
-  Future<void> _showAlertBottomSheet(BuildContext context) async {
-    final TextEditingController deviceCodeController = TextEditingController();
-    final prefs = await SharedPreferences.getInstance();
-    bool isEnable = prefs.getBool('enableBillWarning') ?? false;
-    String RoomId = "", RoomName = "";
-    double bill = 0;
-    if (isEnable) {
-      RoomId = prefs.getString('enableRoomId') ?? '';
-      RoomName = prefs.getString('enableRoomName') ?? '';
-      bill = prefs.getDouble('enableBill') ?? 0;
+  Future<void> _showAlertBottomSheet() async {
+    final alertSettings = await _loadAlertSettings();
+    if (!mounted) {
+      return;
     }
-    showCupertinoModalBottomSheet(
+
+    final TextEditingController deviceCodeController = TextEditingController(
+      text:
+          alertSettings.isEnabled && alertSettings.bill > 0
+              ? alertSettings.bill.toString()
+              : '',
+    );
+    await showCupertinoModalBottomSheet(
       context: context,
       expand: false,
       backgroundColor: Colors.transparent,
       builder:
-          (context) => Material(
-            color: Theme.of(context).colorScheme.surface,
+          (sheetContext) => Material(
+            color: Theme.of(sheetContext).colorScheme.surface,
             borderRadius: BorderRadius.only(
               topLeft: Radius.circular(15),
               topRight: Radius.circular(15),
@@ -557,7 +619,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
             child: SafeArea(
               child: Padding(
                 padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
                 ),
                 child: SingleChildScrollView(
                   child: Padding(
@@ -617,22 +679,25 @@ class _ElectricityPageState extends State<ElectricityPage> {
                           height: 50,
                           child: ElevatedButton(
                             onPressed: () async {
-                              String alertCount =
+                              final alertCount =
                                   deviceCodeController.text.trim();
-                              if (alertCount.isEmpty) {
-                                ScaffoldMessenger.of(
-                                  context,
-                                ).showSnackBar(SnackBar(content: Text('')));
+                              final validationMessage = _validateAlertAmount(
+                                alertCount,
+                              );
+                              if (validationMessage != null) {
+                                _showSnackBar(validationMessage);
                                 return;
                               }
-                              prefs.setBool('enableBillWarning', true);
-                              prefs.setString('enableRoomId', nowRoomId);
-                              prefs.setString('enableRoomName', setRoomName);
-                              prefs.setDouble(
-                                'enableBill',
-                                double.parse(alertCount),
+
+                              await _saveAlertSettings(alertCount);
+                              if (!sheetContext.mounted) {
+                                return;
+                              }
+
+                              Navigator.of(sheetContext).pop();
+                              _showSnackBar(
+                                alertSettings.isEnabled ? '预警已更新' : '预警已开启',
                               );
-                              Navigator.pop(context);
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.orange,
@@ -642,13 +707,13 @@ class _ElectricityPageState extends State<ElectricityPage> {
                               ),
                             ),
                             child: Text(
-                              isEnable ? '更改预警' : '设置预警',
+                              alertSettings.isEnabled ? '更改预警' : '设置预警',
                               style: TextStyle(fontSize: 18),
                             ),
                           ),
                         ),
                         Visibility(
-                          visible: isEnable,
+                          visible: alertSettings.isEnabled,
                           child: Column(
                             children: [
                               Card(
@@ -666,7 +731,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
                                     children: [
                                       SizedBox(height: 8),
                                       Text(
-                                        '目前设置：\n当房间${RoomName}的电费低于${bill}元时进行提醒',
+                                        '目前设置：\n当房间${alertSettings.roomName}${alertSettings.roomId.isEmpty ? '' : '（${alertSettings.roomId}）'}的电费低于${alertSettings.bill}元时进行提醒',
                                       ),
                                     ],
                                   ),
@@ -677,8 +742,13 @@ class _ElectricityPageState extends State<ElectricityPage> {
                                 height: 50,
                                 child: ElevatedButton(
                                   onPressed: () async {
-                                    prefs.setBool('enableBillWarning', false);
-                                    Navigator.pop(context);
+                                    await _disableAlertSettings();
+                                    if (!sheetContext.mounted) {
+                                      return;
+                                    }
+
+                                    Navigator.of(sheetContext).pop();
+                                    _showSnackBar('预警已关闭');
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.orange,
@@ -728,7 +798,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
                                 ),
                                 SizedBox(height: 8),
                                 Text(
-                                  '当检测到${setRoomName}的电费小于预警值后，将会在进入超级包菜时进行提醒',
+                                  '当检测到$setRoomName的电费小于预警值后，将会在进入超级包菜时进行提醒',
                                 ),
                               ],
                             ),
@@ -743,6 +813,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
             ),
           ),
     );
+    deviceCodeController.dispose();
   }
 
   Widget _buildFunctionItem({
@@ -764,6 +835,20 @@ class _ElectricityPageState extends State<ElectricityPage> {
       ),
     );
   }
+}
+
+class _ElectricityAlertSettings {
+  const _ElectricityAlertSettings({
+    required this.isEnabled,
+    required this.roomId,
+    required this.roomName,
+    required this.bill,
+  });
+
+  final bool isEnabled;
+  final String roomId;
+  final String roomName;
+  final double bill;
 }
 
 class DecimalTextInputFormatter extends TextInputFormatter {

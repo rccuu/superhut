@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/pages/freeroom/room.dart';
 
-import 'buildingBridge.dart';
+import 'building_bridge.dart';
 
 class BuildingPage extends StatefulWidget {
   const BuildingPage({super.key});
@@ -17,7 +17,7 @@ class _BuildingPageState extends State<BuildingPage> {
   void initState() {
     // TODO: implement initState
     super.initState();
-    GetBuilding();
+    getBuildingList();
   }
 
   @override
@@ -26,7 +26,7 @@ class _BuildingPageState extends State<BuildingPage> {
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(title: const Text('选择教学楼')),
       body: EnhancedFutureBuilder(
-        future: GetBuilding(),
+        future: getBuildingList(),
         rememberFutureResult: true,
         whenDone: (data) {
           return Container(

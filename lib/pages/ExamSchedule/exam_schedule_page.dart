@@ -105,7 +105,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                     if (daysLeft == 0) {
                       daysLeftText = "今天考试";
                     } else if (daysLeft > 0) {
-                      daysLeftText = "还有${daysLeft}天";
+                      daysLeftText = "还有$daysLeft天";
                     } else {
                       daysLeftText = "已结束${-daysLeft}天";
                     }

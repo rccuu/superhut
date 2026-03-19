@@ -9,6 +9,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/services/app_logger.dart';
+
 class Type2Webview extends StatefulWidget {
   final String serviceUrl, serviceName, tokenAccept;
 
@@ -58,47 +60,55 @@ class _Type2WebviewState extends State<Type2Webview> {
 
   String enCodeUrl(String url) {
     String encoded = Uri.encodeComponent(url);
-    print(encoded);
+    AppLogger.debug('Type2 encoded service url: $encoded');
     return encoded;
   }
 
-  List getTokenAccept(String tokenAccept) {
+  List<Map<String, dynamic>> getTokenAccept(String tokenAccept) {
     try {
-      List<dynamic> parsedList = json.decode(tokenAccept);
-      List<Map<String, dynamic>> result =
-          parsedList.cast<Map<String, dynamic>>();
-      return result;
+      final parsedList = json.decode(tokenAccept);
+      if (parsedList is! List) {
+        return <Map<String, dynamic>>[];
+      }
+
+      return parsedList
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
     } catch (e) {
-      return [];
+      AppLogger.debug('Failed to parse tokenAccept: $e');
+      return <Map<String, dynamic>>[];
     }
   }
 
   bool doWithAccept() {
-    List tokenAcceptList = getTokenAccept(widget.tokenAccept);
-    print(tokenAcceptList);
+    List<Map<String, dynamic>> tokenAcceptList = getTokenAccept(
+      widget.tokenAccept,
+    );
+    AppLogger.debug('Type2 token accept list: $tokenAcceptList');
     for (var item in tokenAcceptList) {
-      print(item);
+      AppLogger.debug('Type2 token accept item: $item');
       if (item['tokenType'] == 'header') {
-        headerMap.addAll({item['tokenKey']: token});
+        headerMap.addAll({item['tokenKey'].toString(): token});
       } else if (item['tokenType'] == 'url') {
         Uri uri = Uri.parse(resultUrl);
 
         // 2. 获取现有查询参数并添加新参数
         Map<String, String> queryParams = Map.from(uri.queryParameters);
-        queryParams[item['tokenKey']] = token; // 添加新参数
+        queryParams[item['tokenKey'].toString()] = token; // 添加新参数
         // 3. 构建新 URL（保留路径和其他部分）
         Uri newUri = uri.replace(queryParameters: queryParams);
         resultUrl = newUri.toString();
       }
     }
-    print(headerMap);
+    AppLogger.debug('Type2 headers prepared: $headerMap');
     return true;
   }
 
   Future<bool> getDetail() async {
     token = await api.getToken();
     resultUrl = widget.serviceUrl;
-    print(resultUrl);
+    AppLogger.debug('Type2 result url prepared: $resultUrl');
     doWithAccept();
     return true;
   }
@@ -136,18 +146,16 @@ class _Type2WebviewState extends State<Type2Webview> {
       // 请求权限
       final result = await Permission.location.request();
       if (result != PermissionStatus.granted) {
-        // 只在首次拒绝时显示提示，避免重复显示
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('某些功能可能需要位置权限才能正常使用'),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('某些功能可能需要位置权限才能正常使用'),
+            duration: Duration(seconds: 3),
+          ),
+        );
       }
     } catch (e) {
-      print('请求位置权限错误: $e');
+      AppLogger.debug('请求位置权限错误: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -171,6 +179,9 @@ class _Type2WebviewState extends State<Type2Webview> {
   void _updateCanGoBackState() async {
     if (_webViewController != null) {
       bool canGoBack = await _webViewController!.canGoBack();
+      if (!mounted) {
+        return;
+      }
       if (canGoBack != _canGoBack) {
         setState(() {
           _canGoBack = canGoBack;
@@ -319,27 +330,29 @@ class _Type2WebviewState extends State<Type2Webview> {
     }
   }
 
-  void _handleAlipayUrl(String url) async {
+  Future<void> _handleAlipayUrl(String url) async {
     try {
       final Uri uri = Uri.parse(url);
-      print(url);
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      AppLogger.debug('Attempting to open Alipay url: $url');
       if (!await launchUrl(uri)) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('无法打开支付宝: $url')));
+        messenger.showSnackBar(SnackBar(content: Text('无法打开支付宝: $url')));
         throw Exception('Could not launch $uri');
-      } else {
-        if (context.mounted) {
-          Navigator.of(context).pop();
-        }
       }
+
+      if (!mounted) {
+        return;
+      }
+
+      navigator.pop();
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('打开链接时发生错误: $e')));
       }
-      print('Error launching URL: $e');
+      AppLogger.debug('Error launching URL: $e');
     }
   }
 
@@ -347,13 +360,15 @@ class _Type2WebviewState extends State<Type2Webview> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: !_canGoBack,
-      onPopInvoked: (didPop) async {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
 
+        final navigator = Navigator.of(context);
         final shouldPop = await _handleBackPressed();
-        if (shouldPop && context.mounted) {
-          Navigator.of(context).pop();
+        if (!mounted || !shouldPop) {
+          return;
         }
+        navigator.pop();
       },
       child: SafeArea(
         child: Scaffold(
@@ -398,7 +413,7 @@ class _Type2WebviewState extends State<Type2Webview> {
                         setState(() {
                           _isPageLoading = true;
                         });
-                        print('Start loading: $url');
+                        AppLogger.debug('Type2 start loading: $url');
                       },
                       onWebViewCreated: (controller) {
                         _webViewController = controller;
@@ -410,7 +425,7 @@ class _Type2WebviewState extends State<Type2Webview> {
                         _updateCanGoBackState();
                         _removeNavigationElement();
                         _setupAlipayLinkListener(); // 添加支付宝链接监听
-                        print('Stop loading: $url');
+                        AppLogger.debug('Type2 stop loading: $url');
                       },
                       onUpdateVisitedHistory: (
                         controller,
@@ -418,7 +433,7 @@ class _Type2WebviewState extends State<Type2Webview> {
                         androidIsReload,
                       ) {
                         _updateCanGoBackState();
-                        print('History updated: $url');
+                        AppLogger.debug('Type2 history updated: $url');
                       },
                       shouldOverrideUrlLoading: (
                         controller,
@@ -436,10 +451,12 @@ class _Type2WebviewState extends State<Type2Webview> {
                       },
                     );
                   },
-                  whenNotDone:  Center(child: LoadingAnimationWidget.inkDrop(
-                    color: Theme.of(context).primaryColor,
-                    size: 40,
-                  ),),
+                  whenNotDone: Center(
+                    child: LoadingAnimationWidget.inkDrop(
+                      color: Theme.of(context).primaryColor,
+                      size: 40,
+                    ),
+                  ),
                 ),
               ),
 
@@ -449,7 +466,7 @@ class _Type2WebviewState extends State<Type2Webview> {
                 left: 8,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: IconButton(
@@ -459,11 +476,14 @@ class _Type2WebviewState extends State<Type2Webview> {
                       size: 28,
                     ),
                     onPressed: () async {
-                      if (await _handleBackPressed()) {
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
+                      final navigator = Navigator.of(context);
+                      if (!await _handleBackPressed()) {
+                        return;
                       }
+                      if (!mounted) {
+                        return;
+                      }
+                      navigator.pop();
                     },
                   ),
                 ),
@@ -473,12 +493,12 @@ class _Type2WebviewState extends State<Type2Webview> {
               if (_isPageLoading)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                           LoadingAnimationWidget.inkDrop(
+                          LoadingAnimationWidget.inkDrop(
                             color: Theme.of(context).primaryColor,
                             size: 40,
                           ),
@@ -500,7 +520,7 @@ class _Type2WebviewState extends State<Type2Webview> {
               if (_isRequestingPermission)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,

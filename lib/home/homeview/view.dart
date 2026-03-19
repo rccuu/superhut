@@ -11,15 +11,16 @@ import 'package:superhut/home/coursetable/view.dart';
 import 'package:superhut/home/userpage/view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../pages/Electricitybill/electricityApi.dart';
-import '../../pages/Electricitybill/electricityPage.dart';
+import '../../core/services/app_logger.dart';
+import '../../pages/Electricitybill/electricity_api.dart';
+import '../../pages/Electricitybill/electricity_page.dart';
 import 'logic.dart';
 
 class HomeviewPage extends StatefulWidget {
   const HomeviewPage({super.key});
 
   @override
-  _HomeviewPageState createState() => _HomeviewPageState();
+  State<HomeviewPage> createState() => _HomeviewPageState();
 }
 
 class _HomeviewPageState extends State<HomeviewPage>
@@ -30,6 +31,7 @@ class _HomeviewPageState extends State<HomeviewPage>
   bool _isForcedUpdate = false;
   String _downloadUrl = '';
   String _currentVersion = '0.0.1'; // 默认版本号
+  final HomeviewLogic _logic = Get.put(HomeviewLogic());
 
   @override
   void initState() {
@@ -41,34 +43,36 @@ class _HomeviewPageState extends State<HomeviewPage>
   }
 
   Future<void> _getCurrentVersion() async {
-    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _currentVersion = packageInfo.version;
     });
   }
 
   void checkAlert() async {
-    var electricityApi = ElectricityApi();
+    final electricityApi = ElectricityApi();
     final prefs = await SharedPreferences.getInstance();
-    bool isEnable = prefs.getBool('enableBillWarning') ?? false;
-    if (isEnable == false) {
+    final isEnable = prefs.getBool('enableBillWarning') ?? false;
+    if (!isEnable) {
       return;
     }
-    String checkRoomId = prefs.getString('enableRoomId') ?? '';
-    //获取电费
+    final checkRoomId = prefs.getString('enableRoomId') ?? '';
     await electricityApi.onInit();
     await electricityApi.getHistory();
-    var nowRoomInfo = await electricityApi.getSingleRoomInfo(checkRoomId);
-    var roomCount = nowRoomInfo["eleTail"];
-    var setRoomName = nowRoomInfo["roomName"];
-    double bill = prefs.getDouble('enableBill') ?? 0;
-    if (double.parse(roomCount) >= bill) {
-      print("无风险");
-    } else {
-      print("有风险");
-      _showAlert('当前电费：${roomCount}元\n设置电费：${bill}元\n房间：${setRoomName}');
+    final nowRoomInfo = await electricityApi.getSingleRoomInfo(checkRoomId);
+    final roomCount = nowRoomInfo["eleTail"];
+    final setRoomName = nowRoomInfo["roomName"];
+    final bill = prefs.getDouble('enableBill') ?? 0;
+    if (!mounted) {
+      return;
     }
-    print('当前电费：${roomCount}元\n设置电费：${bill}元\n房间：${setRoomName}\n\n');
+    if (double.tryParse(roomCount) case final roomBalance?
+        when roomBalance < bill) {
+      _showAlert('当前电费：$roomCount元\n设置电费：$bill元\n房间：$setRoomName');
+    }
   }
 
   void _showAlert(String showDescription) {
@@ -102,24 +106,32 @@ class _HomeviewPageState extends State<HomeviewPage>
   }
 
   Future<void> _checkVersion() async {
-    print("DO");
     final dio = Dio();
-    final response = await dio.get(
-      'https://super.ccrice.com/api/check_version.php?version=$_currentVersion',
-    );
-    print(_currentVersion);
-    print(response.data);
-    final Map<String, dynamic> data = response.data;
-    setState(() {
-      _isUpdateAvailable = !data['is_latest'];
-      _latestVersion = data['latest_version'];
-      _updateDescription = data['description'];
-      _isForcedUpdate = data['is_forced'];
-      _downloadUrl = data['download_url'];
-    });
+    try {
+      final response = await dio.get(
+        'https://super.ccrice.com/api/check_version.php?version=$_currentVersion',
+      );
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isUpdateAvailable = !(data['is_latest'] as bool? ?? true);
+        _latestVersion = data['latest_version']?.toString() ?? '';
+        _updateDescription = data['description']?.toString() ?? '';
+        _isForcedUpdate = data['is_forced'] as bool? ?? false;
+        _downloadUrl = data['download_url']?.toString() ?? '';
+      });
 
-    if (_isUpdateAvailable) {
-      _showUpdateDialog();
+      if (_isUpdateAvailable) {
+        _showUpdateDialog();
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to check app version',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -157,35 +169,38 @@ class _HomeviewPageState extends State<HomeviewPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final HomeviewLogic logic = Get.put(HomeviewLogic());
     return Scaffold(
-      //extendBodyBehindAppBar: true,
       body: PageView(
-        physics: NeverScrollableScrollPhysics(),
-        controller: logic.homePageController,
-        children: [CourseTableView(), FunctionPage(), UserPage()],
+        physics: const NeverScrollableScrollPhysics(),
+        controller: _logic.homePageController,
+        children: const [CourseTableView(), FunctionPage(), UserPage()],
       ),
       bottomSheet: Container(
         color: Colors.transparent,
-        margin: EdgeInsets.all(10),
-        padding: EdgeInsets.only(left: 15, right: 15, bottom: 20, top: 10),
+        margin: const EdgeInsets.all(10),
+        padding: const EdgeInsets.only(
+          left: 15,
+          right: 15,
+          bottom: 20,
+          top: 10,
+        ),
         child: GNav(
           gap: 10,
           color: Theme.of(context).primaryColorDark,
           activeColor: Theme.of(context).primaryColor,
           iconSize: 24,
           tabBackgroundColor: Theme.of(context).primaryColor.withAlpha(20),
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          duration: Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          duration: const Duration(milliseconds: 200),
           tabs: [
             GButton(icon: Ionicons.calendar_outline, text: '课表'),
             GButton(icon: Ionicons.apps_outline, text: '功能'),
             GButton(icon: Ionicons.person_outline, text: '我'),
           ],
           onTabChange: (index) {
-            logic.homePageController.animateToPage(
+            _logic.homePageController.animateToPage(
               index,
-              duration: Duration(milliseconds: 200),
+              duration: const Duration(milliseconds: 200),
               curve: Curves.easeInOut,
             );
           },
