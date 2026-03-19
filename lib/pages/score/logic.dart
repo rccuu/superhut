@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/services/app_logger.dart';
 import '../../utils/token.dart';
 import '../../utils/withhttp.dart';
 
@@ -29,19 +30,19 @@ class Score {
 }
 
 Future<Map> semesterIdfc() async {
-  String token = await getToken();
-  //configureDio(token);
-  configureDioFromStorage();
-  Response response;
-  response = await postDioWithCookie('/njwhd/semesterList', {});
-  Map data = response.data;
-  List iddata = data['data'];
-  List idlist = [];
+  await getToken();
+  await configureDioFromStorage();
+  final Response<dynamic> response = await postDioWithCookie(
+    '/njwhd/semesterList',
+    {},
+  );
+  final Map data = response.data;
+  final List iddata = data['data'];
+  final List idlist = [];
   String nowid = '';
   for (var i = 0; i < iddata.length; i++) {
-    Map tempMap = iddata[i];
+    final Map tempMap = iddata[i];
     idlist.add(tempMap['semesterId']);
-    print(tempMap['semesterId']);
     if (tempMap['nowXq'] == '1') {
       nowid = tempMap['semesterId'];
     }
@@ -50,23 +51,21 @@ Future<Map> semesterIdfc() async {
 }
 
 Future<Map<String, Object>> getScore(String semesterId) async {
-  String token = await getToken();
-  //configureDio(token);
-  configureDioFromStorage();
-  Response response;
-  response = await postDioWithCookie(
+  await getToken();
+  await configureDioFromStorage();
+  final Response<dynamic> response = await postDioWithCookie(
     '/njwhd/student/termGPA?semester=$semesterId&type=1',
     {},
   );
-  Map data = response.data;
+  final Map data = response.data;
   List<Score> reList = [];
-  List scorelist = data['data'];
+  final List scorelist = data['data'];
 
-  List achievementList = scorelist[0]['achievement'];
+  final List achievementList = scorelist[0]['achievement'];
 
-  String yxzxf = scorelist[0]['yxzxf'];
-  String zxfjd = scorelist[0]['zxfjd'];
-  String pjxfjd = scorelist[0]['pjxfjd'];
+  final String yxzxf = scorelist[0]['yxzxf'];
+  final String zxfjd = scorelist[0]['zxfjd'];
+  final String pjxfjd = scorelist[0]['pjxfjd'];
 
   for (Map data in achievementList) {
     reList.add(
@@ -83,11 +82,11 @@ Future<Map<String, Object>> getScore(String semesterId) async {
       ),
     );
   }
-  print(reList.toString());
+  AppLogger.debug('Loaded ${reList.length} score items');
   final prefs = await SharedPreferences.getInstance();
-  prefs.setString('yxzxf', yxzxf);
-  prefs.setString('zxfjd', zxfjd);
-  prefs.setString('pjxfjd', pjxfjd);
+  await prefs.setString('yxzxf', yxzxf);
+  await prefs.setString('zxfjd', zxfjd);
+  await prefs.setString('pjxfjd', pjxfjd);
 
   return {
     'achievement': reList,

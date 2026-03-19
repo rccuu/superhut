@@ -2,7 +2,7 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
-import 'package:superhut/pages/hutpages/hutmainLogic.dart';
+import 'package:superhut/pages/hutpages/hutmain_logic.dart';
 import 'package:superhut/pages/hutpages/type1/type1webview.dart';
 import 'package:superhut/pages/hutpages/type2/type2webview.dart';
 import 'package:superhut/utils/hut_user_api.dart';
@@ -290,45 +290,45 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                             ),
 
                             // Services in this category
-                            ...filteredServices
-                                .map(
-                                  (service) => Padding(
-                                    padding: EdgeInsets.only(bottom: 16),
-                                    child: _buildServiceCard(
-                                      serviceName: service.serviceName,
-                                      serviceType: service.serviceType,
-                                      onTap: () {
-                                        if (service.serviceType == "1") {
-                                          Get.to(
-                                            Type1Webview(
-                                              serviceUrl: service.serviceUrl,
-                                              serviceName: service.serviceName,
-                                            ),
-                                          );
-                                        } else if (service.serviceType == "2" ||
-                                            service.serviceType == "4") {
-                                          Get.to(
-                                            Type2Webview(
-                                              serviceUrl: service.serviceUrl,
-                                              serviceName: service.serviceName,
-                                              tokenAccept: service.tokenAccept,
-                                            ),
-                                          );
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                )
-                                .toList(),
+                            ...filteredServices.map(
+                              (service) => Padding(
+                                padding: EdgeInsets.only(bottom: 16),
+                                child: _buildServiceCard(
+                                  serviceName: service.serviceName,
+                                  serviceType: service.serviceType,
+                                  onTap: () {
+                                    if (service.serviceType == "1") {
+                                      Get.to(
+                                        Type1Webview(
+                                          serviceUrl: service.serviceUrl,
+                                          serviceName: service.serviceName,
+                                        ),
+                                      );
+                                    } else if (service.serviceType == "2" ||
+                                        service.serviceType == "4") {
+                                      Get.to(
+                                        Type2Webview(
+                                          serviceUrl: service.serviceUrl,
+                                          serviceName: service.serviceName,
+                                          tokenAccept: service.tokenAccept,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
                           ],
                         );
                       },
                     );
                   },
-                  whenNotDone: Center(child: LoadingAnimationWidget.inkDrop(
-                    color: Theme.of(context).primaryColor,
-                    size: 40,
-                  ),),
+                  whenNotDone: Center(
+                    child: LoadingAnimationWidget.inkDrop(
+                      color: Theme.of(context).primaryColor,
+                      size: 40,
+                    ),
+                  ),
                 ),
               ),
             ],

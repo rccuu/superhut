@@ -1,13 +1,14 @@
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:superhut/pages/hutpages/hutmainSate.dart';
+import 'package:superhut/pages/hutpages/hutmain_state.dart';
 
+import '../../core/services/app_auth_storage.dart';
 import '../../login/hut/view.dart';
 import '../../utils/hut_user_api.dart';
 
 class HutMainLogic extends GetxController {
   final HutMainState state = HutMainState();
   final api = HutUserApi();
+  final AppAuthStorage _storage = AppAuthStorage.instance;
   List funList = [];
 
   Future<List> getFunList() async {
@@ -22,8 +23,7 @@ class HutMainLogic extends GetxController {
 
   /// 判断是否需要跳转登录
   Future<void> checkLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    bool hsa = prefs.getBool('hutIsLogin') ?? false;
+    final bool hsa = await _storage.isHutLoggedIn();
 
     if (hsa == false) {
       Future.delayed(const Duration(milliseconds: 100), () {

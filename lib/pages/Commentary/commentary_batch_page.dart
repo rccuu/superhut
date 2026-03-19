@@ -2,23 +2,20 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
-import 'package:superhut/pages/Commentary/CommentaryApi.dart';
-import 'package:superhut/pages/Commentary/CommentaryPage2.dart';
 
-class commentaryPage1 extends StatefulWidget {
-  const commentaryPage1({super.key});
+import 'commentary_api.dart';
+import 'commentary_course_list_page.dart';
+
+class CommentaryBatchPage extends StatefulWidget {
+  const CommentaryBatchPage({super.key});
 
   @override
-  State<commentaryPage1> createState() => _commentaryPage1State();
+  State<CommentaryBatchPage> createState() => _CommentaryBatchPageState();
 }
 
-class _commentaryPage1State extends State<commentaryPage1> {
-  //获取批次
-  Future<List> getBatches() async {
-    print("YE");
-    print('刷新啦！！！！！！！！！！！！！！！！！！！！');
-    List batches = await getCommentaryBatch();
-    return batches;
+class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
+  Future<List<CommentaryPayload>> _getBatches() async {
+    return getCommentaryBatches();
   }
 
   @override
@@ -26,24 +23,39 @@ class _commentaryPage1State extends State<commentaryPage1> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: Text('学生教评'),
+        title: const Text('学生教评'),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
       body: EnhancedFutureBuilder(
-        future: getBatches(),
+        future: _getBatches(),
         rememberFutureResult: false,
         whenDone: (List batchesList) {
+          final typedBatchesList = List<CommentaryPayload>.from(batchesList);
           return Container(
-            margin: EdgeInsets.only(left: 10, right: 10),
+            margin: const EdgeInsets.symmetric(horizontal: 10),
             child: ListView.builder(
-              itemCount: batchesList.length,
+              itemCount: typedBatchesList.length,
               itemBuilder: (BuildContext context, int index) {
+                final batch = typedBatchesList[index];
                 return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (context) => CommentaryCourseListPage(
+                              batchId: batch['BATCHID'].toString(),
+                              pj01id: batch['PJ01ID'].toString(),
+                              pj05id: batch['PJ05ID'].toString(),
+                            ),
+                      ),
+                    );
+                  },
                   child: Card.filled(
                     color: Theme.of(context).colorScheme.surfaceContainer,
                     child: Padding(
-                      padding: EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(10),
                       child: Flex(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         direction: Axis.horizontal,
@@ -54,7 +66,7 @@ class _commentaryPage1State extends State<commentaryPage1> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  batchesList[index]['EVALUATIONBATCH'],
+                                  batch['EVALUATIONBATCH'].toString(),
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -62,7 +74,7 @@ class _commentaryPage1State extends State<commentaryPage1> {
                                         Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
-                                SizedBox(height: 5),
+                                const SizedBox(height: 5),
                                 Row(
                                   children: [
                                     Icon(
@@ -72,9 +84,9 @@ class _commentaryPage1State extends State<commentaryPage1> {
                                         context,
                                       ).colorScheme.onSurface.withAlpha(100),
                                     ),
-                                    SizedBox(width: 5),
+                                    const SizedBox(width: 5),
                                     Text(
-                                      batchesList[index]['KCLBMC'],
+                                      batch['KCLBMC'].toString(),
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.normal,
@@ -86,7 +98,7 @@ class _commentaryPage1State extends State<commentaryPage1> {
                                     ),
                                   ],
                                 ),
-                                SizedBox(height: 5),
+                                const SizedBox(height: 5),
                                 Row(
                                   children: [
                                     Icon(
@@ -96,9 +108,9 @@ class _commentaryPage1State extends State<commentaryPage1> {
                                         context,
                                       ).colorScheme.onSurface.withAlpha(100),
                                     ),
-                                    SizedBox(width: 5),
+                                    const SizedBox(width: 5),
                                     Text(
-                                      batchesList[index]['XQMC'],
+                                      batch['XQMC'].toString(),
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.normal,
@@ -115,29 +127,18 @@ class _commentaryPage1State extends State<commentaryPage1> {
                           ),
                           Expanded(
                             child: Container(
-                              decoration: BoxDecoration(shape: BoxShape.circle),
-                              padding: EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                              ),
+                              padding: const EdgeInsets.all(8),
                               alignment: Alignment.center,
-                              child: Icon(Icons.arrow_forward, size: 16),
+                              child: const Icon(Icons.arrow_forward, size: 16),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder:
-                            (context) => commentaryPage2(
-                              batchId: batchesList[index]['BATCHID'],
-                              pj01id: batchesList[index]['PJ01ID'],
-                              pj05id: batchesList[index]['PJ05ID'],
-                            ),
-                      ),
-                    );
-                  },
                 );
               },
             ),

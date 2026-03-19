@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
-import 'package:superhut/utils/token.dart';
 import 'package:superhut/utils/withhttp.dart';
+
+import '../core/services/app_logger.dart';
 
 late String currentTerm;
 
@@ -50,9 +51,8 @@ class FreeBuildingApi {
     );
     Map data = response.data;
     //List buildingList = data['data'];
-    List<Map<String, dynamic>> buildingListData =
+    final List<Map<String, dynamic>> buildingListData =
         List<Map<String, dynamic>>.from(data['data']);
-    print(buildingListData.length);
     for (int i = 0; i < buildingListData.length; i++) {
       var tbuilding = buildingListData[i];
 
@@ -91,7 +91,6 @@ class FreeRoomApi {
     for (var i = 0; i < tempList.length; i++) {
       result.add(processString(tempList[i]));
     }
-    print(result);
     return result;
   }
 
@@ -111,7 +110,6 @@ class FreeRoomApi {
     for (var room in roomListData) {
       List<String> freeList = [];
       if (room['zyjc'] == "") {
-        print("YES");
         freeList = ['00'];
       } else {
         freeList = stringToList(room['zyjc']);
@@ -125,7 +123,9 @@ class FreeRoomApi {
         ),
       );
     }
-    print(roomList[0].name);
+    if (roomList.isNotEmpty) {
+      AppLogger.debug('Loaded free room list for ${roomList.first.name}');
+    }
     return roomList;
   }
 }

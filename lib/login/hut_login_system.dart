@@ -1,6 +1,61 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
+import '../core/services/app_logger.dart';
+
+bool _isUsableJwxtTokenCandidate(
+  String? token, {
+  required String initialIdToken,
+}) {
+  if (token == null) {
+    return false;
+  }
+  final trimmedToken = token.trim();
+  return trimmedToken.isNotEmpty && trimmedToken != initialIdToken;
+}
+
+String? _extractTokenValue(String source) {
+  final tokenMatch = RegExp("token=([^&'\"]+)").firstMatch(source);
+  return tokenMatch?.group(1);
+}
+
+@visibleForTesting
+String? extractJwxtTokenFromCasUrl(
+  String url, {
+  required String initialIdToken,
+}) {
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    return null;
+  }
+
+  final fragment = uri.fragment;
+  if (!fragment.contains('casLogin') || !fragment.contains('token=')) {
+    return null;
+  }
+
+  final token = _extractTokenValue(fragment);
+  if (!_isUsableJwxtTokenCandidate(token, initialIdToken: initialIdToken)) {
+    return null;
+  }
+  return token!.trim();
+}
+
+@visibleForTesting
+String? extractJwxtTokenFromCasHtml(
+  String html, {
+  required String initialIdToken,
+}) {
+  final casRedirectMatch = RegExp(
+    "#/casLogin\\?token=([^&'\\\"]+)",
+  ).firstMatch(html);
+  final token = casRedirectMatch?.group(1);
+  if (!_isUsableJwxtTokenCandidate(token, initialIdToken: initialIdToken)) {
+    return null;
+  }
+  return token!.trim();
+}
+
 class HutLoginSystem extends StatefulWidget {
   /// The initial idToken to pass to the CAS login URL
   final String initialIdToken;
@@ -12,11 +67,11 @@ class HutLoginSystem extends StatefulWidget {
   final Function(String)? onError;
 
   const HutLoginSystem({
-    Key? key,
+    super.key,
     required this.initialIdToken,
     required this.onTokenAndCookieExtracted,
     this.onError,
-  }) : super(key: key);
+  });
 
   @override
   State<HutLoginSystem> createState() => _HutLoginSystemState();
@@ -26,85 +81,102 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
   InAppWebViewController? _webViewController;
   bool _isLoading = true;
   String _currentUrl = '';
-  final String _targetDomain = 'jwxtsj.hut.edu.cn';
-  final String _initialUrl = 'https://mycas.hut.edu.cn/cas/login';
+  bool _hasDeliveredCredentials = false;
+  bool _isDeliveringCredentials = false;
+  static const String _initialUrl = 'https://mycas.hut.edu.cn/cas/login';
 
   @override
   void initState() {
     super.initState();
   }
 
-  // 检查URL并提取token和cookie
-  void _checkUrlAndExtractTokenAndCookie(String url) async {
-    _currentUrl = url;
+  Future<void> _deliverExtractedCredentials(String token) async {
+    if (_hasDeliveredCredentials || _isDeliveringCredentials) {
+      return;
+    }
 
-    if (url.contains(_targetDomain) && url.contains('token=')) {
-      try {
-        // 解析URL获取token
-        Uri uri = Uri.parse(url);
-        String? token;
-
-        // 如果URL包含片段(#)，需要特殊处理
-        String fragment = uri.fragment;
-        if (fragment.isNotEmpty && fragment.contains('token=')) {
-          // 处理 #/casLogin?token=theNewToken&userType=2&toMenu=null 这种格式
-          int tokenStartIndex =
-              fragment.indexOf('token=') + 6; // 'token='.length
-          int tokenEndIndex = fragment.indexOf('&', tokenStartIndex);
-
-          if (tokenEndIndex == -1) {
-            // 如果token是最后一个参数
-            tokenEndIndex = fragment.length;
-          }
-
-          token = fragment.substring(tokenStartIndex, tokenEndIndex);
-        } else {
-          // 正常查询参数处理
-          token = uri.queryParameters['token'];
-        }
-
-        if (token != null && token.isNotEmpty && _webViewController != null) {
-          // 获取cookie
-          String? myClientTicket = await _getCookie('my_client_ticket');
-          
-          // 创建结果Map
-          Map<String, String> result = {
-            'token': token,
-            'my_client_ticket': myClientTicket ?? '',
-          };
-          
-          widget.onTokenAndCookieExtracted(result);
-        }
-      } catch (e) {
-        if (widget.onError != null) {
-          widget.onError!('Token和Cookie提取错误: $e');
-        }
+    _isDeliveringCredentials = true;
+    try {
+      final myClientTicket = await _getCookie('my_client_ticket');
+      if (_hasDeliveredCredentials) {
+        return;
       }
+
+      _hasDeliveredCredentials = true;
+      widget.onTokenAndCookieExtracted({
+        'token': token,
+        'my_client_ticket': myClientTicket ?? '',
+      });
+    } catch (error) {
+      if (widget.onError != null) {
+        widget.onError!('Token和Cookie提取错误: $error');
+      }
+    } finally {
+      _isDeliveringCredentials = false;
+    }
+  }
+
+  Future<void> _checkUrlAndExtractTokenAndCookie(String url) async {
+    _currentUrl = url;
+    final token = extractJwxtTokenFromCasUrl(
+      url,
+      initialIdToken: widget.initialIdToken,
+    );
+    if (token == null) {
+      return;
+    }
+
+    await _deliverExtractedCredentials(token);
+  }
+
+  Future<void> _checkHtmlAndExtractTokenAndCookie() async {
+    final controller = _webViewController;
+    if (controller == null || _hasDeliveredCredentials) {
+      return;
+    }
+
+    try {
+      final html = await controller.getHtml();
+      if (html == null || html.isEmpty) {
+        return;
+      }
+
+      final token = extractJwxtTokenFromCasHtml(
+        html,
+        initialIdToken: widget.initialIdToken,
+      );
+      if (token == null) {
+        return;
+      }
+
+      await _deliverExtractedCredentials(token);
+    } catch (error) {
+      AppLogger.debug('读取CAS页面HTML时出错: $error');
     }
   }
 
   // 获取指定名称的cookie
   Future<String?> _getCookie(String cookieName) async {
     if (_webViewController == null) return null;
-    
+
     try {
       CookieManager cookieManager = CookieManager.instance();
       List<Cookie> cookies = await cookieManager.getCookies(
         url: WebUri(_currentUrl),
       );
-      
+
       for (Cookie cookie in cookies) {
         if (cookie.name == cookieName) {
           return cookie.value;
         }
       }
-      
+
       // 如果在当前域名没找到，尝试从其他相关域名获取
       List<String> relatedDomains = [
         'https://mycas.hut.edu.cn',
         'https://jwxtsj.hut.edu.cn',
       ];
-      
+
       for (String domain in relatedDomains) {
         try {
           List<Cookie> domainCookies = await cookieManager.getCookies(
@@ -117,13 +189,13 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
           }
         } catch (e) {
           // 忽略单个域名的错误，继续尝试下一个
-          print('获取域名 $domain 的cookie时出错: $e');
+          AppLogger.debug('获取域名 $domain 的cookie时出错: $e');
         }
       }
-      
+
       return null;
     } catch (e) {
-      print('获取cookie时出错: $e');
+      AppLogger.debug('获取cookie时出错: $e');
       return null;
     }
   }
@@ -173,20 +245,18 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
                 "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
               },
             ),
-            initialOptions: InAppWebViewGroupOptions(
-              crossPlatform: InAppWebViewOptions(
-                useShouldOverrideUrlLoading: true,
-                useOnLoadResource: true,
-                javaScriptEnabled: true,
-                cacheEnabled: true,
-              ),
+            initialSettings: InAppWebViewSettings(
+              useShouldOverrideUrlLoading: true,
+              useOnLoadResource: true,
+              javaScriptEnabled: true,
+              cacheEnabled: true,
             ),
             onWebViewCreated: (controller) {
               _webViewController = controller;
             },
             shouldOverrideUrlLoading: (controller, navigationAction) async {
               final url = navigationAction.request.url.toString();
-              _checkUrlAndExtractTokenAndCookie(url);
+              await _checkUrlAndExtractTokenAndCookie(url);
               return NavigationActionPolicy.ALLOW;
             },
             onLoadStart: (controller, url) {
@@ -198,33 +268,33 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
                 _checkUrlAndExtractTokenAndCookie(_currentUrl);
               }
             },
-            onLoadStop: (controller, url) {
+            onLoadStop: (controller, url) async {
               if (url != null) {
                 setState(() {
                   _isLoading = false;
                   _currentUrl = url.toString();
                 });
-                _checkUrlAndExtractTokenAndCookie(_currentUrl);
+                await _checkUrlAndExtractTokenAndCookie(_currentUrl);
+                await _checkHtmlAndExtractTokenAndCookie();
 
-                // 输出当前URL到控制台，便于调试
-                print('页面加载完成: $_currentUrl');
+                AppLogger.debug('页面加载完成: $_currentUrl');
               }
             },
-            onLoadError: (controller, url, code, message) {
+            onReceivedError: (controller, request, error) {
               setState(() {
                 _isLoading = false;
               });
               if (widget.onError != null) {
-                widget.onError!('页面加载错误: $message');
+                widget.onError!('页面加载错误: ${error.description}');
               }
             },
             onConsoleMessage: (controller, consoleMessage) {
-              print('Console: ${consoleMessage.message}');
+              AppLogger.debug('Console: ${consoleMessage.message}');
             },
           ),
           if (_isLoading)
             Container(
-              color: Colors.white.withOpacity(0.7),
+              color: Colors.white.withAlpha(179),
               child: const Center(child: CircularProgressIndicator()),
             ),
         ],
@@ -238,19 +308,17 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
 class HutLoginExample extends StatelessWidget {
   final String idToken;
 
-  const HutLoginExample({Key? key, required this.idToken}) : super(key: key);
+  const HutLoginExample({super.key, required this.idToken});
 
   @override
   Widget build(BuildContext context) {
     return HutLoginSystem(
       initialIdToken: idToken,
       onTokenAndCookieExtracted: (result) {
-        // 处理提取到的token和cookie
         String token = result['token'] ?? '';
         String myClientTicket = result['my_client_ticket'] ?? '';
-        print('提取到的token: $token');
-        print('提取到的my_client_ticket: $myClientTicket');
-        // 这里可以保存token和cookie或导航到其他页面
+        AppLogger.debug('提取到的token: $token');
+        AppLogger.debug('提取到的my_client_ticket: $myClientTicket');
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('登录成功！')));

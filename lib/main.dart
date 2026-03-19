@@ -7,14 +7,13 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:superhut/pages/score/jumpToScorePage.dart';
+import 'package:superhut/pages/score/jump_to_score_page.dart';
 import 'package:superhut/welcomepage/view.dart';
 import 'home/homeview/view.dart';
+import 'core/services/app_auth_storage.dart';
 import 'pages/drink/view/view.dart';
 import 'pages/water/view.dart';
-import 'pages/Electricitybill/electricityPage.dart';
-import 'pages/score/scorepage.dart';
+import 'pages/Electricitybill/electricity_page.dart';
 
 abstract final class AppTheme {
   // The defined light theme.
@@ -172,8 +171,9 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   bool _isFirstOpen = true;
   bool _isLoading = true;
-  bool _isOldVersion = false;
-  static const platform = MethodChannel('com.superhut.rice.superhut/widget_actions');
+  static const platform = MethodChannel(
+    'com.superhut.rice.superhut/widget_actions',
+  );
   final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
   @override
@@ -198,7 +198,7 @@ class _MyAppState extends State<MyApp> {
       final context = navigatorKey.currentContext;
       if (context != null) {
         Widget? targetPage;
-        
+
         switch (actionType) {
           case 'drink':
             targetPage = FunctionDrinkPage();
@@ -213,26 +213,24 @@ class _MyAppState extends State<MyApp> {
             targetPage = JumpToScorePage();
             break;
         }
-        
+
         if (targetPage != null) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => targetPage!),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (context) => targetPage!));
         }
       }
     });
   }
 
   Future<void> _checkFirstOpen() async {
-    final prefs = await SharedPreferences.getInstance();
-    // await prefs.setBool('isFirstOpen', true);
-    _isFirstOpen = prefs.getBool('isFirstOpen') ?? true;
-    if (_isFirstOpen) {
-    } else {
-      _isOldVersion = prefs.getString('name') == null ? true : false;
+    final storage = AppAuthStorage.instance;
+    final isFirstOpen = await storage.isFirstOpen();
+    if (!mounted) {
+      return;
     }
     setState(() {
-      _isFirstOpen = _isFirstOpen;
+      _isFirstOpen = isFirstOpen;
       _isLoading = false;
     });
   }
@@ -240,17 +238,16 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const MaterialApp(home: CircularProgressIndicator());
+      return const MaterialApp(
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
     }
 
     return GetMaterialApp(
       navigatorKey: navigatorKey,
-      localizationsDelegates: [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      supportedLocales: [const Locale('zh', 'CH'), const Locale('en', 'US')],
-      locale: Locale('zh'),
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+      locale: const Locale('zh', 'CN'),
       title: '超级包菜',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

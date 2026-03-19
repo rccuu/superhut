@@ -20,7 +20,7 @@ class DrinkLoginPage2 extends StatefulWidget {
   });
 
   @override
-  _DrinkLoginPage2State createState() => _DrinkLoginPage2State();
+  State<DrinkLoginPage2> createState() => _DrinkLoginPage2State();
 }
 
 class _DrinkLoginPage2State extends State<DrinkLoginPage2> {

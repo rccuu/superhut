@@ -1,63 +1,88 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:superhut/bridge/getCoursePage.dart';
+import 'package:superhut/bridge/get_course_page.dart';
+import 'package:superhut/core/services/app_logger.dart';
 import 'package:superhut/generated/assets.dart';
 import 'package:superhut/login/hut_cas_login_page.dart';
 import 'package:superhut/login/webview_login_screen.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
+import '../core/services/app_auth_storage.dart';
+
 class UnifiedLoginPage extends StatefulWidget {
-  const UnifiedLoginPage({Key? key}) : super(key: key);
+  const UnifiedLoginPage({super.key});
 
   @override
-  _UnifiedLoginPageState createState() => _UnifiedLoginPageState();
+  State<UnifiedLoginPage> createState() => _UnifiedLoginPageState();
 }
 
-class _UnifiedLoginPageState extends State<UnifiedLoginPage>
-    with SingleTickerProviderStateMixin {
+class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   final TextEditingController _userNoController = TextEditingController();
   final TextEditingController _pwdController = TextEditingController();
-  late TabController _tabController;
   bool _isLoading = false;
-  final HutUserApi _api = HutUserApi();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _loadSavedCredentials();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _userNoController.dispose();
     _pwdController.dispose();
     super.dispose();
   }
 
-  // 加载保存的账号密码
   Future<void> _loadSavedCredentials() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUser = prefs.getString('user');
-    if (savedUser != null && savedUser.isNotEmpty) {
-      _userNoController.text = savedUser;
-
-      // 密码通常不应自动填充，但这里根据应用需求处理
-      final savedPassword = prefs.getString('password');
-      if (savedPassword != null && savedPassword.isNotEmpty) {
-        _pwdController.text = savedPassword;
-      }
+    final storage = AppAuthStorage.instance;
+    final savedUser = await storage.readJwxtUsername();
+    final savedPassword = await storage.readJwxtPassword();
+    if (!mounted) {
+      return;
     }
+
+    _userNoController.text = savedUser;
+    _pwdController.text = savedPassword;
   }
 
-  // 教务系统直接登录
-  void _loginWithCredentials() async {
-    if (_userNoController.text.isEmpty || _pwdController.text.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入账号和密码')));
+  void _showSnackBar(String message, {Color? backgroundColor}) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: backgroundColor),
+    );
+  }
+
+  Future<bool> _tryOfficialJwxtLogin(String reason) async {
+    _showSnackBar(reason);
+
+    if (!mounted) {
+      return false;
+    }
+
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder:
+            (context) => WebViewLoginScreen(
+              userNo: _userNoController.text.trim(),
+              password: _pwdController.text,
+              showText: '正在通过教务系统官方页面登录...',
+              renew: false,
+            ),
+      ),
+    );
+    return result == true;
+  }
+
+  Future<void> _loginWithCAS() async {
+    final username = _userNoController.text.trim();
+    final password = _pwdController.text;
+
+    if (username.isEmpty || password.isEmpty) {
+      _showSnackBar('请输入账号和密码');
       return;
     }
 
@@ -66,83 +91,50 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage>
     });
 
     try {
-      // 直接使用WebView登录教务系统
-      Navigator.push(
-        context,
+      final isLoginSuccess = await HutUserApi().userLogin(
+        username: username,
+        password: password,
+      );
+      if (!isLoginSuccess) {
+        await _tryOfficialJwxtLogin('智慧工大接口登录失败，正在切换到教务系统官方登录...');
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      final result = await HutCasTokenRetriever.getJwxtTokenAndCookie(context);
+      if (result == null || (result['token'] ?? '').isEmpty) {
+        await _tryOfficialJwxtLogin('统一认证未返回教务凭据，正在切换到教务系统官方登录...');
+        return;
+      }
+
+      await AppAuthStorage.instance.setFirstOpen(false);
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder:
-              (context) => WebViewLoginScreen(
-                userNo: _userNoController.text,
-                password: _pwdController.text,
-                showText: '登录中',
-                renew: false,
-              ),
+          builder: (context) => const Getcoursepage(renew: false),
         ),
       );
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('登录失败: $e')));
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  // 智慧工大平台登录
-  void _loginWithCAS() async {
-    if (_userNoController.text.isEmpty || _pwdController.text.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入账号和密码')));
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // 使用LoginWithPost进行工大平台登录，内部会调用统一认证
-      print('开始');
-      await HutUserApi().userLogin(
-        username: _userNoController.text,
-        password: _pwdController.text,
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Unified login failed unexpectedly',
+        error: error,
+        stackTrace: stackTrace,
       );
-      print('获取Token');
-      String? token = await HutCasTokenRetriever.getJwxtToken(context);
-      if (token != null) {
-        // 使用获取到的token
-        print('获取到的教务系统Token: $token');
-      }
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isFirstOpen', false);
-      Navigator.of(context).pop();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (context) => Getcoursepage(renew: false)),
-        );
-      });
-      // 登录成功后返回
-      //Navigator.pop(context);
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('登录失败: 也许是密码或账户不正确')));
+      await _tryOfficialJwxtLogin('登录过程异常，正在切换到教务系统官方登录...');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-  }
-
-  // 使用统一认证CAS登录工大平台并获取Token
-  void _loginWithHutPlatform() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const HutCasLoginPage()),
-    );
   }
 
   @override

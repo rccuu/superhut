@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
-import 'package:superhut/pages/Commentary/CommentaryPage1.dart';
-import 'package:superhut/pages/Electricitybill/electricityPage.dart';
+import 'package:superhut/pages/Commentary/commentary_batch_page.dart';
+import 'package:superhut/pages/Electricitybill/electricity_page.dart';
 import 'package:superhut/pages/ExamSchedule/exam_schedule_page.dart';
 import 'package:superhut/pages/drink/view/view.dart';
 import 'package:superhut/pages/freeroom/building.dart';
@@ -20,10 +20,8 @@ class FunctionPage extends StatefulWidget {
 }
 
 class _FunctionPageState extends State<FunctionPage> {
-  // 用于跟踪正在加载的功能
   final Set<String> _loadingFunctions = <String>{};
 
-  // 设置加载状态
   void _setLoading(String functionId, bool isLoading) {
     setState(() {
       if (isLoading) {
@@ -34,9 +32,28 @@ class _FunctionPageState extends State<FunctionPage> {
     });
   }
 
-  // 检查是否正在加载
   bool _isLoading(String functionId) {
     return _loadingFunctions.contains(functionId);
+  }
+
+  Future<void> _openProtectedPage({
+    required String functionId,
+    required Widget page,
+  }) async {
+    _setLoading(functionId, true);
+    try {
+      final isReady = await renewToken(context);
+      if (!isReady || !mounted) {
+        return;
+      }
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (context) => page));
+    } finally {
+      if (mounted) {
+        _setLoading(functionId, false);
+      }
+    }
   }
 
   @override
@@ -125,16 +142,10 @@ class _FunctionPageState extends State<FunctionPage> {
               color: Colors.blue.shade100,
               hasArrow: true,
               onTap: () async {
-                _setLoading("empty_room", true);
-                try {
-                  await renewToken(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => BuildingPage()),
-                  );
-                } finally {
-                  _setLoading("empty_room", false);
-                }
+                await _openProtectedPage(
+                  functionId: "empty_room",
+                  page: BuildingPage(),
+                );
               },
             ),
             SizedBox(height: 16),
@@ -148,16 +159,10 @@ class _FunctionPageState extends State<FunctionPage> {
               color: Colors.green.shade100,
               hasArrow: true,
               onTap: () async {
-                _setLoading("score", true);
-                try {
-                  await renewToken(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ScorePage()),
-                  );
-                } finally {
-                  _setLoading("score", false);
-                }
+                await _openProtectedPage(
+                  functionId: "score",
+                  page: ScorePage(),
+                );
               },
             ),
 
@@ -204,16 +209,10 @@ class _FunctionPageState extends State<FunctionPage> {
               color: Colors.blueGrey.shade100,
               hasArrow: true,
               onTap: () async {
-                _setLoading("exam", true);
-                try {
-                  await renewToken(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ExamSchedulePage()),
-                  );
-                } finally {
-                  _setLoading("exam", false);
-                }
+                await _openProtectedPage(
+                  functionId: "exam",
+                  page: ExamSchedulePage(),
+                );
               },
             ),
             SizedBox(height: 16),
@@ -240,16 +239,10 @@ class _FunctionPageState extends State<FunctionPage> {
               color: Colors.pinkAccent.shade100,
               hasArrow: true,
               onTap: () async {
-                _setLoading("commentary", true);
-                try {
-                  await renewToken(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => commentaryPage1()),
-                  );
-                } finally {
-                  _setLoading("commentary", false);
-                }
+                await _openProtectedPage(
+                  functionId: "commentary",
+                  page: CommentaryBatchPage(),
+                );
               },
             ),
             SizedBox(height: 16),
@@ -286,7 +279,7 @@ class _FunctionPageState extends State<FunctionPage> {
     required VoidCallback onTap,
   }) {
     final isLoading = _isLoading(id);
-    
+
     return GestureDetector(
       onTap: isLoading ? null : onTap, // 如果正在加载则禁用点击
       child: Container(
@@ -359,12 +352,13 @@ class _FunctionPageState extends State<FunctionPage> {
                     Container(
                       decoration: BoxDecoration(shape: BoxShape.circle),
                       padding: EdgeInsets.all(8),
-                      child: isLoading 
-                        ? LoadingAnimationWidget.inkDrop(
-                            color: Theme.of(context).colorScheme.primary,
-                            size: 16,
-                          )
-                        : Icon(Ionicons.arrow_forward, size: 16),
+                      child:
+                          isLoading
+                              ? LoadingAnimationWidget.inkDrop(
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 16,
+                              )
+                              : Icon(Ionicons.arrow_forward, size: 16),
                     )
                   else
                     _buildAvatarGroup(),

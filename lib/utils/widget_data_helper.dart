@@ -4,12 +4,14 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:superhut/widget_refresh_service.dart';
 
+import '../core/services/app_logger.dart';
+
 /// 小组件数据助手类
 /// 用于保存和管理桌面小组件所需的数据
 class WidgetDataHelper {
   /// 保存课程数据到本地文件，供桌面小组件读取
   ///
-  /// [courseData] 格式为 Map<String, List<Map<String, dynamic>>>
+  /// [courseData] 的格式为 `Map<String, List<Map<String, dynamic>>>`
   /// 其中外层 Map 的键为日期字符串（格式：yyyy-MM-dd）
   /// 值为当天的课程列表
   static Future<bool> saveCourseDataForWidget(
@@ -35,8 +37,8 @@ class WidgetDataHelper {
       await WidgetRefreshService.refreshCourseTableWidget();
 
       return true;
-    } catch (e) {
-      print('保存课程数据失败: $e');
+    } catch (error, stackTrace) {
+      AppLogger.error('保存课程数据失败', error: error, stackTrace: stackTrace);
       return false;
     }
   }
