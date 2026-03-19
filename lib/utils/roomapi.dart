@@ -3,7 +3,7 @@ import 'package:superhut/utils/withhttp.dart';
 
 import '../core/services/app_logger.dart';
 
-late String currentTerm;
+String currentTerm = '';
 
 class Building {
   final String name;
@@ -30,29 +30,65 @@ class Room {
 class FreeBuildingApi {
   List<Building> buildingList = [];
 
+  Map<String, dynamic> _responseMap(
+    dynamic data, {
+    required String fallbackMessage,
+  }) {
+    final map = mapFromResponseData(data);
+    if (map == null) {
+      throw StateError(fallbackMessage);
+    }
+    return map;
+  }
+
   Future<void> initData() async {
     await configureDioFromStorage();
   }
 
   Future<String> getCurrentTerm() async {
-    Response response;
-    response = await postDioWithCookie('/njwhd/currentTerm', {});
-    Map data = response.data;
-    Map termData = data['data'][0];
-    currentTerm = termData['semesterId'];
+    final Response<dynamic> response = await postDioWithCookie(
+      '/njwhd/currentTerm',
+      {},
+    );
+    final data = _responseMap(response.data, fallbackMessage: '当前学期响应异常');
+    if (data['code']?.toString() != '1') {
+      throw buildJwxtStateError(response.data, fallbackMessage: '当前学期加载失败');
+    }
+
+    final termList = data['data'] as List? ?? const [];
+    final termData =
+        termList.isNotEmpty ? mapFromResponseData(termList.first) : null;
+    if (termData == null) {
+      throw StateError('当前学期数据异常');
+    }
+
+    currentTerm = termData['semesterId']?.toString() ?? '';
+    if (currentTerm.isEmpty) {
+      throw StateError('当前学期标识缺失');
+    }
     return currentTerm;
   }
 
   Future<List<Building>> getBuildingList() async {
-    Response response;
-    response = await postDioWithCookie(
+    if (currentTerm.isEmpty) {
+      await getCurrentTerm();
+    }
+
+    final Response<dynamic> response = await postDioWithCookie(
       '/njwhd/student/getIdleClassroom?campusId=&jiaoxueloumc=&zhouci=40&xnxq=$currentTerm&searchType=lylv',
       {},
     );
-    Map data = response.data;
-    //List buildingList = data['data'];
+    final data = _responseMap(response.data, fallbackMessage: '教学楼列表响应异常');
+    if (data['code']?.toString() != '1') {
+      throw buildJwxtStateError(response.data, fallbackMessage: '教学楼列表加载失败');
+    }
+
     final List<Map<String, dynamic>> buildingListData =
-        List<Map<String, dynamic>>.from(data['data']);
+        (data['data'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+    buildingList = [];
     for (int i = 0; i < buildingListData.length; i++) {
       var tbuilding = buildingListData[i];
 
@@ -71,6 +107,16 @@ class FreeBuildingApi {
 
 class FreeRoomApi {
   List<Room> roomList = [];
+
+  Future<void> _ensureCurrentTermLoaded() async {
+    if (currentTerm.isNotEmpty) {
+      return;
+    }
+
+    final buildingApi = FreeBuildingApi();
+    await buildingApi.initData();
+    await buildingApi.getCurrentTerm();
+  }
 
   Future<void> initData() async {
     await configureDioFromStorage();
@@ -99,26 +145,38 @@ class FreeRoomApi {
     String nodeId,
     String buildingId,
   ) async {
-    Response response;
-    response = await postDioWithCookie(
+    await _ensureCurrentTermLoaded();
+
+    final Response<dynamic> response = await postDioWithCookie(
       '/njwhd/student/getIdleClassroom?date=$date&nodeId=$nodeId&buildingId=$buildingId&campusId=&jsmc=&xnxq=$currentTerm&jiaoxueloumc=',
       {},
     );
-    Map data = response.data;
-    // print(data);
-    List roomListData = data['data'];
+    final data = mapFromResponseData(response.data);
+    if (data == null) {
+      throw StateError('空教室列表响应异常');
+    }
+    if (data['code']?.toString() != '1') {
+      throw buildJwxtStateError(response.data, fallbackMessage: '空教室列表加载失败');
+    }
+
+    final roomListData = data['data'] as List? ?? const [];
+    roomList = [];
     for (var room in roomListData) {
+      final roomMap = mapFromResponseData(room);
+      if (roomMap == null) {
+        continue;
+      }
       List<String> freeList = [];
-      if (room['zyjc'] == "") {
+      if ((roomMap['zyjc']?.toString() ?? '').isEmpty) {
         freeList = ['00'];
       } else {
-        freeList = stringToList(room['zyjc']);
+        freeList = stringToList(roomMap['zyjc'].toString());
       }
 
       roomList.add(
         Room(
-          name: room['classroomname'],
-          seatNumber: room['seatnumber'],
+          name: roomMap['classroomname']?.toString() ?? '',
+          seatNumber: roomMap['seatnumber']?.toString() ?? '',
           free: freeList,
         ),
       );

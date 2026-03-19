@@ -12,12 +12,15 @@ class ScorePage extends StatefulWidget {
 }
 
 class _ScorePageState extends State<ScorePage> {
-  List semesterId = [];
-  late String nowSemesterId = "all";
-  late List<Score> scoreList;
-  late String zxf, zxfjd, pjjd;
+  List<String> semesterId = [];
+  String nowSemesterId = "all";
+  List<Score> scoreList = [];
+  String zxf = '-';
+  String zxfjd = '-';
+  String pjjd = '-';
   String selectedId = "all";
   bool first = true;
+  String? _errorMessage;
 
   void _showLoadingDialog() {
     showDialog(
@@ -38,15 +41,16 @@ class _ScorePageState extends State<ScorePage> {
     );
   }
 
-  void _applyScoreData(Map<String, Object> scoreMap, {String? semesterId}) {
+  void _applyScoreData(ScoreLoadResult scoreData, {String? semesterId}) {
     setState(() {
       if (semesterId != null) {
         selectedId = semesterId;
       }
-      scoreList = scoreMap['achievement'] as List<Score>;
-      zxf = scoreMap['yxzxf'] as String;
-      zxfjd = scoreMap['zxfjd'] as String;
-      pjjd = scoreMap['pjxfjd'] as String;
+      scoreList = scoreData.achievement;
+      zxf = scoreData.yxzxf;
+      zxfjd = scoreData.zxfjd;
+      pjjd = scoreData.pjxfjd;
+      _errorMessage = scoreData.errorMessage;
     });
   }
 
@@ -54,32 +58,39 @@ class _ScorePageState extends State<ScorePage> {
     final navigator = Navigator.of(context);
     _showLoadingDialog();
 
-    final scoreMap = await getScore(semesterId == "all" ? "" : semesterId);
+    final scoreData = await getScore(semesterId == "all" ? "" : semesterId);
     if (!mounted) {
       return;
     }
 
     navigator.pop(true);
-    _applyScoreData(scoreMap, semesterId: semesterId);
+    _applyScoreData(scoreData, semesterId: semesterId);
   }
 
   Future<void> getTimeList() async {
     if (first) {
-      Map timeMap = await semesterIdfc();
+      final timeData = await semesterIdfc();
       if (!mounted) {
         return;
       }
       setState(() {
-        semesterId = timeMap['idlist'];
-        nowSemesterId = timeMap['nowid'];
+        semesterId = timeData.idList;
+        nowSemesterId = timeData.nowId.isEmpty ? "all" : timeData.nowId;
+        _errorMessage = timeData.errorMessage;
       });
+      if (timeData.errorMessage != null) {
+        first = false;
+        return;
+      }
 
-      final scoreMap = await getScore(nowSemesterId);
+      final scoreData = await getScore(
+        nowSemesterId == "all" ? "" : nowSemesterId,
+      );
       if (!mounted) {
         return;
       }
 
-      _applyScoreData(scoreMap, semesterId: nowSemesterId);
+      _applyScoreData(scoreData, semesterId: nowSemesterId);
       first = false;
     } else {
       return;
@@ -128,98 +139,32 @@ class _ScorePageState extends State<ScorePage> {
           ),
           body: Container(
             margin: EdgeInsets.only(left: 10, right: 10),
-            child: ListView.builder(
-              itemCount: scoreList.length + 1,
-              itemBuilder: (context, index) {
-                if (scoreList.isEmpty) {
-                  return Column(
-                    children: [
-                      _buildTopCard(),
-                      const SizedBox(height: 10),
-                      const Text("当前学期没有成绩"),
-                    ],
-                  );
-                }
-                if (index == 0) {
-                  return _buildTopCard();
-                } else {
-                  var ins = index - 1;
-                  return Card.filled(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
-                    child: Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Flex(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        direction: Axis.horizontal,
-                        children: [
-                          Expanded(
-                            flex: 10,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  scoreList[ins].courseName,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                ),
-                                Row(
-                                  children: [
-                                    Chip(
-                                      label: Text(
-                                        scoreList[ins].courseNature,
-                                        style: TextStyle(fontSize: 12),
-                                      ),
-                                      backgroundColor:
-                                          Theme.of(context).colorScheme.surface,
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 0,
-                                        horizontal: 0,
-                                      ),
-                                    ),
-                                    SizedBox(width: 5),
-                                    Chip(
-                                      label: Text(
-                                        "绩点:${scoreList[ins].gradePoints}",
-                                        style: TextStyle(fontSize: 12),
-                                      ),
-                                      backgroundColor:
-                                          Theme.of(context).colorScheme.surface,
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 0,
-                                        horizontal: 0,
-                                      ),
-                                    ),
-                                    SizedBox(width: 5),
-                                    Chip(
-                                      label: Text(
-                                        "学分:${scoreList[ins].credit}",
-                                        style: TextStyle(fontSize: 12),
-                                      ),
-                                      backgroundColor:
-                                          Theme.of(context).colorScheme.surface,
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 0,
-                                        horizontal: 0,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Padding(
-                              padding: EdgeInsets.only(right: 10),
+            child: ListView(
+              children: [
+                _buildTopCard(),
+                const SizedBox(height: 10),
+                if (_errorMessage != null)
+                  Center(child: Text(_errorMessage!))
+                else if (scoreList.isEmpty)
+                  const Center(child: Text("当前学期没有成绩"))
+                else
+                  ...List.generate(scoreList.length, (index) {
+                    final score = scoreList[index];
+                    return Card.filled(
+                      color: Theme.of(context).colorScheme.surfaceContainer,
+                      child: Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Flex(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          direction: Axis.horizontal,
+                          children: [
+                            Expanded(
+                              flex: 10,
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    scoreList[ins].fraction,
+                                    score.courseName,
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -229,27 +174,95 @@ class _ScorePageState extends State<ScorePage> {
                                           ).colorScheme.onSurface,
                                     ),
                                   ),
-                                  Text(
-                                    scoreList[ins].state,
-                                    style: TextStyle(
-                                      fontSize: 12,
-
-                                      color:
-                                          Theme.of(
-                                            context,
-                                          ).colorScheme.onSurface,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Chip(
+                                        label: Text(
+                                          score.courseNature,
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                        backgroundColor:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.surface,
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 0,
+                                          horizontal: 0,
+                                        ),
+                                      ),
+                                      SizedBox(width: 5),
+                                      Chip(
+                                        label: Text(
+                                          "绩点:${score.gradePoints}",
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                        backgroundColor:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.surface,
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 0,
+                                          horizontal: 0,
+                                        ),
+                                      ),
+                                      SizedBox(width: 5),
+                                      Chip(
+                                        label: Text(
+                                          "学分:${score.credit}",
+                                          style: TextStyle(fontSize: 12),
+                                        ),
+                                        backgroundColor:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.surface,
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 0,
+                                          horizontal: 0,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
-                          ),
-                        ],
+                            Expanded(
+                              flex: 3,
+                              child: Padding(
+                                padding: EdgeInsets.only(right: 10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      score.fraction,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                    Text(
+                                      score.state,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color:
+                                            Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }
-              },
+                    );
+                  }),
+              ],
             ),
           ),
         );

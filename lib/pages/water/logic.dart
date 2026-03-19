@@ -144,10 +144,19 @@ class FunctionHotWaterLogic extends GetxController {
 
   /// 获取余额
   Future<void> getBalance() async {
-    await hutUserApi.getCardBalance().then((value) {
+    try {
+      final value = await hutUserApi.getCardBalance();
       state.balance.value = value;
       update();
-    });
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to load hot water card balance',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      state.balance.value = '--';
+      update();
+    }
   }
 
   /// 检查是否有未关闭的设备

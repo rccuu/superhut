@@ -3,17 +3,26 @@ import '../../utils/roomapi.dart';
 bool isGet = false, isRoomGet = false;
 List<Building> buildingList = [];
 List<Room> roomList = [];
+String? buildingLoadErrorMessage;
+String? roomLoadErrorMessage;
 
 Future<List<Building>> getBuildingList() async {
   if (isGet) {
     return buildingList;
   }
-  var api = FreeBuildingApi();
-  await api.initData();
-  await api.getCurrentTerm();
-  buildingList = await api.getBuildingList();
-  isGet = true;
-  return buildingList;
+
+  try {
+    var api = FreeBuildingApi();
+    await api.initData();
+    await api.getCurrentTerm();
+    buildingList = await api.getBuildingList();
+    buildingLoadErrorMessage = null;
+    isGet = true;
+    return buildingList;
+  } catch (error) {
+    buildingLoadErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+    return [];
+  }
 }
 
 Future<List<Room>> getRoom(
@@ -22,8 +31,14 @@ Future<List<Room>> getRoom(
   String buildingId,
   bool reFlash,
 ) async {
-  var api = FreeRoomApi();
-  await api.initData();
-  roomList = await api.getFreeRoomList(date, nodeId, buildingId);
-  return roomList;
+  try {
+    var api = FreeRoomApi();
+    await api.initData();
+    roomList = await api.getFreeRoomList(date, nodeId, buildingId);
+    roomLoadErrorMessage = null;
+    return roomList;
+  } catch (error) {
+    roomLoadErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+    return [];
+  }
 }

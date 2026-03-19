@@ -28,7 +28,7 @@ abstract class _HutUserApiCore {
 
   Future<bool> checkTokenValidity();
 
-  Future<List> getOpenid();
+  Future<List<String>> getOpenid();
 
   Future<_HutOpenIdSession> _getOpenIdSession();
 }

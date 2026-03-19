@@ -31,6 +31,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
   String balance = "-";
   bool isRoomLoading = false, isinit = false;
   bool isChargeLoading = false;
+  String? roomLoadErrorMessage;
   final TextEditingController _paymentController = TextEditingController();
 
   @override
@@ -48,14 +49,29 @@ class _ElectricityPageState extends State<ElectricityPage> {
   }
 
   Future<void> getBalance() async {
-    final cardBalance = await hutUserApi.getCardBalance();
-    if (!mounted) {
-      return;
-    }
+    try {
+      final cardBalance = await hutUserApi.getCardBalance();
+      if (!mounted) {
+        return;
+      }
 
-    setState(() {
-      balance = cardBalance;
-    });
+      setState(() {
+        balance = cardBalance;
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to load card balance on electricity page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        balance = '-';
+      });
+    }
   }
 
   Future<bool> getHisRoomInfo() async {
@@ -63,26 +79,43 @@ class _ElectricityPageState extends State<ElectricityPage> {
       return true;
     }
 
-    await electricityApi.onInit();
-    final history = Map<String, dynamic>.from(
-      await electricityApi.getHistory(),
-    );
-    final roomInfo = Map<String, dynamic>.from(
-      await electricityApi.getSingleRoomInfo(history['roomid'].toString()),
-    );
-    if (!mounted) {
+    try {
+      await electricityApi.onInit();
+      final history = Map<String, dynamic>.from(
+        await electricityApi.getHistory(),
+      );
+      final roomInfo = Map<String, dynamic>.from(
+        await electricityApi.getSingleRoomInfo(history['roomid'].toString()),
+      );
+      if (!mounted) {
+        return false;
+      }
+
+      setState(() {
+        baseInfo = history;
+        nowRoomInfo = roomInfo;
+        setRoomName = roomInfo['roomName'].toString();
+        roomCount = roomInfo['eleTail'].toString();
+        nowRoomId = history['roomid'].toString();
+        roomLoadErrorMessage = null;
+        isinit = true;
+      });
+      return true;
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to load electricity room info',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) {
+        return false;
+      }
+
+      setState(() {
+        roomLoadErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
       return false;
     }
-
-    setState(() {
-      baseInfo = history;
-      nowRoomInfo = roomInfo;
-      setRoomName = roomInfo['roomName'].toString();
-      roomCount = roomInfo['eleTail'].toString();
-      nowRoomId = history['roomid'].toString();
-      isinit = true;
-    });
-    return true;
   }
 
   Future<bool> getNewRoomInfo(String roomId) async {
@@ -98,6 +131,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
       setRoomName = roomInfo['roomName'].toString();
       roomCount = roomInfo['eleTail'].toString();
       nowRoomId = roomId;
+      roomLoadErrorMessage = null;
     });
     return true;
   }
@@ -304,6 +338,9 @@ class _ElectricityPageState extends State<ElectricityPage> {
                 future: getHisRoomInfo(),
                 rememberFutureResult: true,
                 whenDone: (v) {
+                  if (roomLoadErrorMessage != null) {
+                    return Text(roomLoadErrorMessage!);
+                  }
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
