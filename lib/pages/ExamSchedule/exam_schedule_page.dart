@@ -13,7 +13,8 @@ class ExamSchedulePage extends StatefulWidget {
 
 class _ExamSchedulePageState extends State<ExamSchedulePage> {
   //定义安排MAP
-  List examSchedules = [];
+  List<Map<String, dynamic>> examSchedules = [];
+  String? _errorMessage;
 
   void showLoadingDialog() {
     showDialog(
@@ -35,7 +36,9 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
   }
 
   Future getExamSchedule() async {
-    examSchedules = await getSchedule();
+    final result = await getSchedule();
+    examSchedules = result.schedules;
+    _errorMessage = result.errorMessage;
     return true;
   }
 
@@ -55,41 +58,42 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
           appBar: AppBar(title: Text("考试安排")),
           body: Container(
             margin: EdgeInsets.only(left: 10, right: 10),
-            child: ListView.builder(
-              itemCount: examSchedules.length,
-              itemBuilder: (context, index) {
-                if (examSchedules.isEmpty) {
-                  return Column(
-                    children: [SizedBox(height: 10), Text("当前学期暂时没有考试安排")],
-                  );
-                } else {
-                  var ins = index;
+            child:
+                _errorMessage != null
+                    ? Center(child: Text(_errorMessage!))
+                    : examSchedules.isEmpty
+                    ? Column(
+                      children: [SizedBox(height: 10), Text("当前学期暂时没有考试安排")],
+                    )
+                    : ListView.builder(
+                      itemCount: examSchedules.length,
+                      itemBuilder: (context, index) {
+                        var ins = index;
                   // 更健壮的日期规范化函数
-                  DateTime? parseExamDate(String input) {
-                    try {
-                      // 提取日期部分（前10个字符）
-                      String datePart = input.substring(0, 10);
+                        DateTime? parseExamDate(String input) {
+                          try {
+                            if (input.length < 10) {
+                              return null;
+                            }
+                            String datePart = input.substring(0, 10);
 
-                      // 分割日期组件
-                      List<String> parts = datePart.split('-');
-                      if (parts.length != 3) return null;
+                            List<String> parts = datePart.split('-');
+                            if (parts.length != 3) return null;
 
-                      // 解析为整数
-                      int year = int.tryParse(parts[0]) ?? DateTime.now().year;
-                      int month = int.tryParse(parts[1]) ?? 1;
-                      int day = int.tryParse(parts[2]) ?? 1;
+                            int year =
+                                int.tryParse(parts[0]) ?? DateTime.now().year;
+                            int month = int.tryParse(parts[1]) ?? 1;
+                            int day = int.tryParse(parts[2]) ?? 1;
 
-                      // 创建DateTime对象（只保留日期部分）
-                      return DateTime(year, month, day);
-                    } catch (e) {
-                      return null;
-                    }
-                  }
+                            return DateTime(year, month, day);
+                          } catch (e) {
+                            return null;
+                          }
+                        }
 
-                  // 解析考试日期
-                  DateTime? examDate = parseExamDate(
-                    examSchedules[ins]['time'],
-                  );
+                        DateTime? examDate = parseExamDate(
+                          examSchedules[ins]['time']?.toString() ?? '',
+                        );
 
                   // 计算距离考试的天数
                   String daysLeftText = "日期未知";
@@ -110,128 +114,143 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                       daysLeftText = "已结束${-daysLeft}天";
                     }
                   }
-                  return Card.filled(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
-                    child: Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Flex(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        direction: Axis.horizontal,
-                        children: [
-                          Expanded(
-                            flex: 10,
-                            child: Column(
+                        return Card.filled(
+                          color: Theme.of(context).colorScheme.surfaceContainer,
+                          child: Padding(
+                            padding: EdgeInsets.all(10),
+                            child: Flex(
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              direction: Axis.horizontal,
                               children: [
-                                Text(
-                                  examSchedules[ins]['courseName'],
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                ),
-                                SizedBox(height: 5),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Ionicons.location,
-                                      size: 20,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withAlpha(100),
-                                    ),
-                                    SizedBox(width: 5),
-                                    Text(
-                                      '${examSchedules[ins]['examinationPlace']}',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.normal,
-                                        color:
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 5),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Ionicons.calendar,
-                                      size: 20,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withAlpha(100),
-                                    ),
-                                    SizedBox(width: 5),
-                                    Text(
-                                      '${examSchedules[ins]['time']}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.normal,
-                                        color:
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 5),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Ionicons.timer,
-                                      size: 20,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withAlpha(100),
-                                    ),
-                                    SizedBox(width: 5),
-                                    Text(
-                                      daysLeftText,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.normal,
-                                        color: _getDaysLeftColor(
-                                          daysLeftText,
-                                          context,
+                                Expanded(
+                                  flex: 10,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        examSchedules[ins]['courseName']
+                                                ?.toString() ??
+                                            '',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color:
+                                              Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface,
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 10),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      '${examSchedules[ins]['courseNumber']}',
-                                      style: TextStyle(
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.normal,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurface.withAlpha(100),
+                                      SizedBox(height: 5),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Ionicons.location,
+                                            size: 20,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withAlpha(100),
+                                          ),
+                                          SizedBox(width: 5),
+                                          Text(
+                                            examSchedules[ins]['examinationPlace']
+                                                    ?.toString() ??
+                                                '',
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.normal,
+                                              color:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      textAlign: TextAlign.end,
-                                    ),
-                                  ],
+                                      SizedBox(height: 5),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Ionicons.calendar,
+                                            size: 20,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withAlpha(100),
+                                          ),
+                                          SizedBox(width: 5),
+                                          Text(
+                                            examSchedules[ins]['time']
+                                                    ?.toString() ??
+                                                '',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.normal,
+                                              color:
+                                                  Theme.of(
+                                                    context,
+                                                  ).colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 5),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Ionicons.timer,
+                                            size: 20,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface
+                                                .withAlpha(100),
+                                          ),
+                                          SizedBox(width: 5),
+                                          Text(
+                                            daysLeftText,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.normal,
+                                              color: _getDaysLeftColor(
+                                                daysLeftText,
+                                                context,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: 10),
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            examSchedules[ins]['courseNumber']
+                                                    ?.toString() ??
+                                                '',
+                                            style: TextStyle(
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.normal,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withAlpha(100),
+                                            ),
+                                            textAlign: TextAlign.end,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                }
-              },
-            ),
           ),
         );
       },

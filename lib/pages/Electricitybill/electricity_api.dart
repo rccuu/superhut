@@ -9,7 +9,7 @@ import '../../core/services/app_logger.dart';
 class ElectricityApi {
   final HutUserApi hutApi = HutUserApi();
   final AppAuthStorage _storage = AppAuthStorage.instance;
-  late List openids;
+  late List<String> openids;
   late String openid, jsessionId;
   late String token;
   late String username;
@@ -18,9 +18,38 @@ class ElectricityApi {
   //基础电费信息设置
   late String factorycode, areaid, roomid, buildingid;
 
+  Map<String, dynamic> _mapFromData(
+    dynamic data, {
+    required String errorMessage,
+  }) {
+    if (data is Map<String, dynamic>) {
+      return data;
+    }
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    throw StateError(errorMessage);
+  }
+
+  String _requiredString(
+    Map<String, dynamic> data,
+    String key, {
+    required String errorMessage,
+  }) {
+    final value = data[key]?.toString() ?? '';
+    if (value.isEmpty || value == 'null') {
+      throw StateError(errorMessage);
+    }
+    return value;
+  }
+
   //初始化API
   Future<void> onInit() async {
     openids = await hutApi.getOpenid();
+    if (openids.length < 2) {
+      throw StateError('未获取到电费服务身份信息，请重新登录后重试');
+    }
+
     openid = openids[0];
     token = await _storage.readHutToken();
     jsessionId = openids[1];
@@ -69,9 +98,9 @@ class ElectricityApi {
     final Response<dynamic> response = await userDio.get(
       '/personal/api/v1/personal/me/user',
     );
-    final Map data = response.data;
-    final Map user = data['data'];
-    username = user['username'];
+    final data = _mapFromData(response.data, errorMessage: '用户信息响应异常');
+    final user = _mapFromData(data['data'], errorMessage: '用户信息缺失');
+    username = _requiredString(user, 'username', errorMessage: '用户学号缺失');
     return 1;
   }
 
@@ -82,14 +111,37 @@ class ElectricityApi {
       '/myaccount/querywechatUserLastInfo?openid=$openid',
       {"idserial": username, "openid": openid},
     );
-    Map data = response.data;
-    Map history = data['resultData'];
-    String elelastBindStr = history['elelastbind'];
-    Map elelastbind = jsonDecode(elelastBindStr);
-    factorycode = elelastbind['factorycode'];
-    areaid = elelastbind['areaid'];
-    roomid = elelastbind['roomid'];
-    buildingid = elelastbind['buildingid'];
+    final data = _mapFromData(response.data, errorMessage: '历史房间响应异常');
+    final history = _mapFromData(data['resultData'], errorMessage: '未找到历史房间信息');
+    final elelastBindStr = _requiredString(
+      history,
+      'elelastbind',
+      errorMessage: '历史房间信息缺失',
+    );
+    final elelastbind = _mapFromData(
+      jsonDecode(elelastBindStr),
+      errorMessage: '历史房间信息格式异常',
+    );
+    factorycode = _requiredString(
+      elelastbind,
+      'factorycode',
+      errorMessage: '历史房间缺少 factorycode',
+    );
+    areaid = _requiredString(
+      elelastbind,
+      'areaid',
+      errorMessage: '历史房间缺少 areaid',
+    );
+    roomid = _requiredString(
+      elelastbind,
+      'roomid',
+      errorMessage: '历史房间缺少 roomid',
+    );
+    buildingid = _requiredString(
+      elelastbind,
+      'buildingid',
+      errorMessage: '历史房间缺少 buildingid',
+    );
     return {
       "factorycode": factorycode,
       "areaid": areaid,
@@ -107,10 +159,18 @@ class ElectricityApi {
           "factorycode": factorycode,
           "roomid": troomid,
         });
-    final Map data = response.data;
-    final Map roomInfo = data['resultData'];
-    final String eleTail = roomInfo['eledetail'];
-    final String roomName = roomInfo['accname'];
+    final data = _mapFromData(response.data, errorMessage: '房间详情响应异常');
+    final roomInfo = _mapFromData(data['resultData'], errorMessage: '房间详情缺失');
+    final String eleTail = _requiredString(
+      roomInfo,
+      'eledetail',
+      errorMessage: '房间剩余电量缺失',
+    );
+    final String roomName = _requiredString(
+      roomInfo,
+      'accname',
+      errorMessage: '房间名称缺失',
+    );
     return {"roomName": roomName, "eleTail": eleTail};
   }
 
@@ -120,9 +180,12 @@ class ElectricityApi {
       '/channel/getAllAccountInfo?openid=$openid',
       {"areaid": areaid, "buildingid": buildingid, "factorycode": factorycode},
     );
-    final Map data = response.data;
-    final Map roomListA = data['resultData'];
-    final List roomList = roomListA['jsonArr'];
+    final data = _mapFromData(response.data, errorMessage: '房间列表响应异常');
+    final roomListA = _mapFromData(data['resultData'], errorMessage: '房间列表缺失');
+    final roomList = roomListA['jsonArr'];
+    if (roomList is! List) {
+      throw StateError('房间列表数据异常');
+    }
     return roomList;
   }
 
@@ -139,7 +202,7 @@ class ElectricityApi {
       },
       "idserial": username,
     });
-    Map data = response.data;
+    final data = _mapFromData(response.data, errorMessage: '充值校验响应异常');
     if (data['success'] == true) {
       return true;
     } else {
@@ -165,10 +228,21 @@ class ElectricityApi {
           "roomvalue": payRoomName,
           "paytype": "6",
         });
-    final Map data = response.data;
-    final Map resultData = data['resultData'];
-    final String payorderno = resultData['payorderno'];
-    final String txdate = resultData['txdate'];
+    final data = _mapFromData(response.data, errorMessage: '创建订单响应异常');
+    final resultData = _mapFromData(
+      data['resultData'],
+      errorMessage: '创建订单结果缺失',
+    );
+    final String payorderno = _requiredString(
+      resultData,
+      'payorderno',
+      errorMessage: '订单号缺失',
+    );
+    final String txdate = _requiredString(
+      resultData,
+      'txdate',
+      errorMessage: '订单时间缺失',
+    );
     return {"payorderno": payorderno, "txdate": txdate, "code": 'true'};
   }
 
@@ -188,7 +262,7 @@ class ElectricityApi {
           "factorycode": factorycode,
           "roomname": payRoomName,
         });
-    final Map data = response.data;
+    final data = _mapFromData(response.data, errorMessage: '充值结果响应异常');
     AppLogger.debug('Electricity recharge result: ${data['message']}');
   }
 }

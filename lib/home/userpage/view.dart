@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../bridge/get_course_page.dart';
 import '../../core/services/app_auth_storage.dart';
+import '../../core/services/app_logger.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/hut_user_api.dart';
 import '../../utils/token.dart';
@@ -31,11 +32,27 @@ class _UserPageState extends State<UserPage> {
 
   /// 获取余额
   Future<void> getBalance() async {
-    await hutUserApi.getCardBalance().then((value) {
+    try {
+      final value = await hutUserApi.getCardBalance();
+      if (!mounted) {
+        return;
+      }
       setState(() {
         balance = value.isEmpty ? '--' : value;
       });
-    });
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to load card balance on user page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        balance = '--';
+      });
+    }
   }
 
   final Uri _url = Uri.parse(
@@ -67,6 +84,32 @@ class _UserPageState extends State<UserPage> {
       "pjxfjd": pjxfjd,
     };
     return data;
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openScorePage() async {
+    final renewed = await renewToken(context);
+    if (!mounted) {
+      return;
+    }
+    if (!renewed) {
+      _showSnackBar('成绩页登录状态已失效，请重新登录后重试');
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ScorePage()),
+    );
   }
 
   @override
@@ -158,18 +201,7 @@ class _UserPageState extends State<UserPage> {
                         value: d['yxzxf'],
                         color: Color(0xFFE3F1EC),
                         textColor: Colors.black87,
-                        onTap: () async {
-                          await renewToken(context);
-                          if (!context.mounted) {
-                            return;
-                          }
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ScorePage(),
-                            ),
-                          );
-                        },
+                        onTap: _openScorePage,
                       ),
                     ),
 
@@ -182,18 +214,7 @@ class _UserPageState extends State<UserPage> {
                         value: d['pjxfjd'],
                         color: Color(0xFFFFF6E0),
                         textColor: Colors.black87,
-                        onTap: () async {
-                          await renewToken(context);
-                          if (!context.mounted) {
-                            return;
-                          }
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ScorePage(),
-                            ),
-                          );
-                        },
+                        onTap: _openScorePage,
                       ),
                     ),
                   ],

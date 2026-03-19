@@ -36,6 +36,16 @@ class _FunctionPageState extends State<FunctionPage> {
     return _loadingFunctions.contains(functionId);
   }
 
+  void _showSnackBar(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _openProtectedPage({
     required String functionId,
     required Widget page,
@@ -44,6 +54,9 @@ class _FunctionPageState extends State<FunctionPage> {
     try {
       final isReady = await renewToken(context);
       if (!isReady || !mounted) {
+        if (mounted) {
+          _showSnackBar('教务登录状态已失效，请重新登录后重试');
+        }
         return;
       }
       await Navigator.of(

@@ -29,6 +29,13 @@ class _BuildingPageState extends State<BuildingPage> {
         future: getBuildingList(),
         rememberFutureResult: true,
         whenDone: (data) {
+          if (buildingLoadErrorMessage != null) {
+            return Center(child: Text(buildingLoadErrorMessage!));
+          }
+          if (data.isEmpty) {
+            return Center(child: Text('当前暂无可用教学楼数据'));
+          }
+
           return Container(
             margin: EdgeInsets.only(left: 10, right: 10),
             child: ListView.builder(
