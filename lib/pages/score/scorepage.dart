@@ -1,6 +1,7 @@
+import 'dart:async';
+
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
-import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/pages/score/logic.dart';
 
@@ -24,6 +25,7 @@ class _ScorePageState extends State<ScorePage> {
   bool first = true;
   String? _errorMessage;
   final Map<String, ScoreLoadResult> _scoreCache = <String, ScoreLoadResult>{};
+  bool _isSemesterProbeStarted = false;
 
   void _showLoadingDialog() {
     showDialog(
@@ -58,6 +60,12 @@ class _ScorePageState extends State<ScorePage> {
   }
 
   Future<void> _refreshScoresForSelection(String semesterId) async {
+    final cached = _scoreCache[semesterId];
+    if (cached != null) {
+      _applyScoreData(cached, semesterId: semesterId);
+      return;
+    }
+
     final navigator = Navigator.of(context);
     _showLoadingDialog();
 
@@ -102,6 +110,38 @@ class _ScorePageState extends State<ScorePage> {
     return availableSemesterIds;
   }
 
+  Future<void> _probeAvailableSemesters(List<String> semesterIds) async {
+    if (_isSemesterProbeStarted) {
+      return;
+    }
+    _isSemesterProbeStarted = true;
+
+    final filteredSemesterIds = await _filterSemestersWithScores(semesterIds);
+    if (!mounted) {
+      return;
+    }
+
+    final shouldResetSelection =
+        selectedId != "all" && !filteredSemesterIds.contains(selectedId);
+
+    setState(() {
+      semesterId = filteredSemesterIds;
+      if (shouldResetSelection) {
+        selectedId = "all";
+      }
+    });
+
+    if (!shouldResetSelection) {
+      return;
+    }
+
+    final allScoreData = await _loadScoreForSemester("all");
+    if (!mounted) {
+      return;
+    }
+    _applyScoreData(allScoreData, semesterId: "all");
+  }
+
   Future<void> getTimeList() async {
     if (first) {
       final timeData = await semesterIdfc();
@@ -112,36 +152,20 @@ class _ScorePageState extends State<ScorePage> {
         semesterId = timeData.idList;
         nowSemesterId = timeData.nowId.isEmpty ? "all" : timeData.nowId;
         _errorMessage = timeData.errorMessage;
+        selectedId = "all";
       });
       if (timeData.errorMessage != null) {
         first = false;
         return;
       }
 
-      final filteredSemesterIds = await _filterSemestersWithScores(
-        timeData.idList,
-      );
+      final scoreData = await _loadScoreForSemester("all");
       if (!mounted) {
         return;
       }
 
-      final initialSemesterId =
-          filteredSemesterIds.contains(nowSemesterId)
-              ? nowSemesterId
-              : filteredSemesterIds.isNotEmpty
-              ? filteredSemesterIds.first
-              : "all";
-
-      final scoreData = await _loadScoreForSemester(initialSemesterId);
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        semesterId = filteredSemesterIds;
-        nowSemesterId = initialSemesterId;
-      });
-      _applyScoreData(scoreData, semesterId: initialSemesterId);
+      _applyScoreData(scoreData, semesterId: "all");
+      unawaited(_probeAvailableSemesters(timeData.idList));
       first = false;
     } else {
       return;
@@ -333,6 +357,11 @@ class _ScorePageState extends State<ScorePage> {
   }
 
   Widget _buildTopCard() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final titleColor = colorScheme.onSurface;
+    final labelColor = colorScheme.onSurfaceVariant;
+    final valueColor = colorScheme.onSurface;
+
     return Card.filled(
       color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
@@ -345,7 +374,7 @@ class _ScorePageState extends State<ScorePage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).primaryColor,
+                color: titleColor,
               ),
             ),
             SizedBox(height: 10),
@@ -355,16 +384,13 @@ class _ScorePageState extends State<ScorePage> {
                 Expanded(
                   child: Column(
                     children: [
-                      Text(
-                        "已修总学分",
-                        style: TextStyle(color: Theme.of(context).primaryColor),
-                      ),
+                      Text("已修总学分", style: TextStyle(color: labelColor)),
                       Text(
                         zxf,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
+                          color: valueColor,
                         ),
                       ),
                     ],
@@ -373,16 +399,13 @@ class _ScorePageState extends State<ScorePage> {
                 Expanded(
                   child: Column(
                     children: [
-                      Text(
-                        "总学分绩点",
-                        style: TextStyle(color: Theme.of(context).primaryColor),
-                      ),
+                      Text("总学分绩点", style: TextStyle(color: labelColor)),
                       Text(
                         zxfjd,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
+                          color: valueColor,
                         ),
                       ),
                     ],
@@ -391,33 +414,19 @@ class _ScorePageState extends State<ScorePage> {
                 Expanded(
                   child: Column(
                     children: [
-                      Text(
-                        "平均学分绩点",
-                        style: TextStyle(color: Theme.of(context).primaryColor),
-                      ),
+                      Text("平均学分绩点", style: TextStyle(color: labelColor)),
                       Text(
                         pjjd,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
+                          color: valueColor,
                         ),
                       ),
                     ],
                   ),
                 ),
               ],
-            ),
-            SizedBox(height: 10),
-            TextButton(
-              onPressed: () {},
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Icon(Ionicons.help_circle_outline, size: 14),
-                  Text("不同数据分别代表什么", style: TextStyle(fontSize: 12)),
-                ],
-              ),
             ),
           ],
         ),

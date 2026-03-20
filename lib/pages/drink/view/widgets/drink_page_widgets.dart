@@ -80,7 +80,10 @@ class DrinkCurrentDeviceCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_ios, color: Colors.grey),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ],
               ),
             ],
@@ -135,13 +138,15 @@ class DrinkMoreFunctionsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return TextButton(
       onPressed: onTap,
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('展开更多功能', style: TextStyle(color: Colors.grey)),
-          Icon(Icons.keyboard_arrow_right, color: Colors.grey),
+          Text('展开更多功能', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+          Icon(Icons.keyboard_arrow_right, color: colorScheme.onSurfaceVariant),
         ],
       ),
     );
@@ -176,7 +181,7 @@ class DrinkSheetHandle extends StatelessWidget {
       height: 4,
       margin: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.grey[300],
+        color: Theme.of(context).colorScheme.outlineVariant,
         borderRadius: BorderRadius.circular(2),
       ),
     );
@@ -569,20 +574,25 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
                     vertical: 15,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(200),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surface.withValues(alpha: 0.88),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
                       Icon(
                         Ionicons.information_circle_outline,
-                        color: Colors.blue,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
-                      SizedBox(width: 10),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           '将二维码放入框内，即可自动扫描',
-                          style: TextStyle(fontSize: 14, color: Colors.black87),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                         ),
                       ),
                     ],

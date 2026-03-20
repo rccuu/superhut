@@ -127,24 +127,7 @@ flutter build ios --release
 - Releases: https://github.com/rccuu/superhut/releases
 - 应用内更新检查当前也基于 GitHub Releases
 
-## ⚖️ 法律
-
-- [用户协议](assets/UserAgreement.md)
-- [隐私政策](assets/PrivacyAgreement.md)
-
 ## 🙏 致谢
 
 - 感谢所有为项目做出贡献的开发者
 - 感谢Flutter团队提供的优秀框架
-
-
-
-
----
-
-<div align="center">
-
-**⭐ 如果这个项目对你有帮助，请给我们一个星标！**
-
-Made with ❤️ for HUT Students
-</div>

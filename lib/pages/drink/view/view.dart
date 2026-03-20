@@ -234,7 +234,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text('宿舍喝水'),
+        title: const Text('慧生活798'),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
