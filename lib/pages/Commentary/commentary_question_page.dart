@@ -151,7 +151,7 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
     }
 
     if (result == 'success') {
-      messenger.showSnackBar(const SnackBar(content: Text('提交成功~')));
+      messenger.showSnackBar(const SnackBar(content: Text('提交成功')));
       navigator.pop(true);
       return;
     }

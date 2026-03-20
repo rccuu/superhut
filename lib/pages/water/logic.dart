@@ -175,8 +175,8 @@ class FunctionHotWaterLogic extends GetxController {
               (element) => element["poscode"] == value.first,
             );
             Get.snackbar(
-              '提示',
-              '您有设备未关闭！',
+              '设备状态提醒',
+              '检测到有设备尚未关闭',
               backgroundColor:
                   Theme.of(Get.context!).colorScheme.primaryContainer,
               margin: EdgeInsets.only(top: 30, left: 50, right: 50),
@@ -214,8 +214,8 @@ class FunctionHotWaterLogic extends GetxController {
           state.isLoading.value = false;
           if (value['success'] && value['result'] == "000000") {
             Get.snackbar(
-              '提示',
-              '开启设备成功！',
+              '操作成功',
+              '设备已开启',
               backgroundColor:
                   Theme.of(Get.context!).colorScheme.primaryContainer,
               margin: EdgeInsets.only(top: 30, left: 50, right: 50),
@@ -224,8 +224,8 @@ class FunctionHotWaterLogic extends GetxController {
             update();
           } else {
             Get.snackbar(
-              '出错啦',
-              '开启设备失败,${value['message']}',
+              '操作失败',
+              '设备开启失败：${value['message']}',
               backgroundColor:
                   Theme.of(Get.context!).colorScheme.primaryContainer,
               margin: EdgeInsets.only(top: 30, left: 50, right: 50),
@@ -236,8 +236,8 @@ class FunctionHotWaterLogic extends GetxController {
         .catchError((error) {
           state.isLoading.value = false;
           Get.snackbar(
-            '提示',
-            '发生错误，请稍后再试',
+            '操作失败',
+            '操作失败，请稍后重试',
             backgroundColor:
                 Theme.of(Get.context!).colorScheme.primaryContainer,
             margin: EdgeInsets.only(top: 30, left: 50, right: 50),
@@ -259,8 +259,8 @@ class FunctionHotWaterLogic extends GetxController {
           state.isLoading.value = false;
           if (value) {
             Get.snackbar(
-              '提示',
-              '关闭设备成功！',
+              '操作成功',
+              '设备已关闭',
               backgroundColor:
                   Theme.of(Get.context!).colorScheme.primaryContainer,
               margin: EdgeInsets.only(top: 30, left: 50, right: 50),
@@ -269,8 +269,8 @@ class FunctionHotWaterLogic extends GetxController {
             update();
           } else {
             Get.snackbar(
-              '提示',
-              '关闭设备失败',
+              '操作失败',
+              '设备关闭失败，请稍后重试',
               backgroundColor:
                   Theme.of(Get.context!).colorScheme.primaryContainer,
               margin: EdgeInsets.only(top: 30, left: 50, right: 50),
@@ -281,8 +281,8 @@ class FunctionHotWaterLogic extends GetxController {
         .catchError((error) {
           state.isLoading.value = false;
           Get.snackbar(
-            '提示',
-            '发生错误，请稍后再试',
+            '操作失败',
+            '操作失败，请稍后重试',
             backgroundColor:
                 Theme.of(Get.context!).colorScheme.primaryContainer,
             margin: EdgeInsets.only(top: 30, left: 50, right: 50),
@@ -296,8 +296,8 @@ class FunctionHotWaterLogic extends GetxController {
   Future<bool> addDevice(String deviceCode) async {
     if (deviceCode.length != 6 || int.tryParse(deviceCode) == null) {
       Get.snackbar(
-        '提示',
-        '设备号必须是6位数字',
+        '输入有误',
+        '设备号需为 6 位数字',
         backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
         margin: EdgeInsets.only(top: 30, left: 50, right: 50),
       );
@@ -307,8 +307,8 @@ class FunctionHotWaterLogic extends GetxController {
     return await hutUserApi.addWaterDevice(deviceCode).then((value) {
       if (value['result']) {
         Get.snackbar(
-          '提示',
-          '添加设备成功！',
+          '操作成功',
+          '设备添加成功',
           backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
           margin: EdgeInsets.only(top: 30, left: 50, right: 50),
         );
@@ -316,7 +316,7 @@ class FunctionHotWaterLogic extends GetxController {
         return true;
       } else {
         Get.snackbar(
-          '提示',
+          '操作失败',
           '添加设备失败：${value['msg']}',
           backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
           margin: EdgeInsets.only(top: 30, left: 50, right: 50),
@@ -334,8 +334,8 @@ class FunctionHotWaterLogic extends GetxController {
         //      print(value);
         //   print("DEEEEEEEEEEEEE");
         Get.snackbar(
-          '提示',
-          '删除设备成功！',
+          '操作成功',
+          '设备删除成功',
           backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
           margin: EdgeInsets.only(top: 30, left: 50, right: 50),
         );
@@ -344,7 +344,7 @@ class FunctionHotWaterLogic extends GetxController {
         return true;
       } else {
         Get.snackbar(
-          '提示',
+          '操作失败',
           '删除设备失败：${value['msg']}',
           backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
           margin: EdgeInsets.only(top: 30, left: 50, right: 50),

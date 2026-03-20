@@ -94,7 +94,7 @@ class _UserPageState extends State<UserPage> {
       return;
     }
     if (!renewed) {
-      _showSnackBar('成绩页登录状态已失效，请重新登录后重试');
+      _showSnackBar('教务系统登录状态已失效，请重新登录后查看成绩');
       return;
     }
 
@@ -110,7 +110,7 @@ class _UserPageState extends State<UserPage> {
       return;
     }
     if (!renewed) {
-      _showSnackBar('课表刷新失败，请重新登录后重试');
+      _showSnackBar('教务系统登录状态已失效，请重新登录后再刷新课表');
       return;
     }
     await Navigator.of(context).push(
@@ -183,8 +183,8 @@ class _UserPageState extends State<UserPage> {
                       _buildDivider(),
                       _buildActionTile(
                         icon: Ionicons.information_circle_outline,
-                        title: '关于软件',
-                        subtitle: '查看版本和项目说明',
+                        title: '关于工大盒子',
+                        subtitle: '查看版本信息与项目说明',
                         onTap: () async {
                           await Navigator.of(context).push(
                             MaterialPageRoute(
@@ -223,40 +223,30 @@ class _UserPageState extends State<UserPage> {
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.all(18),
       onTap: onTap,
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            top: -18,
-            right: -14,
-            child: Container(
-              width: 92,
-              height: 92,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    accent.withValues(alpha: 0.18),
-                    accent.withValues(alpha: 0),
-                  ],
-                ),
+          Icon(
+            icon,
+            size: 28,
+            color: accent,
+            shadows: [
+              Shadow(
+                color: accent.withValues(alpha: 0.14),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GlassIconBadge(icon: icon, tint: accent, size: 48),
-              const SizedBox(height: 18),
-              Text(
-                title,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(value, style: theme.textTheme.headlineMedium),
             ],
           ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(value, style: theme.textTheme.headlineMedium),
         ],
       ),
     );
@@ -404,7 +394,7 @@ class _UserPageState extends State<UserPage> {
                 Text('退出登录', style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
                 Text(
-                  '清除当前账号会话并回到登录页。',
+                  '清除当前登录状态并返回登录页。',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),

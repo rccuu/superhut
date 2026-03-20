@@ -104,8 +104,8 @@ class FunctionDrinkLogic extends GetxController {
       });
     } else {
       Get.snackbar(
-        '失败',
-        '开启失败',
+        '操作失败',
+        '设备启动失败，请稍后重试',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,
@@ -128,8 +128,8 @@ class FunctionDrinkLogic extends GetxController {
       state.drinkStatus.value = false;
     } else {
       Get.snackbar(
-        '失败',
-        '结算失败',
+        '操作失败',
+        '结算失败，请稍后重试',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,

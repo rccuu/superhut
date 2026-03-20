@@ -52,7 +52,7 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "最后一步~",
+                    "短信验证",
                     style: TextStyle(
                       fontSize: 35,
                       fontWeight: FontWeight.bold,
@@ -97,7 +97,7 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "请输入验证码",
+                                "输入短信验证码",
                                 style: TextStyle(
                                   fontSize: 30,
                                   fontWeight: FontWeight.bold,
@@ -119,7 +119,7 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
                                   maxLength: 13,
                                   decoration: InputDecoration(
                                     filled: false,
-                                    hintText: "验证码",
+                                    hintText: "短信验证码",
                                     border: InputBorder.none,
                                     counterText: '',
                                   ),
@@ -139,7 +139,7 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
                                             context,
                                           ).showSnackBar(
                                             const SnackBar(
-                                              content: Text('验证码不能为空'),
+                                              content: Text('请输入短信验证码'),
                                             ),
                                           );
                                           return;
@@ -150,7 +150,7 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
                                           context,
                                         );
                                       },
-                                      child: const Text('登录'),
+                                      child: const Text('完成登录'),
                                     ),
                                   ),
                                 ],

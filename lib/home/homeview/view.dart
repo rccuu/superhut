@@ -1,6 +1,4 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -11,6 +9,7 @@ import 'package:superhut/home/userpage/view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_logger.dart';
+import '../../core/services/app_update_service.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../pages/Electricitybill/electricity_api.dart';
 import '../../pages/Electricitybill/electricity_page.dart';
@@ -26,11 +25,6 @@ class HomeviewPage extends StatefulWidget {
 class _HomeviewPageState extends State<HomeviewPage>
     with AutomaticKeepAliveClientMixin {
   static const _pages = [CourseTableView(), FunctionPage(), UserPage()];
-  bool _isUpdateAvailable = false;
-  String _latestVersion = '';
-  String _updateDescription = '';
-  bool _isForcedUpdate = false;
-  String _downloadUrl = '';
   String _currentVersion = '0.0.1'; // 默认版本号
   final HomeviewLogic _logic = Get.put(HomeviewLogic());
   int _selectedIndex = 0;
@@ -120,64 +114,75 @@ class _HomeviewPageState extends State<HomeviewPage>
   }
 
   Future<void> _checkVersion() async {
-    final dio = Dio();
-    try {
-      final response = await dio.get(
-        'https://super.ccrice.com/api/check_version.php?version=$_currentVersion',
-      );
-      final data = Map<String, dynamic>.from(response.data as Map);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isUpdateAvailable = !(data['is_latest'] as bool? ?? true);
-        _latestVersion = data['latest_version']?.toString() ?? '';
-        _updateDescription = data['description']?.toString() ?? '';
-        _isForcedUpdate = data['is_forced'] as bool? ?? false;
-        _downloadUrl = data['download_url']?.toString() ?? '';
-      });
-
-      if (_isUpdateAvailable) {
-        _showUpdateDialog();
-      }
-    } catch (error, stackTrace) {
-      AppLogger.error(
-        'Failed to check app version',
-        error: error,
-        stackTrace: stackTrace,
-      );
+    final update = await AppUpdateService.fetchUpdate(
+      currentVersion: _currentVersion,
+    );
+    if (!mounted || update == null) {
+      return;
     }
+
+    _showUpdateDialog(update);
   }
 
-  void _showUpdateDialog() {
+  void _showUpdateDialog(AppUpdateInfo update) {
+    final updateDescription = _buildUpdateDescription(update.notes);
+
     showDialog(
       context: context,
-      barrierDismissible: !_isForcedUpdate,
+      barrierDismissible: true,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('新版本可用: $_latestVersion'),
-          content: Text(_updateDescription),
+          title: Text('发现新版本 ${update.displayVersion}'),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.45,
+            ),
+            child: SingleChildScrollView(child: Text(updateDescription)),
+          ),
           actions: <Widget>[
-            if (!_isForcedUpdate)
-              TextButton(
-                child: Text('稍后更新'),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
             TextButton(
-              child: Text('立即更新'),
+              child: Text('稍后再说'),
               onPressed: () {
-                launchUrl(Uri.parse(_downloadUrl));
-                if (_isForcedUpdate) {
-                  SystemNavigator.pop();
-                }
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('前往更新'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _openUpdateRelease(update.releaseUrl);
               },
             ),
           ],
         );
       },
     );
+  }
+
+  String _buildUpdateDescription(String releaseNotes) {
+    const fallbackText = '工大盒子已发布新版本，可前往 GitHub Release 页面查看更新说明并下载安装。';
+    if (releaseNotes.trim().isEmpty) {
+      return fallbackText;
+    }
+
+    const maxLength = 700;
+    if (releaseNotes.length <= maxLength) {
+      return releaseNotes;
+    }
+
+    return '${releaseNotes.substring(0, maxLength).trimRight()}\n\n……';
+  }
+
+  Future<void> _openUpdateRelease(Uri releaseUrl) async {
+    final opened = await launchUrl(
+      releaseUrl,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('无法打开更新链接：$releaseUrl')));
+    }
   }
 
   @override

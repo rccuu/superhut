@@ -366,7 +366,7 @@ class _MyAppState extends State<MyApp> {
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
       locale: const Locale('zh', 'CN'),
-      title: '超级包菜',
+      title: '工大盒子',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,

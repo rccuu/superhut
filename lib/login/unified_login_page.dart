@@ -70,7 +70,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
             (context) => WebViewLoginScreen(
               userNo: _userNoController.text.trim(),
               password: _pwdController.text,
-              showText: '正在通过教务系统官方页面登录...',
+              showText: '正在打开教务系统官方登录页面...',
               renew: false,
             ),
       ),
@@ -83,7 +83,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     final password = _pwdController.text;
 
     if (username.isEmpty || password.isEmpty) {
-      _showSnackBar('请输入账号和密码');
+      _showSnackBar('请输入学号/手机号和密码');
       return;
     }
 
@@ -97,7 +97,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
         password: password,
       );
       if (!isLoginSuccess) {
-        await _tryOfficialJwxtLogin('智慧工大接口登录失败，正在切换到教务系统官方登录...');
+        await _tryOfficialJwxtLogin('工大平台登录失败，正在切换到教务系统官方登录...');
         return;
       }
 
@@ -167,14 +167,14 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '超级包菜',
+                            '工大盒子',
                             style: theme.textTheme.headlineLarge?.copyWith(
                               letterSpacing: -1.0,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '使用智慧工大账号继续，快速进入课表与校园服务。',
+                            '使用工大平台账号登录，快速进入课表与校园服务。',
                             style: theme.textTheme.bodyLarge?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -203,7 +203,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      '请使用智慧工大账号进行登录',
+                                      '支持学号或手机号登录',
                                       style: theme.textTheme.bodyMedium
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -228,7 +228,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                             style: theme.textTheme.titleMedium,
                             maxLength: 13,
                             decoration: const InputDecoration(
-                              hintText: '手机号',
+                              hintText: '学号 / 手机号',
                               counterText: '',
                               prefixIcon: Icon(Icons.person_outline_rounded),
                             ),
@@ -261,12 +261,12 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                                           strokeWidth: 2,
                                         ),
                                       )
-                                      : const Text('工大平台登录'),
+                                      : const Text('登录并继续'),
                             ),
                           ),
                           const SizedBox(height: 14),
                           Text(
-                            '若平台接口异常，将自动切换到教务系统官方登录。',
+                            '如工大平台不可用，将自动切换到教务系统官方页面。',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),

@@ -31,7 +31,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     required String failureMessage,
   }) {
     Get.snackbar(
-      success ? '成功' : '失败',
+      success ? '操作成功' : '操作失败',
       success ? successMessage : failureMessage,
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: success ? Colors.green : Colors.red,
@@ -137,14 +137,14 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
       logic.removeDeviceByName(deviceName);
       _showResultSnackBar(
         success: true,
-        successMessage: '设备删除成功！',
+        successMessage: '设备删除成功',
         failureMessage: '',
       );
     } else {
       _showResultSnackBar(
         success: false,
         successMessage: '',
-        failureMessage: '设备删除失败，请重试',
+        failureMessage: '设备删除失败，请稍后重试',
       );
     }
   }
@@ -205,8 +205,8 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
       final bool isFavo = await logic.favoDevice(enc, false);
       _showResultSnackBar(
         success: isFavo,
-        successMessage: '设备添加成功！',
-        failureMessage: '设备添加失败，请重试',
+        successMessage: '设备添加成功',
+        failureMessage: '设备添加失败，请稍后重试',
       );
 
       if (isFavo) {
@@ -217,7 +217,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
       _showResultSnackBar(
         success: false,
         successMessage: '',
-        failureMessage: '扫描二维码出错',
+        failureMessage: '扫描二维码失败，请稍后重试',
       );
       return false;
     }
@@ -234,7 +234,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text('快速喝水'),
+        title: const Text('宿舍喝水'),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),

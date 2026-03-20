@@ -35,7 +35,7 @@ class _HutLoginPageState extends State<HutLoginPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "欢迎~",
+                    "工大平台登录",
                     style: TextStyle(
                       fontSize: 35,
                       fontWeight: FontWeight.bold,
@@ -43,7 +43,7 @@ class _HutLoginPageState extends State<HutLoginPage> {
                     ),
                   ),
                   Text(
-                    "登录智慧工大账号~",
+                    "使用工大平台账号继续",
                     style: TextStyle(
                       // fontSize: 35,
                       fontWeight: FontWeight.bold,
@@ -80,7 +80,7 @@ class _HutLoginPageState extends State<HutLoginPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "登录",
+                                "账号登录",
                                 style: TextStyle(
                                   fontSize: 30,
                                   fontWeight: FontWeight.bold,
@@ -152,7 +152,7 @@ class _HutLoginPageState extends State<HutLoginPage> {
                                             context,
                                           ).showSnackBar(
                                             const SnackBar(
-                                              content: Text('学号或密码不能为空'),
+                                              content: Text('请输入学号/手机号和密码'),
                                             ),
                                           );
                                           return;
@@ -164,7 +164,7 @@ class _HutLoginPageState extends State<HutLoginPage> {
                                           context,
                                         );
                                       },
-                                      child: const Text('下一步'),
+                                      child: const Text('登录并继续'),
                                     ),
                                   ),
                                 ],

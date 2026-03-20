@@ -42,7 +42,7 @@ class _Type1WebviewState extends State<Type1Webview> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("智慧工大")),
+      appBar: AppBar(title: Text("工大平台")),
       body: EnhancedFutureBuilder(
         future: getDetail(),
         rememberFutureResult: true,
@@ -103,7 +103,7 @@ class _Type1WebviewState extends State<Type1Webview> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            '加载中...',
+                            '页面加载中...',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,

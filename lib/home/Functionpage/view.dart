@@ -56,7 +56,7 @@ class _FunctionPageState extends State<FunctionPage> {
       final isReady = await renewToken(context);
       if (!isReady || !mounted) {
         if (mounted) {
-          _showSnackBar('教务登录状态已失效，请重新登录后重试');
+          _showSnackBar('教务系统登录状态已失效，请重新登录后再试');
         }
         return;
       }
@@ -161,7 +161,7 @@ class _FunctionPageState extends State<FunctionPage> {
       ),
       _FunctionFeature(
         id: 'hut_main',
-        title: '智慧工大',
+        title: '工大平台',
         icon: Ionicons.phone_portrait_outline,
         accent: const Color(0xFFCC6D2C),
         onTap: () async {
@@ -219,117 +219,75 @@ class _FunctionPageState extends State<FunctionPage> {
         ),
         borderColor: Colors.white.withValues(alpha: isDark ? 0.12 : 0.24),
         onTap: isLoading ? null : () => item.onTap(),
-        child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Positioned(
-              top: -26,
-              right: -22,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.white.withValues(alpha: isDark ? 0.10 : 0.20),
-                      Colors.transparent,
-                    ],
-                  ),
+            Icon(
+              item.icon,
+              color: foreground,
+              size: 28,
+              shadows: [
+                Shadow(
+                  color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.10),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
                 ),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              item.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleLarge?.copyWith(
+                letterSpacing: -0.4,
+                color: foreground,
               ),
             ),
-            Positioned(
-              bottom: -32,
-              left: -20,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      item.accent.withValues(alpha: isDark ? 0.18 : 0.14),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 8),
+            Row(
               children: [
                 Container(
-                  width: 52,
-                  height: 52,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.16),
+                    color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.14),
+                    borderRadius: BorderRadius.circular(999),
                     border: Border.all(
                       color: Colors.white.withValues(
-                        alpha: isDark ? 0.10 : 0.22,
+                        alpha: isDark ? 0.08 : 0.18,
                       ),
                     ),
                   ),
-                  child: Icon(item.icon, color: foreground, size: 22),
+                  child: Text(
+                    '进入',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: foreground.withValues(alpha: 0.92),
+                    ),
+                  ),
                 ),
                 const Spacer(),
-                Text(
-                  item.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    letterSpacing: -0.4,
-                    color: foreground,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(
-                          alpha: isDark ? 0.10 : 0.14,
-                        ),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: Colors.white.withValues(
-                            alpha: isDark ? 0.08 : 0.18,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child:
+                      isLoading
+                          ? SizedBox(
+                            key: const ValueKey('loading'),
+                            width: 24,
+                            height: 24,
+                            child: LoadingAnimationWidget.inkDrop(
+                              color: foreground,
+                              size: 20,
+                            ),
+                          )
+                          : Icon(
+                            key: const ValueKey('arrow'),
+                            Ionicons.arrow_forward,
+                            size: 18,
+                            color: foreground.withValues(alpha: 0.92),
                           ),
-                        ),
-                      ),
-                      child: Text(
-                        '进入',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: foreground.withValues(alpha: 0.92),
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
-                      child:
-                          isLoading
-                              ? SizedBox(
-                                key: const ValueKey('loading'),
-                                width: 24,
-                                height: 24,
-                                child: LoadingAnimationWidget.inkDrop(
-                                  color: foreground,
-                                  size: 20,
-                                ),
-                              )
-                              : Icon(
-                                key: const ValueKey('arrow'),
-                                Ionicons.arrow_forward,
-                                size: 18,
-                                color: foreground.withValues(alpha: 0.92),
-                              ),
-                    ),
-                  ],
                 ),
               ],
             ),
