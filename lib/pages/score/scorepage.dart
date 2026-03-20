@@ -4,6 +4,8 @@ import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/pages/score/logic.dart';
 
+import '../../core/services/app_logger.dart';
+
 class ScorePage extends StatefulWidget {
   const ScorePage({super.key});
 
@@ -21,6 +23,7 @@ class _ScorePageState extends State<ScorePage> {
   String selectedId = "all";
   bool first = true;
   String? _errorMessage;
+  final Map<String, ScoreLoadResult> _scoreCache = <String, ScoreLoadResult>{};
 
   void _showLoadingDialog() {
     showDialog(
@@ -58,13 +61,45 @@ class _ScorePageState extends State<ScorePage> {
     final navigator = Navigator.of(context);
     _showLoadingDialog();
 
-    final scoreData = await getScore(semesterId == "all" ? "" : semesterId);
+    final scoreData = await _loadScoreForSemester(semesterId);
     if (!mounted) {
       return;
     }
 
     navigator.pop(true);
     _applyScoreData(scoreData, semesterId: semesterId);
+  }
+
+  Future<ScoreLoadResult> _loadScoreForSemester(String semesterId) async {
+    final cached = _scoreCache[semesterId];
+    if (cached != null) {
+      return cached;
+    }
+
+    final scoreData = await getScore(semesterId == "all" ? "" : semesterId);
+    _scoreCache[semesterId] = scoreData;
+    return scoreData;
+  }
+
+  Future<List<String>> _filterSemestersWithScores(
+    List<String> semesterIds,
+  ) async {
+    final availableSemesterIds = <String>[];
+
+    for (final semester in semesterIds) {
+      final scoreData = await _loadScoreForSemester(semester);
+      if (scoreData.errorMessage != null) {
+        AppLogger.debug(
+          'Failed to probe score data for semester $semester, keeping full semester list.',
+        );
+        return semesterIds;
+      }
+      if (scoreData.achievement.isNotEmpty) {
+        availableSemesterIds.add(semester);
+      }
+    }
+
+    return availableSemesterIds;
   }
 
   Future<void> getTimeList() async {
@@ -83,14 +118,30 @@ class _ScorePageState extends State<ScorePage> {
         return;
       }
 
-      final scoreData = await getScore(
-        nowSemesterId == "all" ? "" : nowSemesterId,
+      final filteredSemesterIds = await _filterSemestersWithScores(
+        timeData.idList,
       );
       if (!mounted) {
         return;
       }
 
-      _applyScoreData(scoreData, semesterId: nowSemesterId);
+      final initialSemesterId =
+          filteredSemesterIds.contains(nowSemesterId)
+              ? nowSemesterId
+              : filteredSemesterIds.isNotEmpty
+              ? filteredSemesterIds.first
+              : "all";
+
+      final scoreData = await _loadScoreForSemester(initialSemesterId);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        semesterId = filteredSemesterIds;
+        nowSemesterId = initialSemesterId;
+      });
+      _applyScoreData(scoreData, semesterId: initialSemesterId);
       first = false;
     } else {
       return;
@@ -146,7 +197,9 @@ class _ScorePageState extends State<ScorePage> {
                 if (_errorMessage != null)
                   Center(child: Text(_errorMessage!))
                 else if (scoreList.isEmpty)
-                  const Center(child: Text("当前学期没有成绩"))
+                  Center(
+                    child: Text(selectedId == "all" ? "暂未查询到成绩记录" : "当前学期没有成绩"),
+                  )
                 else
                   ...List.generate(scoreList.length, (index) {
                     final score = scoreList[index];

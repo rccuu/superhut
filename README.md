@@ -1,21 +1,10 @@
 # 工大盒子 - 湖南工业大学学生一站式服务APP
 
-<div align="center">
-
-![工大盒子 Logo](assets/icon/logo.png)
-
 **为湖南工业大学学生打造的第三方一站式服务应用**
-
-[![Flutter](https://img.shields.io/badge/Flutter-3.7.0+-blue.svg)](https://flutter.dev/)
-[![Dart](https://img.shields.io/badge/Dart-3.7.0+-blue.svg)](https://dart.dev/)
-[![License](https://img.shields.io/badge/GPL-3.0-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.3.0-brightgreen.svg)](pubspec.yaml)
-
-</div>
 
 ## 📱 项目简介
 
-工大盒子是专为湖南工业大学学生开发的第三方一站式服务应用。由于官方 APP 用户体验不佳，我们在原项目基础上进行 fork 与二次开发，持续维护这个功能更完善、界面更友好的校园工具版本。
+工大盒子是专为湖南工业大学学生开发的第三方一站式服务应用。为提供更便捷的第三方校园工具体验，我们在原项目基础上进行 fork 与二次开发，持续维护这个更易用、界面更统一的校园工具版本。
 
 ## 🍴 Fork 说明
 
@@ -26,10 +15,12 @@
 
 当前项目基于原作仓库 fork 后继续维护与调整，包含界面、文案、图标与部分功能体验上的二次开发。为避免来源混淆，README 与应用内“关于工大盒子”页面都会同时保留 fork 仓库与原作仓库信息。
 
+仓库名与 Dart/包名目前仍沿用 `superhut`，应用对外显示名称为 `工大盒子`。
+
 ## ✨ 主要功能
 
 ### 🎓 学习服务
-- **📅 课表查询** - 查看个人课程安排，支持桌面小部件
+- **📅 课表查询** - 查看个人课程安排，支持桌面小组件（当前主要为 Android 桌面小组件）
 - **📊 成绩查询** - 实时查询各学期成绩和学分
 - **📝 考试安排** - 查看考试时间表和考场信息
 - **🏫 空教室查询** - 快速查找可用教室，支持按教学楼筛选
@@ -44,7 +35,7 @@
 - **📝 学生评教** - 参与课程评价和教学质量反馈
 - **🔐 统一登录** - 支持HUT统一身份认证系统
 - **🌙 深色模式** - 支持明暗主题切换
-- **📱 桌面小部件** - 课表信息快速查看
+- **📱 Android 桌面小组件** - 课表与快捷功能快速查看
 - **🔔 智能提醒** - 电费预警、课程提醒等功能
 
 ## 🛠️ 技术栈
@@ -131,6 +122,11 @@ flutter build ios --release
 
 本项目采用 GPL-3.0 license - 查看 [LICENSE](LICENSE) 文件了解详情
 
+## 📦 版本发布
+
+- Releases: https://github.com/rccuu/superhut/releases
+- 应用内更新检查当前也基于 GitHub Releases
+
 ## ⚖️ 法律
 
 - [用户协议](assets/UserAgreement.md)
@@ -141,11 +137,6 @@ flutter build ios --release
 - 感谢所有为项目做出贡献的开发者
 - 感谢Flutter团队提供的优秀框架
 
-## 📞 联系我们
-
-- **项目主页**: [GitHub Repository](https://github.com/rccuu/superhut)
-- **问题反馈**: [Issues](https://github.com/rccuu/superhut/issues)
-- **邮箱**: syywqs@foxmail.com
 
 
 
