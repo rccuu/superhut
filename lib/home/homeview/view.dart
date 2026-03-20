@@ -25,6 +25,7 @@ class HomeviewPage extends StatefulWidget {
 
 class _HomeviewPageState extends State<HomeviewPage>
     with AutomaticKeepAliveClientMixin {
+  static const _pages = [CourseTableView(), FunctionPage(), UserPage()];
   bool _isUpdateAvailable = false;
   String _latestVersion = '';
   String _updateDescription = '';
@@ -32,6 +33,7 @@ class _HomeviewPageState extends State<HomeviewPage>
   String _downloadUrl = '';
   String _currentVersion = '0.0.1'; // 默认版本号
   final HomeviewLogic _logic = Get.put(HomeviewLogic());
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -53,25 +55,37 @@ class _HomeviewPageState extends State<HomeviewPage>
   }
 
   void checkAlert() async {
-    final electricityApi = ElectricityApi();
-    final prefs = await SharedPreferences.getInstance();
-    final isEnable = prefs.getBool('enableBillWarning') ?? false;
-    if (!isEnable) {
-      return;
-    }
-    final checkRoomId = prefs.getString('enableRoomId') ?? '';
-    await electricityApi.onInit();
-    await electricityApi.getHistory();
-    final nowRoomInfo = await electricityApi.getSingleRoomInfo(checkRoomId);
-    final roomCount = nowRoomInfo["eleTail"];
-    final setRoomName = nowRoomInfo["roomName"];
-    final bill = prefs.getDouble('enableBill') ?? 0;
-    if (!mounted) {
-      return;
-    }
-    if (double.tryParse(roomCount) case final roomBalance?
-        when roomBalance < bill) {
-      _showAlert('当前电费：$roomCount元\n设置电费：$bill元\n房间：$setRoomName');
+    try {
+      final electricityApi = ElectricityApi();
+      final prefs = await SharedPreferences.getInstance();
+      final isEnable = prefs.getBool('enableBillWarning') ?? false;
+      if (!isEnable) {
+        return;
+      }
+      final checkRoomId = prefs.getString('enableRoomId') ?? '';
+      if (checkRoomId.isEmpty) {
+        return;
+      }
+
+      await electricityApi.onInit();
+      await electricityApi.getHistory();
+      final nowRoomInfo = await electricityApi.getSingleRoomInfo(checkRoomId);
+      final roomCount = nowRoomInfo["eleTail"];
+      final setRoomName = nowRoomInfo["roomName"];
+      final bill = prefs.getDouble('enableBill') ?? 0;
+      if (!mounted) {
+        return;
+      }
+      if (double.tryParse(roomCount) case final roomBalance?
+          when roomBalance < bill) {
+        _showAlert('当前电费：$roomCount元\n设置电费：$bill元\n房间：$setRoomName');
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to check electricity warning status',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -169,41 +183,71 @@ class _HomeviewPageState extends State<HomeviewPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Scaffold(
+      extendBody: true,
       body: PageView(
         physics: const NeverScrollableScrollPhysics(),
         controller: _logic.homePageController,
-        children: const [CourseTableView(), FunctionPage(), UserPage()],
+        onPageChanged: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
+        children: _pages,
       ),
-      bottomSheet: Container(
-        color: Colors.transparent,
-        margin: const EdgeInsets.all(10),
-        padding: const EdgeInsets.only(
-          left: 15,
-          right: 15,
-          bottom: 20,
-          top: 10,
-        ),
-        child: GNav(
-          gap: 10,
-          color: Theme.of(context).primaryColorDark,
-          activeColor: Theme.of(context).primaryColor,
-          iconSize: 24,
-          tabBackgroundColor: Theme.of(context).primaryColor.withAlpha(20),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          duration: const Duration(milliseconds: 200),
-          tabs: [
-            GButton(icon: Ionicons.calendar_outline, text: '课表'),
-            GButton(icon: Ionicons.apps_outline, text: '功能'),
-            GButton(icon: Ionicons.person_outline, text: '我'),
-          ],
-          onTabChange: (index) {
-            _logic.homePageController.animateToPage(
-              index,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-            );
-          },
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colorScheme.surface.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: colorScheme.outlineVariant.withValues(alpha: 0.8),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.shadow.withValues(alpha: 0.12),
+                blurRadius: 28,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: GNav(
+              selectedIndex: _selectedIndex,
+              gap: 10,
+              color: colorScheme.onSurfaceVariant,
+              activeColor: colorScheme.onPrimary,
+              iconSize: 22,
+              textStyle: theme.textTheme.labelLarge?.copyWith(
+                color: colorScheme.onPrimary,
+              ),
+              tabBackgroundGradient: LinearGradient(
+                colors: [colorScheme.primary, colorScheme.secondary],
+              ),
+              tabBorderRadius: 22,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              duration: const Duration(milliseconds: 220),
+              tabs: const [
+                GButton(icon: Ionicons.calendar_outline, text: '课表'),
+                GButton(icon: Ionicons.apps_outline, text: '功能'),
+                GButton(icon: Ionicons.person_outline, text: '我的'),
+              ],
+              onTabChange: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+                _logic.homePageController.animateToPage(
+                  index,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                );
+              },
+            ),
+          ),
         ),
       ),
     );

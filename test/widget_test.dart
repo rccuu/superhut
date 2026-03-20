@@ -7,14 +7,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({'isFirstOpen': true});
+    SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('shows onboarding on first launch', (WidgetTester tester) async {
+  testWidgets('shows login page when there is no saved session', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    expect(find.text('超级包菜'), findsOneWidget);
-    expect(find.text('下一步'), findsOneWidget);
+    expect(find.text('登录'), findsOneWidget);
+    expect(find.text('手机号'), findsOneWidget);
   });
 }

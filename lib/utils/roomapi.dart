@@ -30,6 +30,27 @@ class Room {
 class FreeBuildingApi {
   List<Building> buildingList = [];
 
+  int _buildingPriority(String name) {
+    final normalized = name.replaceAll(' ', '');
+    final isHexiPublic =
+        normalized.contains('河西') &&
+        (normalized.contains('公共') || normalized.contains('公教'));
+    if (isHexiPublic) {
+      return 0;
+    }
+
+    final isPublicBuilding =
+        normalized.contains('公共教学楼') ||
+        normalized.contains('公共楼') ||
+        normalized.contains('公教') ||
+        normalized.contains('公共');
+    if (isPublicBuilding) {
+      return 1;
+    }
+
+    return 2;
+  }
+
   Map<String, dynamic> _responseMap(
     dynamic data, {
     required String fallbackMessage,
@@ -88,6 +109,17 @@ class FreeBuildingApi {
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
             .toList();
+    buildingListData.sort((left, right) {
+      final leftName = left['teachingBuildingName']?.toString() ?? '';
+      final rightName = right['teachingBuildingName']?.toString() ?? '';
+      final priorityCompare = _buildingPriority(
+        leftName,
+      ).compareTo(_buildingPriority(rightName));
+      if (priorityCompare != 0) {
+        return priorityCompare;
+      }
+      return leftName.compareTo(rightName);
+    });
     buildingList = [];
     for (int i = 0; i < buildingListData.length; i++) {
       var tbuilding = buildingListData[i];
