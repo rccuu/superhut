@@ -15,9 +15,9 @@ import 'pages/water/view.dart';
 import 'pages/Electricitybill/electricity_page.dart';
 
 abstract final class AppTheme {
-  static const Color _brandBlue = Color(0xFF2753B7);
-  static const Color _brandTeal = Color(0xFF11796B);
-  static const Color _brandAmber = Color(0xFFE28A2E);
+  static const Color _brandBlue = Color(0xFF3B6EEA);
+  static const Color _brandTeal = Color(0xFF3E9D97);
+  static const Color _brandAmber = Color(0xFFE59A56);
 
   static final ColorScheme _lightScheme = ColorScheme.fromSeed(
     seedColor: _brandBlue,
@@ -25,12 +25,14 @@ abstract final class AppTheme {
     primary: _brandBlue,
     secondary: _brandTeal,
     tertiary: _brandAmber,
-    surface: const Color(0xFFF7F9FD),
+    surface: const Color(0xFFF5F7FC),
   ).copyWith(
-    primaryContainer: const Color(0xFFDCE5FF),
-    secondaryContainer: const Color(0xFFD8F3EC),
-    tertiaryContainer: const Color(0xFFFFE4C5),
-    outlineVariant: const Color(0xFFD6DEEB),
+    primaryContainer: const Color(0xFFDFE8FF),
+    secondaryContainer: const Color(0xFFDDF5F0),
+    tertiaryContainer: const Color(0xFFFFE7CF),
+    surfaceContainerLow: const Color(0xFFF8FAFE),
+    surfaceContainerHigh: const Color(0xFFF1F4FB),
+    outlineVariant: const Color(0xFFD9E1EE),
     shadow: const Color(0x1F16233C),
     surfaceTint: Colors.transparent,
   );
@@ -38,12 +40,17 @@ abstract final class AppTheme {
   static final ColorScheme _darkScheme = ColorScheme.fromSeed(
     seedColor: _brandBlue,
     brightness: Brightness.dark,
-    primary: const Color(0xFFADC4FF),
-    secondary: const Color(0xFF83D8C8),
-    tertiary: const Color(0xFFFFC889),
-    surface: const Color(0xFF0D1422),
+    primary: const Color(0xFFA9C1FF),
+    secondary: const Color(0xFF89D8D0),
+    tertiary: const Color(0xFFFFC88E),
+    surface: const Color(0xFF0B111A),
   ).copyWith(
-    outlineVariant: const Color(0xFF31415D),
+    primaryContainer: const Color(0xFF183161),
+    secondaryContainer: const Color(0xFF163A38),
+    tertiaryContainer: const Color(0xFF4E3317),
+    surfaceContainerLow: const Color(0xFF111927),
+    surfaceContainerHigh: const Color(0xFF182132),
+    outlineVariant: const Color(0xFF2D3A4F),
     shadow: const Color(0x66000000),
     surfaceTint: Colors.transparent,
   );
@@ -58,6 +65,13 @@ abstract final class AppTheme {
       colorScheme: colorScheme,
       cupertinoOverrideTheme: const CupertinoThemeData(applyThemeToAll: true),
       visualDensity: VisualDensity.standard,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+        },
+      ),
     );
     final textTheme = _buildTextTheme(base.textTheme, colorScheme);
     final isDark = colorScheme.brightness == Brightness.dark;
@@ -78,13 +92,13 @@ abstract final class AppTheme {
             isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       ),
       cardTheme: CardThemeData(
-        color: colorScheme.surface,
+        color: colorScheme.surface.withValues(alpha: isDark ? 0.62 : 0.82),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         shadowColor: colorScheme.shadow,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(30),
           side: BorderSide(
             color: colorScheme.outlineVariant.withValues(alpha: 0.7),
           ),
@@ -116,7 +130,7 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colorScheme.surfaceContainerLow,
+        fillColor: colorScheme.surface.withValues(alpha: isDark ? 0.18 : 0.72),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 16,
@@ -178,12 +192,16 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: colorScheme.surface.withValues(
+          alpha: isDark ? 0.92 : 0.96,
+        ),
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: colorScheme.surface.withValues(
+          alpha: isDark ? 0.96 : 0.98,
+        ),
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -351,6 +369,7 @@ class _MyAppState extends State<MyApp> {
       title: '超级包菜',
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
       home: _hasSession ? const HomeviewPage() : const UnifiedLoginPage(),
       builder: (context, child) {
         return ResponsiveBreakpoints.builder(

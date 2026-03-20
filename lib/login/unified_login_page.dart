@@ -8,6 +8,7 @@ import 'package:superhut/login/webview_login_screen.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
 import '../core/services/app_auth_storage.dart';
+import '../core/ui/apple_glass.dart';
 
 class UnifiedLoginPage extends StatefulWidget {
   const UnifiedLoginPage({super.key});
@@ -139,200 +140,146 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).cardColor,
+      backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
-      body: Stack(
-        children: [
-          // 顶部背景
-          Container(
-            width: double.infinity,
-            height: 400,
-            color: Theme.of(context).secondaryHeaderColor,
-            padding: const EdgeInsets.only(top: 200, right: 20, left: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "欢迎~",
-                  style: TextStyle(
-                    fontSize: 35,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                ),
-                Text(
-                  "选择登录方式",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).primaryColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 主内容
-          MediaQuery.removePadding(
-            context: context,
-            removeTop: true,
-            child: ListView(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 200),
-                  child: Stack(
-                    children: [
-                      // 登录卡片
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(20),
-                            topRight: Radius.circular(20),
-                          ),
-                        ),
-                        margin: const EdgeInsets.only(top: 100),
-                        padding: const EdgeInsets.only(
-                          top: 40,
-                          right: 20,
-                          left: 20,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 标题
-                            Text(
-                              "登录",
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).primaryColor,
-                              ),
+      body: AppGlassBackground(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                24,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '超级包菜',
+                            style: theme.textTheme.headlineLarge?.copyWith(
+                              letterSpacing: -1.0,
                             ),
-                            const SizedBox(height: 20),
-
-                            Column(
-                              children: [
-                                // 账号输入框
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    10,
-                                    0,
-                                    10,
-                                    0,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(15),
-                                    color: Theme.of(context).highlightColor,
-                                  ),
-                                  child: TextField(
-                                    keyboardType: TextInputType.number,
-                                    style: const TextStyle(fontSize: 18),
-                                    maxLength: 13,
-                                    decoration: const InputDecoration(
-                                      filled: false,
-                                      hintText: "手机号",
-                                      border: InputBorder.none,
-                                      counterText: '',
-                                    ),
-                                    controller: _userNoController,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-
-                                // 密码输入框
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    10,
-                                    0,
-                                    10,
-                                    0,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(15),
-                                    color: Theme.of(context).highlightColor,
-                                  ),
-                                  child: TextField(
-                                    style: const TextStyle(fontSize: 18),
-                                    maxLength: 40,
-                                    decoration: const InputDecoration(
-                                      filled: false,
-                                      hintText: "密码",
-                                      border: InputBorder.none,
-                                      counterText: '',
-                                    ),
-                                    controller: _pwdController,
-                                    obscureText: true,
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-
-                                // 登录按钮
-                                Row(
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '使用智慧工大账号继续，快速进入课表与校园服务。',
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    GlassPanel(
+                      blur: 24,
+                      borderRadius: BorderRadius.circular(34),
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    /*
-                                    Expanded(
-                                      child: FilledButton(
-                                        onPressed: _loginWithCredentials,
-                                        child: const Text('教务系统登录'),
-                                      ),
+                                    Text(
+                                      '登录',
+                                      style: theme.textTheme.headlineMedium,
                                     ),
-                                    const SizedBox(width: 10),
-
-
-                                     */
-                                    Expanded(
-                                      child: FilledButton(
-                                        onPressed: _loginWithCAS,
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: Colors.orangeAccent,
-                                        ),
-                                        child:
-                                            _isLoading
-                                                ? const SizedBox(
-                                                  width: 20,
-                                                  height: 20,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        color: Colors.white,
-                                                        strokeWidth: 2,
-                                                      ),
-                                                )
-                                                : const Text('工大平台登录'),
-                                      ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '请使用智慧工大账号进行登录',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
                                     ),
                                   ],
                                 ),
-                              ],
+                              ),
+                              const SizedBox(width: 12),
+                              Opacity(
+                                opacity: 0.92,
+                                child: SvgPicture.asset(
+                                  Assets.illustrationLogin,
+                                  width: 92,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          TextField(
+                            keyboardType: TextInputType.number,
+                            style: theme.textTheme.titleMedium,
+                            maxLength: 13,
+                            decoration: const InputDecoration(
+                              hintText: '手机号',
+                              counterText: '',
+                              prefixIcon: Icon(Icons.person_outline_rounded),
                             ),
-                            const SizedBox(height: 20),
-                            Text(
-                              '请使用智慧工大账号进行登录',
-                              style: TextStyle(color: Colors.grey),
+                            controller: _userNoController,
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            style: theme.textTheme.titleMedium,
+                            maxLength: 40,
+                            decoration: const InputDecoration(
+                              hintText: '密码',
+                              counterText: '',
+                              prefixIcon: Icon(Icons.lock_outline_rounded),
                             ),
-                          ],
-                        ),
+                            controller: _pwdController,
+                            obscureText: true,
+                          ),
+                          const SizedBox(height: 18),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: _isLoading ? null : _loginWithCAS,
+                              child:
+                                  _isLoading
+                                      ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                      : const Text('工大平台登录'),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            '若平台接口异常，将自动切换到教务系统官方登录。',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-
-                      // 右上角装饰图标
-                      Container(
-                        padding: const EdgeInsets.only(right: 20),
-                        alignment: Alignment.topRight,
-                        margin: const EdgeInsets.only(top: 0),
-                        child: SvgPicture.asset(
-                          Assets.illustrationLogin,
-                          width: 150,
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

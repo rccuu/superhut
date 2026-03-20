@@ -9,6 +9,7 @@ import 'package:superhut/pages/freeroom/building.dart';
 import 'package:superhut/pages/hutpages/hutmain.dart';
 import 'package:superhut/pages/water/view.dart';
 
+import '../../core/ui/apple_glass.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/token.dart';
 
@@ -71,7 +72,6 @@ class _FunctionPageState extends State<FunctionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final items = [
       _FunctionFeature(
         id: 'empty_room',
@@ -174,20 +174,22 @@ class _FunctionPageState extends State<FunctionPage> {
     ];
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: SafeArea(
-        child: GridView.builder(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 14,
-            childAspectRatio: 1.05,
+      backgroundColor: Colors.transparent,
+      body: AppGlassBackground(
+        child: SafeArea(
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 0.96,
+            ),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              return _buildFeatureCard(items[index]);
+            },
           ),
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            return _buildFeatureCard(items[index]);
-          },
         ),
       ),
     );
@@ -195,68 +197,153 @@ class _FunctionPageState extends State<FunctionPage> {
 
   Widget _buildFeatureCard(_FunctionFeature item) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isLoading = _isLoading(item.id);
+    final lightColor = _shiftAccent(item.accent, lightnessDelta: 0.10);
+    final deepColor = _shiftAccent(item.accent, lightnessDelta: -0.05);
+    const foreground = Colors.white;
 
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(28),
+      child: GlassPanel(
+        blur: 18,
+        borderRadius: BorderRadius.circular(30),
+        padding: const EdgeInsets.all(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            lightColor.withValues(alpha: isDark ? 0.82 : 0.74),
+            deepColor.withValues(alpha: isDark ? 0.74 : 0.70),
+          ],
+        ),
+        borderColor: Colors.white.withValues(alpha: isDark ? 0.12 : 0.24),
         onTap: isLoading ? null : () => item.onTap(),
-        child: Ink(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: item.accent.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: item.accent.withValues(alpha: 0.24)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 50,
-                height: 50,
+        child: Stack(
+          children: [
+            Positioned(
+              top: -26,
+              right: -22,
+              child: Container(
+                width: 120,
+                height: 120,
                 decoration: BoxDecoration(
-                  color: item.accent,
-                  borderRadius: BorderRadius.circular(18),
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.white.withValues(alpha: isDark ? 0.10 : 0.20),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
-                child: Icon(item.icon, color: Colors.white, size: 22),
               ),
-              const Spacer(),
-              Text(
-                item.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge,
+            ),
+            Positioned(
+              bottom: -32,
+              left: -20,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      item.accent.withValues(alpha: isDark ? 0.18 : 0.14),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child:
-                      isLoading
-                          ? SizedBox(
-                            key: const ValueKey('loading'),
-                            width: 24,
-                            height: 24,
-                            child: LoadingAnimationWidget.inkDrop(
-                              color: item.accent,
-                              size: 20,
-                            ),
-                          )
-                          : Icon(
-                            key: const ValueKey('arrow'),
-                            Ionicons.arrow_forward,
-                            size: 18,
-                            color: item.accent,
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.16),
+                    border: Border.all(
+                      color: Colors.white.withValues(
+                        alpha: isDark ? 0.10 : 0.22,
+                      ),
+                    ),
+                  ),
+                  child: Icon(item.icon, color: foreground, size: 22),
+                ),
+                const Spacer(),
+                Text(
+                  item.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    letterSpacing: -0.4,
+                    color: foreground,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(
+                          alpha: isDark ? 0.10 : 0.14,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withValues(
+                            alpha: isDark ? 0.08 : 0.18,
                           ),
+                        ),
+                      ),
+                      child: Text(
+                        '进入',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: foreground.withValues(alpha: 0.92),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      child:
+                          isLoading
+                              ? SizedBox(
+                                key: const ValueKey('loading'),
+                                width: 24,
+                                height: 24,
+                                child: LoadingAnimationWidget.inkDrop(
+                                  color: foreground,
+                                  size: 20,
+                                ),
+                              )
+                              : Icon(
+                                key: const ValueKey('arrow'),
+                                Ionicons.arrow_forward,
+                                size: 18,
+                                color: foreground.withValues(alpha: 0.92),
+                              ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Color _shiftAccent(Color color, {required double lightnessDelta}) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withLightness((hsl.lightness + lightnessDelta).clamp(0.0, 1.0))
+        .toColor();
   }
 }
 

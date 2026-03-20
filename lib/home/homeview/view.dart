@@ -2,7 +2,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +11,7 @@ import 'package:superhut/home/userpage/view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_logger.dart';
+import '../../core/ui/apple_glass.dart';
 import '../../pages/Electricitybill/electricity_api.dart';
 import '../../pages/Electricitybill/electricity_page.dart';
 import 'logic.dart';
@@ -183,8 +183,6 @@ class _HomeviewPageState extends State<HomeviewPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     return Scaffold(
       extendBody: true,
       body: PageView(
@@ -199,60 +197,145 @@ class _HomeviewPageState extends State<HomeviewPage>
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colorScheme.surface.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: colorScheme.outlineVariant.withValues(alpha: 0.8),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.shadow.withValues(alpha: 0.12),
-                blurRadius: 28,
-                offset: const Offset(0, 16),
+        child: GlassPanel(
+          blur: 24,
+          borderRadius: BorderRadius.circular(32),
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            children: [
+              Expanded(
+                child: _NavItem(
+                  icon: Ionicons.calendar_outline,
+                  label: '课表',
+                  isSelected: _selectedIndex == 0,
+                  onTap: () => _onTabChange(0),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _NavItem(
+                  icon: Ionicons.apps_outline,
+                  label: '功能',
+                  isSelected: _selectedIndex == 1,
+                  onTap: () => _onTabChange(1),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _NavItem(
+                  icon: Ionicons.person_outline,
+                  label: '我的',
+                  isSelected: _selectedIndex == 2,
+                  onTap: () => _onTabChange(2),
+                ),
               ),
             ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            child: GNav(
-              selectedIndex: _selectedIndex,
-              gap: 10,
-              color: colorScheme.onSurfaceVariant,
-              activeColor: colorScheme.onPrimary,
-              iconSize: 22,
-              textStyle: theme.textTheme.labelLarge?.copyWith(
-                color: colorScheme.onPrimary,
-              ),
-              tabBackgroundGradient: LinearGradient(
-                colors: [colorScheme.primary, colorScheme.secondary],
-              ),
-              tabBorderRadius: 22,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              duration: const Duration(milliseconds: 220),
-              tabs: const [
-                GButton(icon: Ionicons.calendar_outline, text: '课表'),
-                GButton(icon: Ionicons.apps_outline, text: '功能'),
-                GButton(icon: Ionicons.person_outline, text: '我的'),
-              ],
-              onTabChange: (index) {
-                setState(() {
-                  _selectedIndex = index;
-                });
-                _logic.homePageController.animateToPage(
-                  index,
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                );
-              },
-            ),
           ),
         ),
       ),
     );
   }
 
+  void _onTabChange(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+    _logic.homePageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   bool get wantKeepAlive => true;
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient:
+            isSelected
+                ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.72),
+                    colorScheme.primary.withValues(alpha: 0.30),
+                  ],
+                )
+                : null,
+        color:
+            isSelected
+                ? null
+                : Colors.white.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.04 : 0.12,
+                ),
+        border: Border.all(
+          color:
+              isSelected
+                  ? Colors.white.withValues(alpha: 0.72)
+                  : Colors.white.withValues(alpha: 0.18),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color:
+                      isSelected
+                          ? colorScheme.primary
+                          : colorScheme.onSurfaceVariant,
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  child:
+                      isSelected
+                          ? Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: Text(
+                              label,
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: colorScheme.primary,
+                              ),
+                            ),
+                          )
+                          : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
