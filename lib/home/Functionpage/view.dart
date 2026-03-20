@@ -123,7 +123,7 @@ class _FunctionPageState extends State<FunctionPage> {
       ),
       _FunctionFeature(
         id: 'drink',
-        title: '宿舍喝水',
+        title: '慧生活798',
         icon: Ionicons.water_outline,
         accent: const Color(0xFF1D9DB7),
         onTap: () async {

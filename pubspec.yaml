@@ -80,6 +80,12 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.3
   change_app_package_name: ^1.5.0
 
+dependency_overrides:
+  # path_provider_foundation 2.6.0 switched iOS/macOS to direct FFI via
+  # objective_c native assets. On the current simulator toolchain this breaks
+  # course persistence at runtime, so we pin to the last plugin-based release.
+  path_provider_foundation: 2.5.1
+
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
