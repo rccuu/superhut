@@ -98,6 +98,15 @@ CourseSyncResult _buildCourseSyncFailure(Object error, StackTrace stackTrace) {
   return const CourseSyncResult.failure('课表加载失败，请稍后重试');
 }
 
+Future<void> saveExperimentRawDataToJson(
+  Map<String, dynamic> experimentRawData,
+) async {
+  final Directory appDocumentsDir = await getApplicationDocumentsDirectory();
+  final String appDocumentsPath = appDocumentsDir.path;
+  final file = File('$appDocumentsPath/experiment_course_raw.json');
+  await file.writeAsString(jsonEncode(experimentRawData));
+}
+
 Future<void> saveCourseDataToJson(Map<String, List<Course>> courseData) async {
   // 将 Course 对象列表转换为 Map 列表
   Map<String, List<Map<String, dynamic>>> courseDataMap = {};
@@ -237,6 +246,15 @@ Future<Map<String, List<Course>>> loadClassFormUrl(
   }
   final Map<String, List<Course>> expCourseData = await getOrgDataWeb
       .getAllWeekExpClass(context);
+  try {
+    await saveExperimentRawDataToJson(getOrgDataWeb.expRawWeeklyResponses);
+  } catch (error, stackTrace) {
+    AppLogger.error(
+      'Failed to persist experiment course raw snapshot',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
   expCourseData.forEach((date, list) {
     if (courseData.containsKey(date)) {
       courseData[date]!.addAll(list);

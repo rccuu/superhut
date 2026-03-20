@@ -39,6 +39,7 @@ DateTime getMondayOfCurrentWeek() {
 class _CourseTableViewState extends State<CourseTableView> {
   static const int _defaultMaxWeek = 20;
   static const int _sectionCount = 10;
+  static const String _showExperimentCoursesKey = 'showExperimentCourses';
   late final Future<void> _initialLoadFuture;
 
   // DateTime _currentDate = DateTime.now();
@@ -51,6 +52,7 @@ class _CourseTableViewState extends State<CourseTableView> {
 
   //当前实际周数
   int _currentRealWeek = 1;
+  bool _showExperimentCourses = true;
 
   /*
    * 课程数据存储器
@@ -119,6 +121,8 @@ class _CourseTableViewState extends State<CourseTableView> {
     final firstDay = prefs.getString('firstDay');
     final allWeek = prefs.getInt('maxWeek') ?? _defaultMaxWeek;
     final currentWeek = _resolveCurrentWeek(firstDay);
+    final showExperimentCourses =
+        prefs.getBool(_showExperimentCoursesKey) ?? true;
     final courseData = await loadClassFromLocal();
     if (!mounted) {
       return;
@@ -128,7 +132,19 @@ class _CourseTableViewState extends State<CourseTableView> {
       _allWeek = allWeek;
       _currentWeek = currentWeek;
       _currentRealWeek = currentWeek;
+      _showExperimentCourses = showExperimentCourses;
       _courseData = courseData;
+    });
+  }
+
+  Future<void> _setShowExperimentCourses(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_showExperimentCoursesKey, value);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _showExperimentCourses = value;
     });
   }
 
@@ -198,6 +214,22 @@ class _CourseTableViewState extends State<CourseTableView> {
    */
   String _dateKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
 
+  bool _isSameDay(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  bool _isToday(DateTime date) => _isSameDay(date, DateTime.now());
+
+  List<Course> _visibleCoursesForDay(DateTime date) {
+    final courses = _courseData[_dateKey(date)] ?? const <Course>[];
+    if (_showExperimentCourses) {
+      return List<Course>.from(courses);
+    }
+    return courses.where((course) => !course.isExp).toList();
+  }
+
   /*
    * 根据课程名称生成固定颜色
    * @param seed 颜色生成种子字符串（课程名称）
@@ -205,7 +237,7 @@ class _CourseTableViewState extends State<CourseTableView> {
    */
   Color _getCourseColor(String seed) {
     final hash = seed.hashCode % 360;
-    return HSLColor.fromAHSL(1.0, hash.toDouble(), 0.6, 0.75).toColor();
+    return HSLColor.fromAHSL(1.0, hash.toDouble(), 0.58, 0.58).toColor();
   }
 
   void _showSnackBar(String message) {
@@ -381,10 +413,20 @@ class _CourseTableViewState extends State<CourseTableView> {
     return Container(
       height: 60,
       margin: EdgeInsets.fromLTRB(1, marginT, 1, 1),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Center(
-        child: Text(
-          '',
-          style: TextStyle(color: Colors.grey[600], fontSize: 10),
+        child: Container(
+          width: 14,
+          height: 3,
+          decoration: BoxDecoration(
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(100),
+          ),
         ),
       ),
     );
@@ -392,6 +434,7 @@ class _CourseTableViewState extends State<CourseTableView> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final weekStart = _getStartOfWeek(_currentDate);
     final weekDays = List.generate(7, (i) => weekStart.add(Duration(days: i)));
     final dayLabels =
@@ -401,66 +444,96 @@ class _CourseTableViewState extends State<CourseTableView> {
                   '${_weekdayMap[day.weekday]!}\n${DateFormat('M-d').format(day)}',
             )
             .toList();
+    final todayIndex = weekDays.indexWhere(_isToday);
     String showWeekStr = "第$_currentWeek周";
     if (_currentWeek != _currentRealWeek) {
       showWeekStr = "第$_currentWeek周（当前第$_currentRealWeek周）";
     }
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: EnhancedFutureBuilder(
           future: _initialLoadFuture,
           rememberFutureResult: true,
           whenDone: (_) {
             return Padding(
-              padding: EdgeInsets.fromLTRB(10, 0, 10, 0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Column(
                 children: [
                   CourseTableToolbar(
-                    dateText: DateFormat('yyyy/M/dd').format(_currentDate),
                     weekText: showWeekStr,
+                    isShowingCurrentWeek: _currentWeek == _currentRealWeek,
                     onBackToCurrentWeek: _backToRealWeek,
-                    onPreviousWeek: _previousWeek,
-                    onNextWeek: _nextWeek,
+                    showExperimentCourses: _showExperimentCourses,
+                    onShowExperimentCoursesChanged: _setShowExperimentCourses,
                   ),
-                  CourseWeekdayHeader(dayLabels: dayLabels),
+                  const SizedBox(height: 12),
+                  CourseWeekdayHeader(
+                    dayLabels: dayLabels,
+                    todayIndex: todayIndex,
+                  ),
+                  const SizedBox(height: 6),
                   Expanded(
                     child: GestureDetector(
                       onHorizontalDragEnd: (details) {
                         final velocity = details.primaryVelocity ?? 0;
                         if (velocity > 10) {
                           _previousWeek();
-                        } else {
+                        } else if (velocity < -10) {
                           _nextWeek();
                         }
                       },
-                      child: SingleChildScrollView(
-                        child: Padding(
-                          padding: EdgeInsets.only(bottom: 100),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              CourseSectionColumn(sectionCount: _sectionCount),
-                              ...weekDays.map((day) {
-                                return Expanded(
-                                  flex: 4,
-                                  child: Container(
-                                    padding: EdgeInsets.only(top: 1),
-                                    decoration: BoxDecoration(
-                                      border: Border(
-                                        //right: BorderSide(color: Colors.grey),
-                                        // top: BorderSide(color: Colors.grey),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.78,
+                            ),
+                          ),
+                        ),
+                        child: SingleChildScrollView(
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 110),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CourseSectionColumn(
+                                  sectionCount: _sectionCount,
+                                ),
+                                ...weekDays.map((day) {
+                                  final isToday = _isToday(day);
+                                  return Expanded(
+                                    flex: 4,
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 2,
+                                      ),
+                                      padding: const EdgeInsets.only(top: 1),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            isToday
+                                                ? colorScheme.primary
+                                                    .withValues(alpha: 0.06)
+                                                : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                      child: Column(
+                                        children: _buildDayCourses(
+                                          _visibleCoursesForDay(day),
+                                        ),
                                       ),
                                     ),
-                                    child: Column(
-                                      children: _buildDayCourses(
-                                        _courseData[_dateKey(day)] ?? [],
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ],
+                                  );
+                                }),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -470,7 +543,9 @@ class _CourseTableViewState extends State<CourseTableView> {
               ),
             );
           },
-          whenNotDone: Center(child: Text('Waiting...')),
+          whenNotDone: Center(
+            child: CircularProgressIndicator(color: colorScheme.primary),
+          ),
         ),
       ),
     );

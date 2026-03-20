@@ -2,12 +2,12 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:superhut/welcomepage/view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../bridge/get_course_page.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
+import '../../login/unified_login_page.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/hut_user_api.dart';
 import '../../utils/token.dart';
@@ -21,16 +21,19 @@ class UserPage extends StatefulWidget {
 }
 
 class _UserPageState extends State<UserPage> {
+  final hutUserApi = HutUserApi();
+  final Uri _url = Uri.parse(
+    'alipays://platformapi/startapp?appId=2019030163398604&page=pages/index/index',
+  );
+
+  String balance = "--";
+
   @override
   void initState() {
     super.initState();
     getBalance();
   }
 
-  final hutUserApi = HutUserApi();
-  String balance = "--";
-
-  /// 获取余额
   Future<void> getBalance() async {
     try {
       final value = await hutUserApi.getCardBalance();
@@ -55,35 +58,23 @@ class _UserPageState extends State<UserPage> {
     }
   }
 
-  final Uri _url = Uri.parse(
-    'alipays://platformapi/startapp?appId=2019030163398604&page=pages/index/index',
-  );
-
   Future<void> _launchUrl() async {
     if (!await launchUrl(_url)) {
       throw Exception('Could not launch $_url');
     }
   }
 
-  Future<Map> getBaseData() async {
+  Future<Map<String, String>> getBaseData() async {
     final prefs = await SharedPreferences.getInstance();
-    String name = prefs.getString('name') ?? "人类";
-    String entranceYear = prefs.getString('entranceYear') ?? "0001";
-    String academyName = prefs.getString('academyName') ?? "地球学院";
-    String clsName = prefs.getString('clsName') ?? "地球1班";
-    String yxzxf = prefs.getString('yxzxf') ?? "-";
-    String zxfjd = prefs.getString('zxfjd') ?? "-";
-    String pjxfjd = prefs.getString('pjxfjd') ?? "-";
-    Map data = {
-      "name": name,
-      "entranceYear": entranceYear,
-      "academyName": academyName,
-      "clsName": clsName,
-      "yxzxf": yxzxf,
-      "zxfjd": zxfjd,
-      "pjxfjd": pjxfjd,
+    return {
+      "name": prefs.getString('name') ?? "同学",
+      "entranceYear": prefs.getString('entranceYear') ?? "--",
+      "academyName": prefs.getString('academyName') ?? "未绑定学院",
+      "clsName": prefs.getString('clsName') ?? "未绑定班级",
+      "yxzxf": prefs.getString('yxzxf') ?? "-",
+      "zxfjd": prefs.getString('zxfjd') ?? "-",
+      "pjxfjd": prefs.getString('pjxfjd') ?? "-",
     };
-    return data;
   }
 
   void _showSnackBar(String message) {
@@ -106,334 +97,346 @@ class _UserPageState extends State<UserPage> {
       return;
     }
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const ScorePage()),
     );
   }
 
+  Future<void> _refreshCourse() async {
+    final renewed = await renewToken(context);
+    if (!mounted) {
+      return;
+    }
+    if (!renewed) {
+      _showSnackBar('课表刷新失败，请重新登录后重试');
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const Getcoursepage(renew: true)),
+    );
+  }
+
+  Future<void> _logout() async {
+    final storage = AppAuthStorage.instance;
+    await storage.clearAllAuthData();
+    await storage.setFirstOpen(false);
+    if (!mounted) {
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const UnifiedLoginPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface, // 浅灰蓝色背景，类似图片中的风格
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
       body: EnhancedFutureBuilder(
         future: getBaseData(),
         rememberFutureResult: true,
-        whenDone: (d) {
+        whenDone: (data) {
           return SafeArea(
             child: ListView(
-              padding: EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
               children: [
-                // 顶部标题
-                Text(
-                  "你好，${d["name"]}",
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-                ),
-
-                SizedBox(height: 24),
-                /*
-              Container(
-                padding: EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Color(0xFFF1E6F5),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 标题行
-                    Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(Ionicons.person_outline, size: 20), // 修改图标为用户相关图标
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          "我的信息",
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black87),
-                        ),
-                      ],
-                    ),
-
-                    SizedBox(height: 16),
-
-                    // 学生信息字段
-                    Text(
-                      "姓名: 张三", // 示例数据，实际可动态绑定
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      "学号: 20230001", // 示例数据，实际可动态绑定
-                      style: TextStyle(fontSize: 14),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      "班级: 计算机科学与技术1班", // 示例数据，实际可动态绑定
-                      style: TextStyle(fontSize: 14),
-                    ),
-
-                    SizedBox(height: 20),
-                  ],
-                ),
-              ),
-
-
-              SizedBox(height: 24),
-
-              */
-                // 完成和分数卡片
                 Row(
                   children: [
-                    // 完成卡片
                     Expanded(
                       child: _buildStatCard(
-                        title: "已修学分",
-                        value: d['yxzxf'],
-                        color: Color(0xFFE3F1EC),
-                        textColor: Colors.black87,
+                        title: '已修学分',
+                        value: data['yxzxf'] ?? '-',
+                        accent: const Color(0xFF1E8A6F),
+                        icon: Ionicons.ribbon_outline,
                         onTap: _openScorePage,
                       ),
                     ),
-
-                    SizedBox(width: 12),
-
-                    // 分数卡片
+                    const SizedBox(width: 14),
                     Expanded(
                       child: _buildStatCard(
-                        title: "我的绩点",
-                        value: d['pjxfjd'],
-                        color: Color(0xFFFFF6E0),
-                        textColor: Colors.black87,
+                        title: '平均绩点',
+                        value: data['pjxfjd'] ?? '-',
+                        accent: const Color(0xFFE28A2E),
+                        icon: Ionicons.stats_chart_outline,
                         onTap: _openScorePage,
                       ),
                     ),
                   ],
                 ),
-
-                SizedBox(height: 10),
-
-                // 校园卡
-                Card(
-                  elevation: 0,
-                  color: Colors.purple.shade100,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      color: Colors.white.withAlpha(20),
+                const SizedBox(height: 16),
+                _buildBalanceCard(theme),
+                const SizedBox(height: 16),
+                _buildActionPanel(
+                  children: [
+                    _buildActionTile(
+                      icon: Ionicons.refresh_outline,
+                      title: '刷新课表',
+                      subtitle: '重新同步本地课表',
+                      onTap: _refreshCourse,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  '校园卡',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text(
-                              balance,
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              ),
-                            ),
-                            SizedBox(width: 5),
-                            Text(
-                              'CNY',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w100,
-                                color: Colors.black.withAlpha(150),
-                              ),
-                            ),
-                          ],
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            _launchUrl();
-                          },
-                          style: ButtonStyle(
-                            backgroundColor: WidgetStateProperty.all(
-                              Colors.purple.shade200,
-                            ),
-                            foregroundColor: WidgetStateProperty.all(
-                              Colors.white,
-                            ),
-                            shape: WidgetStateProperty.all(
-                              RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                          ),
-                          child: Text('充值'),
-                        ),
-                      ],
+                    _buildDivider(),
+                    _buildActionTile(
+                      icon: Ionicons.information_circle_outline,
+                      title: '关于软件',
+                      subtitle: '查看版本和项目说明',
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(builder: (context) => AboutPage()),
+                        );
+                      },
                     ),
-                  ),
+                  ],
                 ),
-                SizedBox(height: 20),
-                //SizedBox(height: 24),
-
-                // 功能项
-                _buildFunctionItem(
-                  icon: Ionicons.refresh_outline,
-                  title: "刷新课表",
-                  onTap: () async {
-                    final renewed = await renewToken(context);
-                    if (!context.mounted) {
-                      return;
-                    }
-                    if (!renewed) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('课表刷新失败，请重新登录后重试')),
-                      );
-                      return;
-                    }
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => Getcoursepage(renew: true),
-                      ),
-                    );
-                  },
-                ),
-
-                _buildFunctionItem(
-                  icon: Ionicons.log_out_outline,
-                  title: "退出登录",
-                  onTap: () async {
-                    final storage = AppAuthStorage.instance;
-                    await storage.clearAllAuthData();
-                    await storage.setFirstOpen(true);
-                    if (!context.mounted) {
-                      return;
-                    }
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (context) => WelcomepagePage(),
-                      ),
-                    );
-                  },
-                ),
-
-                _buildFunctionItem(
-                  icon: Ionicons.information_circle_outline,
-                  title: "关于软件",
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => AboutPage()),
-                    );
-                  },
-                ),
-                SizedBox(height: 100),
+                const SizedBox(height: 16),
+                _buildDangerTile(),
               ],
             ),
           );
         },
-        whenNotDone: Center(child: CircularProgressIndicator()),
+        whenNotDone: Center(
+          child: CircularProgressIndicator(color: colorScheme.primary),
+        ),
       ),
     );
   }
 
-  // 构建统计卡片
   Widget _buildStatCard({
     required VoidCallback onTap,
     required String title,
     required String value,
-    required Color color,
-    required Color textColor,
+    required Color accent,
+    required IconData icon,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: accent.withValues(alpha: 0.22)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: Colors.white, size: 20),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                title,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(value, style: theme.textTheme.headlineMedium),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBalanceCard(ThemeData theme) {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF13284E), Color(0xFF2451B7)],
+        ),
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withValues(alpha: 0.18),
+            blurRadius: 30,
+            offset: const Offset(0, 18),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: textColor.withValues(alpha: 0.7),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                value,
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
+                '校园卡余额',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.88),
                 ),
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
+              const Spacer(),
+              Icon(
+                Ionicons.wallet_outline,
+                color: Colors.white.withValues(alpha: 0.78),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                balance,
+                style: theme.textTheme.displaySmall?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
                 ),
-                padding: EdgeInsets.all(4),
-                child: IconButton(
-                  onPressed: onTap,
-                  icon: Icon(Icons.arrow_forward, size: 16, color: textColor),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  'CNY',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.72),
+                  ),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 18),
+          FilledButton.tonalIcon(
+            onPressed: _launchUrl,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white.withValues(alpha: 0.16),
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Ionicons.flash_outline, size: 18),
+            label: const Text('前往充值'),
           ),
         ],
       ),
     );
   }
 
-  // 构建功能项
-  Widget _buildFunctionItem({
+  Widget _buildActionPanel({required List<Widget> children}) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.8),
+        ),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildActionTile({
     required IconData icon,
     required String title,
-    required VoidCallback onTap,
+    required String subtitle,
+    required Future<void> Function() onTap,
   }) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ListTile(
+      onTap: () => onTap(),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Icon(icon, color: colorScheme.primary, size: 20),
       ),
-      child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).primaryColor),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.w500)),
-        trailing: Icon(Icons.chevron_right, color: Colors.grey),
-        onTap: onTap,
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: Icon(
+        Ionicons.chevron_forward_outline,
+        size: 18,
+        color: colorScheme.onSurfaceVariant,
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: Divider(height: 1),
+    );
+  }
+
+  Widget _buildDangerTile() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: _logout,
+        child: Ink(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFD85B66).withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: const Color(0xFFD85B66).withValues(alpha: 0.22),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD85B66),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Ionicons.log_out_outline,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '退出登录',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '清除当前账号会话并回到欢迎页。',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Ionicons.chevron_forward_outline,
+                size: 18,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

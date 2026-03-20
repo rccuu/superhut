@@ -42,6 +42,21 @@ StateError _buildCourseRequestStateError(dynamic responseData) {
   return StateError(message ?? '教务系统登录状态已失效，请重新登录后再试');
 }
 
+dynamic _jsonSafeValue(dynamic value) {
+  if (value == null || value is String || value is num || value is bool) {
+    return value;
+  }
+  if (value is Map) {
+    return value.map(
+      (key, item) => MapEntry(key.toString(), _jsonSafeValue(item)),
+    );
+  }
+  if (value is List) {
+    return value.map(_jsonSafeValue).toList();
+  }
+  return value.toString();
+}
+
 bool _hasScheduleData(Map<String, dynamic> data) {
   final payload = data['data'];
   return payload is List && payload.isNotEmpty;
@@ -255,6 +270,12 @@ class GetOrgDataWeb {
   int maxWeek = _defaultMaxWeek;
   final Map<String, List<Course>> courseData = {};
   String? semesterId;
+  final Map<String, dynamic> expRawWeeklyResponses = {
+    'schemaVersion': 1,
+    'capturedAt': '',
+    'semesterId': '',
+    'weeks': <String, dynamic>{},
+  };
 
   GetOrgDataWeb({required this.token});
 
@@ -395,21 +416,31 @@ class GetOrgDataWeb {
     BuildContext? context,
   ) async {
     final Map<String, List<Course>> expCourseData = {};
+    final weeks = expRawWeeklyResponses['weeks'] as Map<String, dynamic>;
     try {
       if (semesterId == null || semesterId!.isEmpty) {
         await getCurrentSemesterId();
       }
       await configureDioFromStorage();
+      final sid = semesterId ?? '';
+      expRawWeeklyResponses['capturedAt'] = DateTime.now().toIso8601String();
+      expRawWeeklyResponses['semesterId'] = sid;
       for (int i = firstWeek; i <= maxWeek; i++) {
+        final requestPath =
+            '/njwhd/teacher/courseScheduleExp?xnxq01id=$sid&week=$i';
         try {
-          final sid = semesterId ?? '';
           if (sid.isEmpty) {
             continue;
           }
           final Response<dynamic> response = await postDioWithCookie(
-            '/njwhd/teacher/courseScheduleExp?xnxq01id=$sid&week=$i',
+            requestPath,
             {},
           );
+          weeks['$i'] = {
+            'requestPath': requestPath,
+            'statusCode': response.statusCode,
+            'response': _jsonSafeValue(response.data),
+          };
           final data = _asResponseMap(response.data);
           if (data == null || data['code']?.toString() != '1') {
             throw _buildCourseRequestStateError(response.data);
@@ -431,6 +462,14 @@ class GetOrgDataWeb {
           }
           await Future.delayed(const Duration(milliseconds: 100));
         } catch (error, stackTrace) {
+          weeks['$i'] = {
+            'requestPath': requestPath,
+            'error': error.toString(),
+            if (error is DioException && error.response != null)
+              'statusCode': error.response?.statusCode,
+            if (error is DioException && error.response != null)
+              'response': _jsonSafeValue(error.response?.data),
+          };
           AppLogger.error('获取第$i周实验课表出错', error: error, stackTrace: stackTrace);
         }
       }

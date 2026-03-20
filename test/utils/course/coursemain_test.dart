@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:superhut/utils/course/get_course.dart';
 import 'package:superhut/utils/course/coursemain.dart';
 import 'package:superhut/utils/withhttp.dart';
 
@@ -212,6 +213,112 @@ void main() {
       expect(widgetRefreshCalls.map((call) => call.method), [
         'refreshCourseTableWidget',
       ]);
+    },
+  );
+
+  test(
+    'saveExperimentRawDataToJson writes raw experiment schedule snapshot for debugging',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'token': 'jwxt-token',
+        'my_client_ticket': '',
+      });
+
+      final originalAdapter = dio.httpClientAdapter;
+      dio.httpClientAdapter = _FakeCourseHttpClientAdapter((options) {
+        final path = options.path;
+        if (path == '/njwhd/student/curriculum?week=1') {
+          return _jsonResponse({
+            'code': '1',
+            'data': [
+              {
+                'date': [
+                  {'xqid': 1, 'mxrq': '2026-03-16'},
+                ],
+                'item': [
+                  {
+                    'classTime': '10102',
+                    'courseName': '软件工程',
+                    'teacherName': '张老师',
+                    'classWeek': '1-16',
+                    'location': '公共201',
+                  },
+                ],
+              },
+            ],
+          });
+        }
+        if (path.startsWith('/njwhd/student/curriculum?week=')) {
+          return _jsonResponse({'code': '1', 'data': []});
+        }
+        if (path == '/njwhd/semesterList') {
+          return _jsonResponse({
+            'code': '1',
+            'data': [
+              {'nowXq': '1', 'semesterId': '2025-2026-2'},
+            ],
+          });
+        }
+        if (path ==
+            '/njwhd/teacher/courseScheduleExp?xnxq01id=2025-2026-2&week=1') {
+          return _jsonResponse({
+            'code': '1',
+            'data': [
+              {
+                'date': [
+                  {'xqid': 1, 'mxrq': '2026-03-16'},
+                ],
+                'courses': [
+                  {
+                    'teacherName': '李老师',
+                    'syxmName': '网络实验',
+                    'weekNoteDetail': '105,106',
+                    'courseName': '软件工程',
+                    'classroomName': '实验楼101',
+                    'weekDay': 1,
+                    'pcid': 'pcid-1',
+                    'kkzc': '1',
+                    'startTime': '14:00',
+                    'endTIme': '15:40',
+                  },
+                ],
+              },
+            ],
+          });
+        }
+        if (path.startsWith('/njwhd/teacher/courseScheduleExp?')) {
+          return _jsonResponse({'code': '1', 'data': []});
+        }
+        throw StateError('Unexpected request path: $path');
+      });
+      addTearDown(() {
+        dio.httpClientAdapter = originalAdapter;
+      });
+
+      final getOrgDataWeb = GetOrgDataWeb(token: 'jwxt-token');
+      getOrgDataWeb.initData();
+      await getOrgDataWeb.getAllWeekExpClass(null);
+      await saveExperimentRawDataToJson(getOrgDataWeb.expRawWeeklyResponses);
+
+      final rawFile = File('${tempDirectory.path}/experiment_course_raw.json');
+      expect(rawFile.existsSync(), isTrue);
+
+      final rawJson =
+          jsonDecode(await rawFile.readAsString()) as Map<String, dynamic>;
+      expect(rawJson['semesterId'], '2025-2026-2');
+
+      final weeks = rawJson['weeks'] as Map<String, dynamic>;
+      final weekOne = weeks['1'] as Map<String, dynamic>;
+      final response = weekOne['response'] as Map<String, dynamic>;
+      final data = response['data'] as List<dynamic>;
+      final weekData = data.single as Map<String, dynamic>;
+      final courses = weekData['courses'] as List<dynamic>;
+      final course = courses.single as Map<String, dynamic>;
+
+      expect(course['syxmName'], '网络实验');
+      expect(course['startTime'], '14:00');
+      expect(course['endTIme'], '15:40');
+      expect(course['pcid'], 'pcid-1');
     },
   );
 }
