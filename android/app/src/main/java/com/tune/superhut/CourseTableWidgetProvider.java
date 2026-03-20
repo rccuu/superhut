@@ -1,4 +1,4 @@
-package com.zhiquxy.rice;
+package com.tune.superhut;
 
 import android.app.AlarmManager;
 import android.app.PendingIntent;
@@ -36,8 +36,8 @@ import java.util.Locale;
  */
 public class CourseTableWidgetProvider extends AppWidgetProvider {
 
-    public static final String ACTION_REFRESH = "com.zhiquxy.rice.ACTION_REFRESH";
-    public static final String ACTION_AUTO_UPDATE = "com.zhiquxy.rice.ACTION_AUTO_UPDATE_WIDGET";
+    public static final String ACTION_REFRESH = "com.tune.superhut.ACTION_REFRESH";
+    public static final String ACTION_AUTO_UPDATE = "com.tune.superhut.ACTION_AUTO_UPDATE_WIDGET";
     private static final String TODAY_FORMAT = "yyyy-MM-dd";
     private static final String TAG = "CourseTableWidgetProv";
 

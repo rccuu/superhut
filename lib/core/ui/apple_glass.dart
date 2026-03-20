@@ -1,0 +1,268 @@
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+
+class AppGlassBackground extends StatelessWidget {
+  const AppGlassBackground({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomCenter,
+          colors:
+              isDark
+                  ? const [
+                    Color(0xFF0A0F17),
+                    Color(0xFF101826),
+                    Color(0xFF0C111A),
+                  ]
+                  : const [
+                    Color(0xFFF4F7FC),
+                    Color(0xFFEAF0FA),
+                    Color(0xFFF8FAFD),
+                  ],
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _AmbientOrb(
+            alignment: const Alignment(-1.15, -0.92),
+            width: 280,
+            height: 280,
+            colors: [
+              colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.18),
+              colorScheme.primary.withValues(alpha: 0),
+            ],
+          ),
+          _AmbientOrb(
+            alignment: const Alignment(1.08, -0.78),
+            width: 250,
+            height: 250,
+            colors: [
+              colorScheme.secondary.withValues(alpha: isDark ? 0.14 : 0.14),
+              colorScheme.secondary.withValues(alpha: 0),
+            ],
+          ),
+          _AmbientOrb(
+            alignment: const Alignment(0.9, 0.78),
+            width: 340,
+            height: 340,
+            colors: [
+              colorScheme.tertiary.withValues(alpha: isDark ? 0.11 : 0.10),
+              colorScheme.tertiary.withValues(alpha: 0),
+            ],
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: isDark ? 0.03 : 0.14),
+                    Colors.transparent,
+                    Colors.white.withValues(alpha: isDark ? 0.02 : 0.08),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class GlassPanel extends StatelessWidget {
+  const GlassPanel({
+    super.key,
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.margin,
+    this.borderRadius = const BorderRadius.all(Radius.circular(28)),
+    this.blur = 20,
+    this.tintColor,
+    this.gradient,
+    this.borderColor,
+    this.onTap,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? margin;
+  final BorderRadius borderRadius;
+  final double blur;
+  final Color? tintColor;
+  final Gradient? gradient;
+  final Color? borderColor;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final decoration = BoxDecoration(
+      color:
+          gradient == null
+              ? (tintColor ??
+                  colorScheme.surface.withValues(alpha: isDark ? 0.20 : 0.58))
+              : null,
+      gradient:
+          gradient ??
+          LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: isDark ? 0.16 : 0.70),
+              colorScheme.surface.withValues(alpha: isDark ? 0.10 : 0.34),
+            ],
+          ),
+      borderRadius: borderRadius,
+      border: Border.all(
+        color:
+            borderColor ?? Colors.white.withValues(alpha: isDark ? 0.14 : 0.62),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: colorScheme.shadow.withValues(alpha: isDark ? 0.22 : 0.08),
+          blurRadius: 32,
+          offset: const Offset(0, 18),
+        ),
+      ],
+    );
+
+    final content =
+        onTap == null
+            ? Padding(padding: padding, child: child)
+            : Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: borderRadius,
+                onTap: onTap,
+                child: Padding(padding: padding, child: child),
+              ),
+            );
+
+    return Container(
+      margin: margin,
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: DecoratedBox(decoration: decoration, child: content),
+        ),
+      ),
+    );
+  }
+}
+
+class GlassIconBadge extends StatelessWidget {
+  const GlassIconBadge({
+    super.key,
+    required this.icon,
+    required this.tint,
+    this.size = 52,
+  });
+
+  final IconData icon;
+  final Color tint;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(size * 0.34),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: isDark ? 0.24 : 0.94),
+            tint.withValues(alpha: isDark ? 0.32 : 0.22),
+          ],
+        ),
+        border: Border.all(
+          color:
+              isDark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : Colors.white.withValues(alpha: 0.82),
+        ),
+      ),
+      child: Icon(icon, color: tint, size: size * 0.42),
+    );
+  }
+}
+
+class GlassHairlineDivider extends StatelessWidget {
+  const GlassHairlineDivider({
+    super.key,
+    this.horizontal = 0,
+    this.vertical = 0,
+  });
+
+  final double horizontal;
+  final double vertical;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical),
+      child: Container(
+        height: 1,
+        color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.52),
+      ),
+    );
+  }
+}
+
+class _AmbientOrb extends StatelessWidget {
+  const _AmbientOrb({
+    required this.alignment,
+    required this.width,
+    required this.height,
+    required this.colors,
+  });
+
+  final Alignment alignment;
+  final double width;
+  final double height;
+  final List<Color> colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Align(
+        alignment: alignment,
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 56, sigmaY: 56),
+          child: Container(
+            width: width,
+            height: height,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(colors: colors),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

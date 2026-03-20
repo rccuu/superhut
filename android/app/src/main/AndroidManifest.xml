@@ -38,7 +38,7 @@
 
         <!-- 课程表桌面小组件注册 -->
         <receiver
-            android:name="com.zhiquxy.rice.CourseTableWidgetProvider"
+            android:name="com.tune.superhut.CourseTableWidgetProvider"
             android:label="课程表"
             android:exported="true">
             <intent-filter>
@@ -46,7 +46,7 @@
                 <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
                 <action android:name="android.appwidget.action.APPWIDGET_DELETED" />
                 <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
-                <action android:name="com.zhiquxy.rice.ACTION_REFRESH" />
+                <action android:name="com.tune.superhut.ACTION_REFRESH" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -55,7 +55,7 @@
 
         <!-- 快捷按钮桌面小组件注册 -->
         <receiver
-            android:name="com.zhiquxy.rice.QuickActionWidgetProvider"
+            android:name="com.tune.superhut.QuickActionWidgetProvider"
             android:label="快捷功能"
             android:exported="true">
             <intent-filter>
@@ -63,10 +63,10 @@
                 <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
                 <action android:name="android.appwidget.action.APPWIDGET_DELETED" />
                 <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
-                <action android:name="com.zhiquxy.rice.ACTION_DRINK" />
-                <action android:name="com.zhiquxy.rice.ACTION_BATH" />
-                <action android:name="com.zhiquxy.rice.ACTION_ELECTRICITY" />
-                <action android:name="com.zhiquxy.rice.ACTION_SCORE" />
+                <action android:name="com.tune.superhut.ACTION_DRINK" />
+                <action android:name="com.tune.superhut.ACTION_BATH" />
+                <action android:name="com.tune.superhut.ACTION_ELECTRICITY" />
+                <action android:name="com.tune.superhut.ACTION_SCORE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -75,7 +75,7 @@
 
         <!-- 课程表小组件服务 -->
         <service
-            android:name="com.zhiquxy.rice.CourseTableWidgetService"
+            android:name="com.tune.superhut.CourseTableWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS"
             android:exported="false" />
     </application>

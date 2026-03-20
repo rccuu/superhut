@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../../core/ui/apple_glass.dart';
 import '../../../utils/course/coursemain.dart';
 
 class CourseTableToolbar extends StatelessWidget {
   const CourseTableToolbar({
     super.key,
-    required this.weekText,
+    required this.weekTitle,
+    required this.weekDateRange,
+    required this.currentWeekLabel,
     required this.isShowingCurrentWeek,
     required this.onBackToCurrentWeek,
     required this.showExperimentCourses,
     required this.onShowExperimentCoursesChanged,
   });
 
-  final String weekText;
+  final String weekTitle;
+  final String weekDateRange;
+  final String currentWeekLabel;
   final bool isShowingCurrentWeek;
   final VoidCallback onBackToCurrentWeek;
   final bool showExperimentCourses;
@@ -24,87 +30,74 @@ class CourseTableToolbar extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Row(
-      children: [
-        TextButton(
-          onPressed: isShowingCurrentWeek ? null : onBackToCurrentWeek,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-            foregroundColor: colorScheme.primary,
-          ),
-          child: const Text('回到本周'),
-        ),
-        const SizedBox(width: 8),
-        GestureDetector(
-          onTap: () => onShowExperimentCoursesChanged(!showExperimentCourses),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color:
-                  showExperimentCourses
-                      ? colorScheme.primaryContainer
-                      : colorScheme.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color:
-                    showExperimentCourses
-                        ? colorScheme.primary.withValues(alpha: 0.32)
-                        : colorScheme.outlineVariant.withValues(alpha: 0.75),
-              ),
-            ),
-            child: Row(
+    return GlassPanel(
+      blur: 18,
+      borderRadius: BorderRadius.circular(22),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color:
-                        showExperimentCourses
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      weekTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.onSurface,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        weekDateRange,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.15,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(height: 3),
                 Text(
-                  '实验课',
+                  currentWeekLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color:
-                        showExperimentCourses
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  showExperimentCourses ? '开' : '关',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color:
-                        showExperimentCourses
-                            ? colorScheme.primary
-                            : colorScheme.onSurfaceVariant,
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            weekText,
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
+          const SizedBox(width: 8),
+          _ToolbarAction(
+            icon:
+                showExperimentCourses ? Ionicons.flask : Ionicons.flask_outline,
+            semanticLabel: showExperimentCourses ? '隐藏实验课' : '显示实验课',
+            isActive: showExperimentCourses,
+            onTap: () => onShowExperimentCoursesChanged(!showExperimentCourses),
           ),
-        ),
-      ],
+          const SizedBox(width: 6),
+          _ToolbarAction(
+            icon: Ionicons.return_up_back_outline,
+            semanticLabel: '回到本周',
+            isActive: !isShowingCurrentWeek,
+            onTap: isShowingCurrentWeek ? null : onBackToCurrentWeek,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -113,50 +106,60 @@ class CourseWeekdayHeader extends StatelessWidget {
   const CourseWeekdayHeader({
     super.key,
     required this.dayLabels,
+    required this.dayFlexes,
     required this.todayIndex,
+    required this.leadingWidth,
   });
 
   final List<String> dayLabels;
+  final List<int> dayFlexes;
   final int todayIndex;
+  final double leadingWidth;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Row(
       children: [
-        const Expanded(child: SizedBox()),
+        SizedBox(width: leadingWidth),
         ...dayLabels.asMap().entries.map((entry) {
           final index = entry.key;
           final label = entry.value;
           final isToday = index == todayIndex;
 
           return Expanded(
-            flex: 4,
+            flex: dayFlexes[index],
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(3, 0, 3, 8),
+              padding: const EdgeInsets.fromLTRB(0.6, 0, 0.6, 5),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(vertical: 10),
+                padding: const EdgeInsets.symmetric(vertical: 5),
                 decoration: BoxDecoration(
                   color:
                       isToday
-                          ? colorScheme.primaryContainer
-                          : colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(18),
+                          ? colorScheme.primary.withValues(
+                            alpha: isDark ? 0.18 : 0.12,
+                          )
+                          : Colors.white.withValues(
+                            alpha: isDark ? 0.08 : 0.42,
+                          ),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color:
                         isToday
-                            ? colorScheme.primary.withValues(alpha: 0.28)
-                            : colorScheme.outlineVariant.withValues(
-                              alpha: 0.72,
+                            ? colorScheme.primary.withValues(alpha: 0.32)
+                            : Colors.white.withValues(
+                              alpha: isDark ? 0.10 : 0.62,
                             ),
                   ),
                 ),
                 child: Text(
                   label,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  style: theme.textTheme.labelSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color:
                         isToday
@@ -178,42 +181,47 @@ class CourseSectionColumn extends StatelessWidget {
   const CourseSectionColumn({
     super.key,
     required this.sectionCount,
+    required this.width,
     this.slotHeight = 60,
   });
 
   final int sectionCount;
+  final double width;
   final double slotHeight;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
-    return Expanded(
-      child: SizedBox(
-        width: 42,
-        child: Column(
-          children: List.generate(sectionCount, (index) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(0, 1, 0, 1),
-              child: Container(
-                height: slotHeight,
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(16),
+    return SizedBox(
+      width: width,
+      child: Column(
+        children: List.generate(sectionCount, (index) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(0, 0.2, 0, 0.2),
+            child: Container(
+              height: slotHeight,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.44),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: isDark ? 0.06 : 0.56),
                 ),
-                child: Center(
-                  child: Text(
-                    '${index + 1}',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
-                    ),
+              ),
+              child: Center(
+                child: Text(
+                  '${index + 1}',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-            );
-          }),
-        ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -226,56 +234,100 @@ class CourseSummary extends StatelessWidget {
     required this.nameMaxLines,
     required this.locationMaxLines,
     this.expandName = false,
+    required this.foregroundColor,
   });
 
   final Course course;
   final int nameMaxLines;
   final int locationMaxLines;
   final bool expandName;
+  final Color foregroundColor;
 
   @override
   Widget build(BuildContext context) {
-    final nameText = Text(
-      course.name,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 12,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.2,
-      ),
-      textAlign: TextAlign.left,
-      maxLines: nameMaxLines,
-      overflow: TextOverflow.ellipsis,
-    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final ultraCompact = constraints.maxHeight < 28;
+        final compact = constraints.maxHeight < 36 || course.duration <= 1;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (expandName) Expanded(child: nameText) else nameText,
-        const SizedBox(height: 2),
-        Text(
-          course.location,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ScaledLine(
+              text: course.name,
+              color: foregroundColor,
+              fontSize: compact ? (ultraCompact ? 8.7 : 9.4) : 11.2,
+              fontWeight: FontWeight.w800,
+              height: compact ? (ultraCompact ? 9.5 : 11) : 14,
+            ),
+            if (course.location.isNotEmpty)
+              Padding(
+                padding: EdgeInsets.only(top: compact ? 0.4 : 1.8),
+                child: _ScaledLine(
+                  text: course.location,
+                  color: foregroundColor.withValues(alpha: 0.92),
+                  fontSize: compact ? (ultraCompact ? 6.8 : 7.4) : 8.9,
+                  fontWeight: FontWeight.w700,
+                  height: compact ? (ultraCompact ? 8 : 9) : 11,
+                ),
+              ),
+            if (!compact && course.teacherName.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 0.8),
+                child: _ScaledLine(
+                  text: course.teacherName,
+                  color: foregroundColor.withValues(alpha: 0.76),
+                  fontSize: 8.1,
+                  fontWeight: FontWeight.w600,
+                  height: 10,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ScaledLine extends StatelessWidget {
+  const _ScaledLine({
+    required this.text,
+    required this.color,
+    required this.fontSize,
+    required this.fontWeight,
+    required this.height,
+  });
+
+  final String text;
+  final Color color;
+  final double fontSize;
+  final FontWeight fontWeight;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: height,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            text,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+            style: TextStyle(
+              color: color,
+              fontSize: fontSize,
+              fontWeight: fontWeight,
+              letterSpacing: -0.18,
+            ),
           ),
-          textAlign: TextAlign.left,
-          maxLines: locationMaxLines,
-          overflow: TextOverflow.ellipsis,
         ),
-        Text(
-          course.teacherName,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.88),
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-          ),
-          textAlign: TextAlign.left,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
+      ),
     );
   }
 }
@@ -284,61 +336,160 @@ class CourseDetailSheet extends StatelessWidget {
   const CourseDetailSheet({
     super.key,
     required this.course,
+    required this.scheduleText,
+    required this.copyText,
     this.onViewStudents,
   });
 
   final Course course;
+  final String scheduleText;
+  final String copyText;
   final VoidCallback? onViewStudents;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final colorScheme = Theme.of(context).colorScheme;
+
+    Future<void> copyValue(String text, String message) async {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text(message)));
+    }
+
+    final detailItems = [
+      _CourseDetailItem(
+        icon: Ionicons.calendar_outline,
+        text: course.weekDuration.isEmpty ? '暂无周数信息' : course.weekDuration,
+      ),
+      _CourseDetailItem(icon: Ionicons.time_outline, text: scheduleText),
+      _CourseDetailItem(
+        icon: Ionicons.person_outline,
+        text: course.teacherName.isEmpty ? '暂无教师信息' : course.teacherName,
+      ),
+      _CourseDetailItem(
+        icon: Ionicons.location_outline,
+        text: course.location.isEmpty ? '暂无上课地点' : course.location,
+      ),
+    ];
+
+    final actionItems = [
+      _CourseActionItem(
+        icon: Ionicons.copy_outline,
+        text: '复制课程名称',
+        onTap: () => copyValue(course.name, '已复制课程名称'),
+      ),
+      _CourseActionItem(
+        icon: Ionicons.document_text_outline,
+        text: '复制课程信息为文本',
+        onTap: () => copyValue(copyText, '已复制课程详情'),
+      ),
+      if (course.isExp && onViewStudents != null)
+        _CourseActionItem(
+          icon: Ionicons.people_outline,
+          text: '查看实验人员名单',
+          onTap: onViewStudents,
+        ),
+    ];
 
     return Material(
       color: Colors.transparent,
-      child: SizedBox(
-        height: course.isExp ? 420 : 360,
-        child: ListView(
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          children: [
-            Center(
-              child: Container(
-                width: 48,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(100),
+      child: SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.84,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 18),
+                Text(
+                  course.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.onSurface,
+                    letterSpacing: -0.45,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Text(
+                      '详情',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '长按下方信息可复制',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.78,
+                        ),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _CourseDetailGroup(
+                  children:
+                      detailItems
+                          .map(
+                            (item) => _CourseDetailRow(
+                              icon: item.icon,
+                              text: item.text,
+                              onLongPress:
+                                  () => copyValue(item.text, '已复制${item.text}'),
+                            ),
+                          )
+                          .toList(),
+                ),
+                const SizedBox(height: 16),
+                _CourseDetailGroup(
+                  children:
+                      actionItems
+                          .map(
+                            (item) => _CourseDetailRow(
+                              icon: item.icon,
+                              text: item.text,
+                              accentColor: colorScheme.primary,
+                              trailing: Icon(
+                                Ionicons.chevron_forward_outline,
+                                size: 18,
+                                color: colorScheme.onSurfaceVariant.withValues(
+                                  alpha: 0.72,
+                                ),
+                              ),
+                              onTap: item.onTap,
+                            ),
+                          )
+                          .toList(),
+                ),
+              ],
             ),
-            const SizedBox(height: 18),
-            Text(course.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 16),
-            _CourseInfoTile(
-              icon: Ionicons.calendar_outline,
-              title: course.weekDuration,
-            ),
-            _CourseInfoTile(
-              icon: Ionicons.time_outline,
-              title:
-                  '第${course.startSection}-${course.duration + course.startSection - 1}节',
-            ),
-            _CourseInfoTile(
-              icon: Ionicons.person_outline,
-              title: course.teacherName,
-            ),
-            _CourseInfoTile(
-              icon: Ionicons.location_outline,
-              title: course.location,
-            ),
-            if (course.isExp && onViewStudents != null)
-              _CourseInfoTile(
-                icon: Ionicons.people_outline,
-                title: '查看人员名单',
-                onTap: onViewStudents,
-              ),
-          ],
+          ),
         ),
       ),
     );
@@ -400,27 +551,33 @@ class ExperimentStudentsSheet extends StatelessWidget {
                     final student = students[index];
                     return Container(
                       decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(22),
                       ),
-                      child: ListTile(
-                        leading: Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: colorScheme.primaryContainer,
-                            shape: BoxShape.circle,
+                      child: GlassPanel(
+                        blur: 12,
+                        borderRadius: BorderRadius.circular(22),
+                        padding: EdgeInsets.zero,
+                        child: ListTile(
+                          leading: Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary.withValues(
+                                alpha: 0.12,
+                              ),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Ionicons.person_outline,
+                              color: colorScheme.primary,
+                            ),
                           ),
-                          child: Icon(
-                            Ionicons.person_outline,
-                            color: colorScheme.primary,
+                          title: Text(student['xm']?.toString() ?? ''),
+                          subtitle: Text(
+                            '学号 ${student['xh']?.toString() ?? ''}  ·  ${student['bj']?.toString() ?? ''}',
                           ),
+                          trailing: Text(student['xbmc']?.toString() ?? ''),
                         ),
-                        title: Text(student['xm']?.toString() ?? ''),
-                        subtitle: Text(
-                          '学号 ${student['xh']?.toString() ?? ''}  ·  ${student['bj']?.toString() ?? ''}',
-                        ),
-                        trailing: Text(student['xbmc']?.toString() ?? ''),
                       ),
                     );
                   },
@@ -434,43 +591,180 @@ class ExperimentStudentsSheet extends StatelessWidget {
   }
 }
 
-class _CourseInfoTile extends StatelessWidget {
-  const _CourseInfoTile({required this.icon, required this.title, this.onTap});
+class _CourseDetailItem {
+  const _CourseDetailItem({required this.icon, required this.text});
 
   final IconData icon;
-  final String title;
+  final String text;
+}
+
+class _CourseActionItem {
+  const _CourseActionItem({
+    required this.icon,
+    required this.text,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String text;
+  final VoidCallback? onTap;
+}
+
+class _CourseDetailGroup extends StatelessWidget {
+  const _CourseDetailGroup({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      blur: 12,
+      borderRadius: BorderRadius.circular(24),
+      padding: EdgeInsets.zero,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(children.length * 2 - 1, (index) {
+          if (index.isOdd) {
+            return const GlassHairlineDivider(horizontal: 18);
+          }
+          return children[index ~/ 2];
+        }),
+      ),
+    );
+  }
+}
+
+class _CourseDetailRow extends StatelessWidget {
+  const _CourseDetailRow({
+    required this.icon,
+    required this.text,
+    this.onTap,
+    this.onLongPress,
+    this.trailing,
+    this.accentColor,
+  });
+
+  final IconData icon;
+  final String text;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final Widget? trailing;
+  final Color? accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+    final tint = accentColor ?? colorScheme.primary;
+    final isInteractive = onTap != null || onLongPress != null;
+
+    final rowContent = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: tint.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(icon, color: tint, size: 19),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: accentColor ?? colorScheme.onSurface,
+                fontWeight:
+                    accentColor != null ? FontWeight.w700 : FontWeight.w600,
+                letterSpacing: -0.2,
+                height: 1.25,
+              ),
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+        ],
+      ),
+    );
+
+    if (!isInteractive) {
+      return rowContent;
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(onTap: onTap, onLongPress: onLongPress, child: rowContent),
+    );
+  }
+}
+
+class _ToolbarAction extends StatelessWidget {
+  const _ToolbarAction({
+    required this.icon,
+    required this.semanticLabel,
+    required this.isActive,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String semanticLabel;
+  final bool isActive;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: ListTile(
-        onTap: onTap,
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(14),
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Ink(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              gradient:
+                  isActive
+                      ? LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withValues(alpha: isDark ? 0.20 : 0.90),
+                          colorScheme.primary.withValues(
+                            alpha: isDark ? 0.20 : 0.18,
+                          ),
+                        ],
+                      )
+                      : null,
+              color:
+                  isActive
+                      ? null
+                      : Colors.white.withValues(alpha: isDark ? 0.05 : 0.26),
+              border: Border.all(
+                color:
+                    isActive
+                        ? Colors.white.withValues(alpha: isDark ? 0.16 : 0.72)
+                        : Colors.white.withValues(alpha: isDark ? 0.08 : 0.52),
+              ),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color:
+                  isActive ? colorScheme.primary : colorScheme.onSurfaceVariant,
+            ),
           ),
-          child: Icon(icon, color: colorScheme.primary, size: 20),
         ),
-        title: Text(title),
-        trailing:
-            onTap != null
-                ? Icon(
-                  Ionicons.chevron_forward_outline,
-                  color: colorScheme.onSurfaceVariant,
-                  size: 18,
-                )
-                : null,
       ),
     );
   }

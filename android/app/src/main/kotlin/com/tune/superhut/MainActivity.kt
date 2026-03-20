@@ -1,4 +1,4 @@
-package com.zhiquxy.rice
+package com.tune.superhut
 
 import io.flutter.embedding.android.FlutterActivity
 
