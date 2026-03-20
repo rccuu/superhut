@@ -201,7 +201,7 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text('洗澡热水'),
+        title: const Text('宿舍热水'),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),

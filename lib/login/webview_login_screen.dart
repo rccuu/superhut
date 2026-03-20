@@ -312,7 +312,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('教务登录'),
+        title: const Text('教务系统官方登录'),
         actions: [TextButton(onPressed: _closePage, child: const Text('关闭'))],
       ),
       body: Stack(

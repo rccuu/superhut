@@ -74,7 +74,7 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
       }
       setState(() {
         _isLoading = false;
-        _errorMessage = '获取认证令牌失败: $e';
+        _errorMessage = '获取统一认证令牌失败：$e';
       });
     }
   }
@@ -138,14 +138,14 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('HUT统一认证'), leading: SizedBox()),
+        appBar: AppBar(title: const Text('统一认证登录'), leading: SizedBox()),
         body: const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(),
               SizedBox(height: 16),
-              Text('正在准备登录...'),
+              Text('正在打开统一认证...'),
             ],
           ),
         ),
@@ -154,7 +154,7 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
 
     if (_errorMessage != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('HUT统一认证'), leading: SizedBox()),
+        appBar: AppBar(title: const Text('统一认证登录'), leading: SizedBox()),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -217,7 +217,7 @@ class HutCasLoginExample extends StatelessWidget {
           AppLogger.debug('CAS cookie acquired: $myClientTicket');
         }
       },
-      child: const Text('登录教务系统'),
+      child: const Text('打开教务系统登录'),
     );
   }
 }

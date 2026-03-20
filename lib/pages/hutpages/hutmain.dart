@@ -85,7 +85,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(title: Text("智慧工大"), elevation: 0),
+      appBar: AppBar(title: Text("工大平台"), elevation: 0),
       body: GestureDetector(
         // Unfocus when tapping outside of the text field
         onTap: _unfocusSearchField,
@@ -106,7 +106,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                     //focusNode: _searchFocusNode,
                     decoration: InputDecoration(
                       filled: false,
-                      hintText: '搜索...',
+                      hintText: '搜索工大平台服务',
                       prefixIcon: Icon(Icons.search),
                       suffixIcon:
                           _searchText.isNotEmpty

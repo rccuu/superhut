@@ -350,7 +350,7 @@ class _Type2WebviewState extends State<Type2Webview> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('打开链接时发生错误: $e')));
+        ).showSnackBar(SnackBar(content: Text('打开链接失败：$e')));
       }
       AppLogger.debug('Error launching URL: $e');
     }

@@ -12,7 +12,7 @@ void loginToHuT(String username, String password, context) {
     if (value) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('成功')));
+      ).showSnackBar(const SnackBar(content: Text('登录成功')));
       Navigator.pop(context);
     } else {
       ScaffoldMessenger.of(

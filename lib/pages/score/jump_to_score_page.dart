@@ -47,9 +47,9 @@ class _JumpToScorePageState extends State<JumpToScorePage> {
     if (!renewed) {
       setState(() {
         _isLoading = false;
-        _errorMessage = '成绩页暂时无法打开，请重新登录后重试';
+        _errorMessage = '成绩页面暂时无法打开，请重新登录后重试';
       });
-      _showSnackBar('成绩页登录状态已失效，请重新登录后重试');
+      _showSnackBar('教务系统登录状态已失效，请重新登录后重试');
       return;
     }
 
@@ -61,7 +61,7 @@ class _JumpToScorePageState extends State<JumpToScorePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("正在跳转")),
+      appBar: AppBar(title: const Text("正在打开成绩页")),
       body:
           _isLoading
               ? Center(
@@ -76,7 +76,7 @@ class _JumpToScorePageState extends State<JumpToScorePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(_errorMessage ?? '成绩页暂时无法打开'),
+                      Text(_errorMessage ?? '成绩页面暂时无法打开'),
                       const SizedBox(height: 12),
                       FilledButton(
                         onPressed: _jumpToScorePage,

@@ -45,7 +45,7 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "欢迎~",
+                    "饮水服务登录",
                     style: TextStyle(
                       fontSize: 35,
                       fontWeight: FontWeight.bold,
@@ -53,7 +53,7 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
                     ),
                   ),
                   Text(
-                    "一起喝水吧~",
+                    "输入手机号和图形验证码以继续",
                     style: TextStyle(
                       // fontSize: 35,
                       fontWeight: FontWeight.bold,
@@ -90,7 +90,7 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "登录",
+                                "获取短信验证码",
                                 style: TextStyle(
                                   fontSize: 30,
                                   fontWeight: FontWeight.bold,
@@ -137,7 +137,7 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
                                         maxLength: 40,
                                         decoration: InputDecoration(
                                           filled: false,
-                                          hintText: "验证码",
+                                          hintText: "图形验证码",
                                           border: InputBorder.none,
                                           counterText: '',
                                         ),
@@ -204,7 +204,7 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
                                             context,
                                           ).showSnackBar(
                                             const SnackBar(
-                                              content: Text('手机号或验证码不能为空'),
+                                              content: Text('请输入手机号和图形验证码'),
                                             ),
                                           );
                                           return;
@@ -215,7 +215,7 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
                                           _pwdController.text,
                                         );
                                       },
-                                      child: const Text('下一步'),
+                                      child: const Text('发送验证码'),
                                     ),
                                   ),
                                 ],

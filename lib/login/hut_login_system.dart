@@ -109,7 +109,7 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
       });
     } catch (error) {
       if (widget.onError != null) {
-        widget.onError!('Token和Cookie提取错误: $error');
+        widget.onError!('提取登录凭据失败：$error');
       }
     } finally {
       _isDeliveringCredentials = false;
@@ -204,7 +204,7 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('HUT统一认证'),
+        title: const Text('统一认证登录'),
         leading: SizedBox(),
         //  leading: IconButton(
         //    icon: const Icon(Icons.arrow_back),
@@ -285,7 +285,7 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
                 _isLoading = false;
               });
               if (widget.onError != null) {
-                widget.onError!('页面加载错误: ${error.description}');
+                widget.onError!('页面加载失败：${error.description}');
               }
             },
             onConsoleMessage: (controller, consoleMessage) {
@@ -321,7 +321,7 @@ class HutLoginExample extends StatelessWidget {
         AppLogger.debug('提取到的my_client_ticket: $myClientTicket');
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('登录成功！')));
+        ).showSnackBar(SnackBar(content: Text('登录成功')));
         Navigator.of(context).pop(result); // 返回包含token和cookie的Map并关闭页面
       },
       onError: (errorMessage) {

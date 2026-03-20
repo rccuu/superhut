@@ -215,14 +215,14 @@ class _ElectricityPageState extends State<ElectricityPage> {
       return false;
     }
     if (!firstCheck) {
-      _showSnackBar('未知错误');
+      _showSnackBar('充值校验失败，请稍后重试');
       return false;
     }
 
     await electricityApi.createOrder(roomToChargeId, payment, roomToChargeName);
     await Future.wait([getNewRoomInfo(roomToChargeId), getBalance()]);
     _paymentController.clear();
-    _showSnackBar('充值成功');
+    _showSnackBar('电费充值成功');
     return true;
   }
 
@@ -250,7 +250,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
         error: error,
         stackTrace: stackTrace,
       );
-      _showSnackBar('充值失败，请稍后重试');
+      _showSnackBar('电费充值失败，请稍后重试');
     } finally {
       if (mounted) {
         setState(() {
@@ -835,7 +835,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
                                 ),
                                 SizedBox(height: 8),
                                 Text(
-                                  '当检测到$setRoomName的电费小于预警值后，将会在进入超级包菜时进行提醒',
+                                  '当检测到$setRoomName的电费小于预警值后，将会在进入工大盒子时进行提醒',
                                 ),
                               ],
                             ),
