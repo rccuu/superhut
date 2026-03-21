@@ -1,10 +1,21 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:qr_code_scanner/qr_code_scanner.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../bridge/get_course_page.dart';
 import '../../core/services/app_auth_storage.dart';
@@ -30,7 +41,7 @@ class CourseTableView extends StatefulWidget {
  * @param duration 课程持续节数
  */
 
-DateTime getMondayOfCurrentWeek() {
+DateTime getMondayOfCurrentWeek({bool refreshWidget = true}) {
   final DateTime now = DateTime.now();
   // 计算当前日期与本周一的差值（星期一对应的weekday为1）
   int daysToSubtract = now.weekday - 1;
@@ -39,7 +50,9 @@ DateTime getMondayOfCurrentWeek() {
     daysToSubtract = 6;
   }
   // 刷新桌面小组件
-  WidgetRefreshService.refreshCourseTableWidget();
+  if (refreshWidget) {
+    WidgetRefreshService.refreshCourseTableWidget();
+  }
   return now.subtract(Duration(days: daysToSubtract));
 }
 
@@ -56,6 +69,7 @@ class _CourseTableViewState extends State<CourseTableView> {
   late final Future<void> _initialLoadFuture;
   bool _hasLinkedCampusAccount = false;
   bool _isPrimaryActionLoading = false;
+  bool _isCurrentTermSchedule = true;
 
   // DateTime _currentDate = DateTime.now();
   DateTime _currentDate = getMondayOfCurrentWeek();
@@ -63,11 +77,13 @@ class _CourseTableViewState extends State<CourseTableView> {
   //设置周数
   //当前显示周数
   int _currentWeek = 1;
-  int _allWeek = 100;
+  int _allWeek = _defaultMaxWeek;
 
   //当前实际周数
   int _currentRealWeek = 1;
   bool _showExperimentCourses = true;
+  SavedCourseSchedule? _activeSchedule;
+  List<SavedCourseSchedule> _savedSchedules = const [];
 
   /*
    * 课程数据存储器
@@ -131,28 +147,161 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
   }
 
-  Future<void> _loadInitialData() async {
+  DateTime? _tryParseDate(String value) {
+    if (value.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(value);
+  }
+
+  DateTime _startOfMonday(DateTime date) {
+    return date.subtract(Duration(days: date.weekday - 1));
+  }
+
+  bool _isScheduleCurrentTerm(SavedCourseSchedule? schedule) {
+    if (schedule == null ||
+        schedule.firstDay.isEmpty ||
+        schedule.maxWeek <= 0) {
+      return false;
+    }
+
+    final firstDay = _tryParseDate(schedule.firstDay);
+    if (firstDay == null) {
+      return false;
+    }
+
+    final firstMonday = _startOfMonday(firstDay);
+    final now = DateTime.now();
+    final termEnd = firstMonday.add(Duration(days: schedule.maxWeek * 7 - 1));
+    return !now.isBefore(firstMonday) && !now.isAfter(termEnd);
+  }
+
+  int _resolveCurrentWeekForSchedule(SavedCourseSchedule? schedule) {
+    if (schedule == null) {
+      return 1;
+    }
+
+    if (!_isScheduleCurrentTerm(schedule)) {
+      return 1;
+    }
+
+    final maxWeek = schedule.maxWeek > 0 ? schedule.maxWeek : _defaultMaxWeek;
+    final computed = _resolveCurrentWeek(schedule.firstDay);
+    return computed.clamp(1, maxWeek).toInt();
+  }
+
+  DateTime _buildInitialDateForSchedule(
+    SavedCourseSchedule? schedule,
+    int currentWeek,
+  ) {
+    if (schedule == null) {
+      return getMondayOfCurrentWeek(refreshWidget: false);
+    }
+
+    final firstDay = _tryParseDate(schedule.firstDay);
+    if (firstDay == null) {
+      return getMondayOfCurrentWeek(refreshWidget: false);
+    }
+
+    final firstMonday = _startOfMonday(firstDay);
+    return firstMonday.add(Duration(days: (currentWeek - 1) * 7));
+  }
+
+  String _buildScheduleStatusLabel() {
+    if (_activeSchedule == null) {
+      return '';
+    }
+    if (!_isCurrentTermSchedule) {
+      return '已归档';
+    }
+    return '当前第$_currentRealWeek周';
+  }
+
+  String _scheduleSourceLabel(SavedCourseSchedule schedule) {
+    switch (schedule.sourceType) {
+      case CourseScheduleSourceType.selfSync:
+        return '登录同步';
+      case CourseScheduleSourceType.shareImport:
+        return '朋友分享';
+      case CourseScheduleSourceType.migratedLegacy:
+        return '本地迁移';
+      default:
+        return '本地保存';
+    }
+  }
+
+  String _buildScheduleListSubtitle(SavedCourseSchedule schedule) {
+    final parts = <String>[
+      if (schedule.ownerName.isNotEmpty) schedule.ownerName,
+      if (schedule.termLabel.isNotEmpty) schedule.termLabel,
+      _scheduleSourceLabel(schedule),
+      if (schedule.isReadOnly) '本地只读快照',
+    ];
+    return parts.join(' · ');
+  }
+
+  List<String> _scheduleBadges(
+    SavedCourseSchedule schedule, {
+    required bool isActive,
+  }) {
+    final badges = <String>[];
+    if (isActive) {
+      badges.add('当前');
+    }
+    if (schedule.sourceType == CourseScheduleSourceType.selfSync) {
+      badges.add('我的');
+    } else if (schedule.sourceType == CourseScheduleSourceType.shareImport) {
+      badges.add('分享');
+    }
+    if (schedule.isReadOnly) {
+      badges.add('只读');
+    }
+    return badges;
+  }
+
+  Future<void> _reloadScheduleState() async {
     final prefs = await SharedPreferences.getInstance();
-    final firstDay = prefs.getString('firstDay');
-    final allWeek = prefs.getInt('maxWeek') ?? _defaultMaxWeek;
-    final currentWeek = _resolveCurrentWeek(firstDay);
     final showExperimentCourses =
         prefs.getBool(_showExperimentCoursesKey) ?? true;
     final hasLinkedCampusAccount =
         await AppAuthStorage.instance.hasLinkedCampusAccount();
-    final courseData = await loadClassFromLocal();
+    final savedSchedules = await loadSavedCourseSchedules();
+    final activeSchedule = await loadActiveCourseSchedule();
+    final courseData =
+        activeSchedule?.courseData ?? const <String, List<Course>>{};
+    final isCurrentTermSchedule = _isScheduleCurrentTerm(activeSchedule);
+    final allWeek =
+        activeSchedule == null
+            ? _defaultMaxWeek
+            : (activeSchedule.maxWeek <= 0
+                ? _defaultMaxWeek
+                : activeSchedule.maxWeek);
+    final currentWeek = _resolveCurrentWeekForSchedule(activeSchedule);
+    final currentDate = _buildInitialDateForSchedule(
+      activeSchedule,
+      currentWeek,
+    );
+
     if (!mounted) {
       return;
     }
 
     setState(() {
+      _savedSchedules = savedSchedules;
+      _activeSchedule = activeSchedule;
+      _courseData = courseData;
       _allWeek = allWeek;
       _currentWeek = currentWeek;
       _currentRealWeek = currentWeek;
+      _currentDate = currentDate;
       _showExperimentCourses = showExperimentCourses;
       _hasLinkedCampusAccount = hasLinkedCampusAccount;
-      _courseData = courseData;
+      _isCurrentTermSchedule = isCurrentTermSchedule;
     });
+  }
+
+  Future<void> _loadInitialData() async {
+    await _reloadScheduleState();
   }
 
   Future<void> _setShowExperimentCourses(bool value) async {
@@ -350,6 +499,7 @@ class _CourseTableViewState extends State<CourseTableView> {
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => const UnifiedLoginPage()));
+    await _reloadScheduleState();
   }
 
   Future<void> _handlePrimaryAction() async {
@@ -390,16 +540,1264 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
   }
 
+  Future<void> _switchToSchedule(SavedCourseSchedule schedule) async {
+    if (_activeSchedule?.id == schedule.id) {
+      return;
+    }
+
+    try {
+      await setActiveCourseSchedule(schedule.id);
+      await _reloadScheduleState();
+      _showSnackBar('已切换到 ${schedule.name}');
+    } catch (error) {
+      _showSnackBar('切换课表失败：$error');
+    }
+  }
+
+  Future<void> _confirmDeleteSchedule(SavedCourseSchedule schedule) async {
+    final shouldDelete =
+        await showDialog<bool>(
+          context: context,
+          builder:
+              (dialogContext) => AlertDialog(
+                title: const Text('删除课表'),
+                content: Text('确认删除“${schedule.name}”吗？删除后只能重新导入或重新同步。'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('删除'),
+                  ),
+                ],
+              ),
+        ) ??
+        false;
+    if (!shouldDelete) {
+      return;
+    }
+
+    final deleted = await deleteCourseSchedule(schedule.id);
+    if (!deleted) {
+      _showSnackBar('删除失败，请稍后重试');
+      return;
+    }
+
+    await _reloadScheduleState();
+    _showSnackBar('已删除 ${schedule.name}');
+  }
+
+  Future<void> _renameSchedule(SavedCourseSchedule schedule) async {
+    var draftName = schedule.name;
+    final newName = await showDialog<String>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('重命名课表'),
+            content: SizedBox(
+              width: 420,
+              child: TextFormField(
+                initialValue: schedule.name,
+                autofocus: true,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(hintText: '输入新的课表名称'),
+                onChanged: (value) {
+                  draftName = value;
+                },
+                onFieldSubmitted: (value) {
+                  Navigator.of(dialogContext).pop(value);
+                },
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(draftName),
+                child: const Text('保存'),
+              ),
+            ],
+          ),
+    );
+
+    if (newName == null) {
+      return;
+    }
+
+    final normalizedName = newName.trim();
+    if (normalizedName.isEmpty) {
+      _showSnackBar('课表名称不能为空');
+      return;
+    }
+    if (normalizedName == schedule.name) {
+      return;
+    }
+
+    try {
+      await renameCourseSchedule(schedule.id, normalizedName);
+      await _reloadScheduleState();
+      _showSnackBar('已重命名为 $normalizedName');
+    } catch (error) {
+      _showSnackBar('重命名失败：$error');
+    }
+  }
+
+  Future<void> _importScheduleFromShareCode(
+    String rawCode, {
+    bool reopenEditorOnFailure = false,
+  }) async {
+    final code = rawCode.trim();
+    if (code.isEmpty) {
+      _showSnackBar('请输入分享码');
+      return;
+    }
+
+    try {
+      final importedSchedule = await saveImportedCourseScheduleFromShareCode(
+        code,
+      );
+      await _reloadScheduleState();
+      _showSnackBar('已导入 ${importedSchedule.name}');
+    } on FormatException catch (error) {
+      final message = error.message.toString();
+      if (reopenEditorOnFailure) {
+        await _showManualImportDialog(
+          initialText: rawCode,
+          errorMessage: message,
+        );
+        return;
+      }
+      _showSnackBar(message);
+    } catch (error) {
+      _showSnackBar('导入失败：$error');
+    }
+  }
+
+  Future<void> _showManualImportDialog({
+    String initialText = '',
+    String? errorMessage,
+  }) async {
+    var draftCode = initialText;
+    final rawCode = await showDialog<String>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('导入分享课表'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '粘贴工大盒子的课表分享码后即可导入并保存到本地。',
+                    style: Theme.of(dialogContext).textTheme.bodyMedium,
+                  ),
+                  if (errorMessage != null && errorMessage.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      errorMessage,
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    initialValue: initialText,
+                    minLines: 5,
+                    maxLines: 8,
+                    keyboardType: TextInputType.multiline,
+                    decoration: const InputDecoration(
+                      hintText: 'SUPERHUT1:...',
+                    ),
+                    onChanged: (value) {
+                      draftCode = value;
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(draftCode),
+                child: const Text('导入'),
+              ),
+            ],
+          ),
+    );
+
+    if (rawCode == null) {
+      return;
+    }
+    await _importScheduleFromShareCode(rawCode);
+  }
+
+  Future<void> _importScheduleFromClipboard() async {
+    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    final rawCode = clipboardData?.text?.trim() ?? '';
+    if (rawCode.isEmpty) {
+      await _showManualImportDialog(errorMessage: '剪贴板里没有可导入的分享码');
+      return;
+    }
+    await _importScheduleFromShareCode(rawCode, reopenEditorOnFailure: true);
+  }
+
+  Future<void> _importScheduleFromFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        dialogTitle: '选择工大盒子课表文件',
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        allowMultiple: false,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final file = result.files.single;
+      String rawContent = '';
+      if (file.bytes != null) {
+        rawContent = utf8.decode(file.bytes!);
+      } else if (file.path != null && file.path!.isNotEmpty) {
+        rawContent = await File(file.path!).readAsString();
+      }
+
+      if (rawContent.trim().isEmpty) {
+        _showSnackBar('选中的文件没有可导入内容');
+        return;
+      }
+
+      final importedSchedule = await saveImportedCourseScheduleFromFileContent(
+        rawContent,
+      );
+      await _reloadScheduleState();
+      _showSnackBar('已从文件导入 ${importedSchedule.name}');
+    } on FormatException catch (error) {
+      _showSnackBar(error.message.toString());
+    } catch (error) {
+      _showSnackBar('导入文件失败：$error');
+    }
+  }
+
+  String _sanitizeFileNameSegment(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'\s+'), '_');
+    final safe = normalized.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-');
+    return safe.isEmpty ? 'schedule' : safe;
+  }
+
+  String _buildExportFileName(SavedCourseSchedule schedule) {
+    final name = _sanitizeFileNameSegment(schedule.name);
+    final term =
+        schedule.termLabel.isEmpty
+            ? ''
+            : '_${_sanitizeFileNameSegment(schedule.termLabel)}';
+    return '$name$term.superhut-course.json';
+  }
+
+  Future<File> _writeScheduleExportTempFile(
+    SavedCourseSchedule schedule,
+  ) async {
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/${_buildExportFileName(schedule)}');
+    await file.writeAsString(buildCourseScheduleExportJsonString(schedule));
+    return file;
+  }
+
+  Rect _sharePositionOrigin() {
+    final box = context.findRenderObject();
+    if (box is RenderBox) {
+      return box.localToGlobal(Offset.zero) & box.size;
+    }
+    return const Rect.fromLTWH(0, 0, 1, 1);
+  }
+
+  Future<void> _saveActiveScheduleToFile() async {
+    final activeSchedule = _activeSchedule;
+    if (activeSchedule == null) {
+      _showSnackBar('当前没有可导出的课表');
+      return;
+    }
+
+    try {
+      final bytes = Uint8List.fromList(
+        utf8.encode(buildCourseScheduleExportJsonString(activeSchedule)),
+      );
+      final savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: '导出课表文件',
+        fileName: _buildExportFileName(activeSchedule),
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        bytes: bytes,
+      );
+      if (savedPath == null || savedPath.isEmpty) {
+        return;
+      }
+      _showSnackBar('课表文件已导出');
+    } catch (error) {
+      _showSnackBar('导出文件失败：$error');
+    }
+  }
+
+  Future<void> _shareActiveScheduleFile() async {
+    final activeSchedule = _activeSchedule;
+    if (activeSchedule == null) {
+      _showSnackBar('当前没有可分享的课表');
+      return;
+    }
+
+    try {
+      final file = await _writeScheduleExportTempFile(activeSchedule);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        subject: '${activeSchedule.name} 课表文件',
+        text: '这是 ${activeSchedule.name} 的工大盒子课表文件，导入后即可使用。',
+        sharePositionOrigin: _sharePositionOrigin(),
+      );
+    } catch (error) {
+      _showSnackBar('分享文件失败：$error');
+    }
+  }
+
+  Future<void> _showActiveScheduleQrCode() async {
+    final activeSchedule = _activeSchedule;
+    if (activeSchedule == null) {
+      _showSnackBar('当前没有可分享的课表');
+      return;
+    }
+
+    final shareCode = buildCourseScheduleShareCode(activeSchedule);
+    final validation = QrValidator.validate(
+      data: shareCode,
+      version: QrVersions.auto,
+      errorCorrectionLevel: QrErrorCorrectLevel.L,
+    );
+    if (!validation.isValid) {
+      _showSnackBar('当前课表内容较大，二维码方式暂不可用，请改用复制或文件分享');
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('课表分享二维码'),
+            content: SizedBox(
+              width: 320,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '让对方在工大盒子里使用“扫码导入”即可保存这份课表。',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(dialogContext).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: QrImageView(
+                        data: shareCode,
+                        size: 240,
+                        backgroundColor: Colors.white,
+                        errorCorrectionLevel: QrErrorCorrectLevel.L,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '若扫码失败，可改用“复制分享码”或“分享文件”。',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(
+                      dialogContext,
+                    ).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('关闭'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: shareCode));
+                  if (!dialogContext.mounted) {
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop();
+                },
+                child: const Text('复制分享码'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _scanScheduleQrCode() async {
+    try {
+      final cameraPermission = await Permission.camera.request();
+      if (!cameraPermission.isGranted) {
+        if (!mounted) {
+          return;
+        }
+
+        final needsSettings =
+            cameraPermission.isPermanentlyDenied ||
+            cameraPermission.isRestricted;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              needsSettings
+                  ? '相机权限已关闭，请在系统设置中允许工大盒子访问相机后再扫码导入。'
+                  : '未授予相机权限，无法扫码导入课表。',
+            ),
+            action:
+                needsSettings
+                    ? SnackBarAction(label: '去设置', onPressed: openAppSettings)
+                    : null,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+      final navigator = Navigator.of(context);
+      final scannedCode = await navigator.push<String>(
+        MaterialPageRoute(builder: (_) => const _CourseShareQrScannerPage()),
+      );
+      if (scannedCode == null || scannedCode.trim().isEmpty) {
+        return;
+      }
+      await _importScheduleFromShareCode(scannedCode);
+    } catch (error) {
+      _showSnackBar('扫码导入失败：$error');
+    }
+  }
+
+  Future<void> _exportActiveScheduleShareCode() async {
+    final activeSchedule = _activeSchedule;
+    if (activeSchedule == null) {
+      _showSnackBar('当前没有可分享的课表');
+      return;
+    }
+
+    final shareCode = buildCourseScheduleShareCode(activeSchedule);
+    await Clipboard.setData(ClipboardData(text: shareCode));
+    if (!mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('分享码已复制'),
+            content: SizedBox(
+              width: 520,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '已经复制 ${activeSchedule.name} 的分享码。对方打开工大盒子后，从剪贴板导入即可使用。',
+                    style: Theme.of(dialogContext).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color:
+                          Theme.of(
+                            dialogContext,
+                          ).colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: SelectableText(
+                      shareCode,
+                      maxLines: 6,
+                      style: Theme.of(dialogContext).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('关闭'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final navigator = Navigator.of(dialogContext);
+                  await Clipboard.setData(ClipboardData(text: shareCode));
+                  navigator.pop();
+                },
+                child: const Text('再次复制'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Future<void> _showScheduleManager() async {
+    final action = await showCupertinoModalBottomSheet<_ScheduleManagerAction>(
+      context: context,
+      expand: false,
+      builder:
+          (sheetContext) {
+            final theme = Theme.of(sheetContext);
+            final colorScheme = theme.colorScheme;
+            final sheetHeight = math.min(
+              MediaQuery.sizeOf(sheetContext).height * 0.82,
+              620.0,
+            );
+
+            return Material(
+              color: Colors.transparent,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(34),
+                ),
+                child: AppGlassBackground(
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                      child: SizedBox(
+                        height: sheetHeight,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Center(
+                              child: Container(
+                                width: 42,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.outlineVariant,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                GlassIconBadge(
+                                  icon: Icons.layers_rounded,
+                                  tint: colorScheme.primary,
+                                  size: 46,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '课表库',
+                                        style: theme.textTheme.titleLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: -0.4,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '把自己的历史课表和朋友分享的课表都收进这里，切换、备份、分享都会更清楚。',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: FilledButton.icon(
+                                        style: FilledButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 18,
+                                            vertical: 16,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              18,
+                                            ),
+                                          ),
+                                        ),
+                                        onPressed:
+                                            () => Navigator.of(sheetContext).pop(
+                                              const _ScheduleManagerAction
+                                                  .syncMine(),
+                                            ),
+                                        icon: Icon(
+                                          _hasLinkedCampusAccount
+                                              ? Icons.cloud_download_rounded
+                                              : Icons.login_rounded,
+                                        ),
+                                        label: Text(
+                                          _hasLinkedCampusAccount
+                                              ? '从教务系统抓取课表'
+                                              : '登录后从教务系统抓取课表',
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _buildScheduleManagerSection(
+                                      sheetContext,
+                                      title: '导入到课表库',
+                                      description:
+                                          '把朋友分享的课表或你之前导出的课表保存下来，不登录也能用。',
+                                      icon: Icons.move_to_inbox_rounded,
+                                      accent: colorScheme.secondary,
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.white.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.14
+                                                    : 0.78,
+                                          ),
+                                          colorScheme.secondary.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.28
+                                                    : 0.20,
+                                          ),
+                                          colorScheme.tertiary.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.18
+                                                    : 0.16,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Wrap(
+                                        spacing: 10,
+                                        runSpacing: 10,
+                                        children: [
+                                          FilledButton.icon(
+                                            onPressed:
+                                                () => Navigator.of(
+                                                  sheetContext,
+                                                ).pop(
+                                                  const _ScheduleManagerAction
+                                                      .scanImport(),
+                                                ),
+                                            icon: const Icon(
+                                              Icons.qr_code_scanner_rounded,
+                                            ),
+                                            label: const Text('扫码导入'),
+                                          ),
+                                          FilledButton.icon(
+                                            onPressed:
+                                                () => Navigator.of(
+                                                  sheetContext,
+                                                ).pop(
+                                                  const _ScheduleManagerAction
+                                                      .clipboardImport(),
+                                                ),
+                                            icon: const Icon(
+                                              Icons.content_paste_rounded,
+                                            ),
+                                            label: const Text('从剪贴板导入'),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed:
+                                                () => Navigator.of(
+                                                  sheetContext,
+                                                ).pop(
+                                                  const _ScheduleManagerAction
+                                                      .fileImport(),
+                                                ),
+                                            icon: const Icon(
+                                              Icons.file_open_rounded,
+                                            ),
+                                            label: const Text('导入文件'),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed:
+                                                () => Navigator.of(
+                                                  sheetContext,
+                                                ).pop(
+                                                  const _ScheduleManagerAction
+                                                      .manualImport(),
+                                                ),
+                                            icon: const Icon(
+                                              Icons.edit_note_rounded,
+                                            ),
+                                            label: const Text('手动粘贴'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _buildScheduleManagerSection(
+                                      sheetContext,
+                                      title: '导出与分享当前课表',
+                                      description:
+                                          _activeSchedule == null
+                                              ? '当前还没有可导出的课表。'
+                                              : '把当前正在使用的课表复制、导出或分享给别人。',
+                                      icon: Icons.ios_share_rounded,
+                                      accent: colorScheme.primary,
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.white.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.13
+                                                    : 0.78,
+                                          ),
+                                          colorScheme.primary.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.30
+                                                    : 0.22,
+                                          ),
+                                          colorScheme.tertiary.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.16
+                                                    : 0.14,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Wrap(
+                                        spacing: 10,
+                                        runSpacing: 10,
+                                        children: [
+                                          OutlinedButton.icon(
+                                            onPressed:
+                                                _activeSchedule == null
+                                                    ? null
+                                                    : () => Navigator.of(
+                                                      sheetContext,
+                                                    ).pop(
+                                                      const _ScheduleManagerAction
+                                                          .copyShareCode(),
+                                                    ),
+                                            icon: const Icon(
+                                              Icons.copy_all_rounded,
+                                            ),
+                                            label: const Text('复制分享码'),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed:
+                                                _activeSchedule == null
+                                                    ? null
+                                                    : () => Navigator.of(
+                                                      sheetContext,
+                                                    ).pop(
+                                                      const _ScheduleManagerAction
+                                                          .showQrCode(),
+                                                    ),
+                                            icon: const Icon(
+                                              Icons.qr_code_2_rounded,
+                                            ),
+                                            label: const Text('显示二维码'),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed:
+                                                _activeSchedule == null
+                                                    ? null
+                                                    : () => Navigator.of(
+                                                      sheetContext,
+                                                    ).pop(
+                                                      const _ScheduleManagerAction
+                                                          .exportFile(),
+                                                    ),
+                                            icon: const Icon(
+                                              Icons.download_rounded,
+                                            ),
+                                            label: const Text('导出文件'),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed:
+                                                _activeSchedule == null
+                                                    ? null
+                                                    : () => Navigator.of(
+                                                      sheetContext,
+                                                    ).pop(
+                                                      const _ScheduleManagerAction
+                                                          .shareFile(),
+                                                    ),
+                                            icon: const Icon(
+                                              Icons.share_rounded,
+                                            ),
+                                            label: const Text('分享文件'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _buildScheduleManagerSection(
+                                      sheetContext,
+                                      title: '已保存课表',
+                                      description:
+                                          _savedSchedules.isEmpty
+                                              ? '还没有保存的课表。你可以登录同步自己的课表，或者导入朋友分享的课表。'
+                                              : '点击课表可切换当前显示，右上角可重命名或删除。',
+                                      icon: Icons.bookmarks_rounded,
+                                      accent: colorScheme.tertiary,
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.white.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.12
+                                                    : 0.72,
+                                          ),
+                                          colorScheme.tertiary.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.26
+                                                    : 0.18,
+                                          ),
+                                          colorScheme.surface.withValues(
+                                            alpha:
+                                                theme.brightness ==
+                                                        Brightness.dark
+                                                    ? 0.10
+                                                    : 0.36,
+                                          ),
+                                        ],
+                                      ),
+                                      child:
+                                          _savedSchedules.isEmpty
+                                              ? null
+                                              : Column(
+                                                children:
+                                                    _savedSchedules
+                                                        .asMap()
+                                                        .entries
+                                                        .map((entry) {
+                                                          final schedule =
+                                                              entry.value;
+                                                          final isActive =
+                                                              schedule.id ==
+                                                              _activeSchedule
+                                                                  ?.id;
+                                                          final badges =
+                                                              _scheduleBadges(
+                                                                schedule,
+                                                                isActive:
+                                                                    isActive,
+                                                              );
+                                                          final tileAccent =
+                                                              isActive
+                                                                  ? colorScheme
+                                                                      .primary
+                                                                  : schedule
+                                                                          .isReadOnly
+                                                                      ? colorScheme
+                                                                          .secondary
+                                                                      : colorScheme
+                                                                          .tertiary;
+                                                          return Padding(
+                                                            padding:
+                                                                EdgeInsets.only(
+                                                                  bottom:
+                                                                      entry.key ==
+                                                                              _savedSchedules.length -
+                                                                                  1
+                                                                          ? 0
+                                                                          : 8,
+                                                                ),
+                                                            child: GlassPanel(
+                                                              blur: 18,
+                                                              borderRadius:
+                                                                  BorderRadius.circular(
+                                                                    18,
+                                                                  ),
+                                                              padding:
+                                                                  EdgeInsets.zero,
+                                                              gradient: LinearGradient(
+                                                                begin:
+                                                                    Alignment
+                                                                        .topLeft,
+                                                                end:
+                                                                    Alignment
+                                                                        .bottomRight,
+                                                                colors: [
+                                                                  Colors.white
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            theme.brightness == Brightness.dark
+                                                                                ? 0.08
+                                                                                : 0.64,
+                                                                      ),
+                                                                  tileAccent
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            theme.brightness == Brightness.dark
+                                                                                ? 0.18
+                                                                                : 0.12,
+                                                                      ),
+                                                                  colorScheme
+                                                                      .surface
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            theme.brightness == Brightness.dark
+                                                                                ? 0.12
+                                                                                : 0.28,
+                                                                      ),
+                                                                ],
+                                                              ),
+                                                              borderColor:
+                                                                  tileAccent
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            theme.brightness == Brightness.dark
+                                                                                ? 0.22
+                                                                                : 0.20,
+                                                                      ),
+                                                              child: ListTile(
+                                                                shape: RoundedRectangleBorder(
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        18,
+                                                                      ),
+                                                                ),
+                                                                title: Row(
+                                                                  children: [
+                                                                    Expanded(
+                                                                      child: Text(
+                                                                        schedule
+                                                                            .name,
+                                                                        maxLines:
+                                                                            1,
+                                                                        overflow:
+                                                                            TextOverflow.ellipsis,
+                                                                      ),
+                                                                    ),
+                                                                    if (badges
+                                                                        .isNotEmpty) ...[
+                                                                      const SizedBox(
+                                                                        width:
+                                                                            8,
+                                                                      ),
+                                                                      Wrap(
+                                                                        spacing:
+                                                                            6,
+                                                                        runSpacing:
+                                                                            4,
+                                                                        children:
+                                                                            badges
+                                                                                .map(
+                                                                                  (
+                                                                                    badge,
+                                                                                  ) => _ScheduleBadge(
+                                                                                    label: badge,
+                                                                                  ),
+                                                                                )
+                                                                                .toList(),
+                                                                      ),
+                                                                    ],
+                                                                  ],
+                                                                ),
+                                                                subtitle: Text(
+                                                                  _buildScheduleListSubtitle(
+                                                                    schedule,
+                                                                  ),
+                                                                  maxLines: 2,
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                ),
+                                                                leading: Icon(
+                                                                  isActive
+                                                                      ? Icons
+                                                                          .check_circle_rounded
+                                                                      : Icons
+                                                                          .calendar_month_rounded,
+                                                                  color:
+                                                                      tileAccent,
+                                                                ),
+                                                                trailing: PopupMenuButton<
+                                                                  String
+                                                                >(
+                                                                  tooltip:
+                                                                      '课表操作',
+                                                                  onSelected: (
+                                                                    value,
+                                                                  ) {
+                                                                    switch (
+                                                                      value
+                                                                    ) {
+                                                                      case 'rename':
+                                                                        Navigator.of(
+                                                                          sheetContext,
+                                                                        ).pop(
+                                                                          _ScheduleManagerAction.rename(
+                                                                            schedule,
+                                                                          ),
+                                                                        );
+                                                                        break;
+                                                                      case 'delete':
+                                                                        Navigator.of(
+                                                                          sheetContext,
+                                                                        ).pop(
+                                                                          _ScheduleManagerAction.delete(
+                                                                            schedule,
+                                                                          ),
+                                                                        );
+                                                                        break;
+                                                                    }
+                                                                  },
+                                                                  itemBuilder:
+                                                                      (
+                                                                        context,
+                                                                      ) => const [
+                                                                        PopupMenuItem(
+                                                                          value:
+                                                                              'rename',
+                                                                          child:
+                                                                              Text(
+                                                                                '重命名',
+                                                                              ),
+                                                                        ),
+                                                                        PopupMenuItem(
+                                                                          value:
+                                                                              'delete',
+                                                                          child:
+                                                                              Text(
+                                                                                '删除',
+                                                                              ),
+                                                                        ),
+                                                                      ],
+                                                                ),
+                                                                onTap:
+                                                                    () => Navigator.of(
+                                                                      sheetContext,
+                                                                    ).pop(
+                                                                      _ScheduleManagerAction.switchSchedule(
+                                                                        schedule,
+                                                                      ),
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        })
+                                                        .toList(),
+                                              ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+    );
+
+    if (action == null) {
+      return;
+    }
+
+    switch (action.type) {
+      case _ScheduleManagerActionType.scanImport:
+        await _scanScheduleQrCode();
+        break;
+      case _ScheduleManagerActionType.clipboardImport:
+        await _importScheduleFromClipboard();
+        break;
+      case _ScheduleManagerActionType.fileImport:
+        await _importScheduleFromFile();
+        break;
+      case _ScheduleManagerActionType.manualImport:
+        await _showManualImportDialog();
+        break;
+      case _ScheduleManagerActionType.copyShareCode:
+        await _exportActiveScheduleShareCode();
+        break;
+      case _ScheduleManagerActionType.showQrCode:
+        await _showActiveScheduleQrCode();
+        break;
+      case _ScheduleManagerActionType.exportFile:
+        await _saveActiveScheduleToFile();
+        break;
+      case _ScheduleManagerActionType.shareFile:
+        await _shareActiveScheduleFile();
+        break;
+      case _ScheduleManagerActionType.syncMine:
+        await _handlePrimaryAction();
+        break;
+      case _ScheduleManagerActionType.switchSchedule:
+        final schedule = action.schedule;
+        if (schedule != null) {
+          await _switchToSchedule(schedule);
+        }
+        break;
+      case _ScheduleManagerActionType.renameSchedule:
+        final schedule = action.schedule;
+        if (schedule != null) {
+          await _renameSchedule(schedule);
+        }
+        break;
+      case _ScheduleManagerActionType.deleteSchedule:
+        final schedule = action.schedule;
+        if (schedule != null) {
+          await _confirmDeleteSchedule(schedule);
+        }
+        break;
+    }
+  }
+
+  Widget _buildScheduleManagerSection(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required IconData icon,
+    required Color accent,
+    required Gradient gradient,
+    Widget? child,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Theme(
+      data: theme.copyWith(
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: accent.withValues(alpha: isDark ? 0.42 : 0.96),
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: accent.withValues(
+              alpha: isDark ? 0.14 : 0.18,
+            ),
+            disabledForegroundColor: colorScheme.onSurfaceVariant,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: accent,
+            backgroundColor: accent.withValues(alpha: isDark ? 0.10 : 0.08),
+            disabledForegroundColor: colorScheme.onSurfaceVariant,
+            side: BorderSide(
+              color: accent.withValues(alpha: isDark ? 0.22 : 0.20),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      ),
+      child: GlassPanel(
+        blur: 22,
+        borderRadius: BorderRadius.circular(28),
+        padding: const EdgeInsets.all(18),
+        gradient: gradient,
+        borderColor: accent.withValues(alpha: isDark ? 0.18 : 0.16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                GlassIconBadge(icon: icon, tint: accent, size: 46),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (child != null) ...[
+              const SizedBox(height: 14),
+              child,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final accent =
         _hasLinkedCampusAccount ? colorScheme.primary : colorScheme.secondary;
-    final title = _hasLinkedCampusAccount ? '课表暂未同步' : '课表功能需要登录后刷新查看';
+    final title = _hasLinkedCampusAccount ? '课表暂未同步' : '登录后抓取或导入课表';
     final description =
-        _hasLinkedCampusAccount ? '点击下方按钮刷新后，即可查看课表。' : '登录校园账号后，即可刷新并查看课表。';
-    final actionLabel = _hasLinkedCampusAccount ? '刷新课表' : '登录校园账号';
+        _hasLinkedCampusAccount
+            ? '最推荐的方式是直接从教务系统抓取课表；也可以导入朋友分享的课表。'
+            : '登录校园账号后可直接从教务系统抓取课表；不登录也能导入朋友分享的课表。';
+    final primaryLabel =
+        _hasLinkedCampusAccount ? '从教务系统抓取课表' : '登录后抓取课表';
+    const secondaryLabel = '从剪贴板导入';
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
@@ -465,11 +1863,53 @@ class _CourseTableViewState extends State<CourseTableView> {
                             )
                             : Icon(
                               _hasLinkedCampusAccount
-                                  ? Icons.refresh_rounded
+                                  ? Icons.cloud_download_rounded
                                   : Icons.login_rounded,
                             ),
-                    label: Text(actionLabel),
+                    label: Text(primaryLabel),
                   ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _importScheduleFromClipboard,
+                    icon: Icon(
+                      _hasLinkedCampusAccount
+                          ? Icons.content_paste_rounded
+                          : Icons.content_paste_rounded,
+                    ),
+                    label: Text(secondaryLabel),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _scanScheduleQrCode,
+                      icon: const Icon(Icons.qr_code_scanner_rounded),
+                      label: const Text('扫码导入'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _importScheduleFromFile,
+                      icon: const Icon(Icons.file_open_rounded),
+                      label: const Text('导入文件'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _importScheduleFromClipboard,
+                      icon: const Icon(Icons.content_paste_rounded),
+                      label: const Text('剪贴板导入'),
+                    ),
+                    if (_savedSchedules.isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: _showScheduleManager,
+                        icon: const Icon(Icons.layers_outlined),
+                        label: const Text('打开课表库'),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -499,7 +1939,7 @@ class _CourseTableViewState extends State<CourseTableView> {
   }
 
   String _buildCurrentWeekLabel() {
-    return '当前第$_currentRealWeek周';
+    return _buildScheduleStatusLabel();
   }
 
   _WeekGridMetrics _buildGridMetrics(BoxConstraints constraints) {
@@ -695,6 +2135,7 @@ class _CourseTableViewState extends State<CourseTableView> {
                       currentWeekLabel: _buildCurrentWeekLabel(),
                       isShowingCurrentWeek: _currentWeek == _currentRealWeek,
                       onBackToCurrentWeek: _backToRealWeek,
+                      onManageSchedules: _showScheduleManager,
                       showExperimentCourses: _showExperimentCourses,
                       onShowExperimentCoursesChanged: _setShowExperimentCourses,
                     ),
@@ -1255,89 +2696,80 @@ class _ScheduleCourseCard extends StatelessWidget {
         final height = constraints.maxHeight;
         final width = constraints.maxWidth;
         final compact = height < 44 || width < 38;
-        final ultraCompact = height < 30 || width < 28;
-        final showLocation = course.location.isNotEmpty && !ultraCompact;
-        final showTeacher =
-            course.teacherName.isNotEmpty && height >= 58 && width >= 34;
-        final locationFontSize = math.min(
-          compact ? 12.0 : 13.8,
-          math.max(compact ? 10.0 : 11.0, width * (compact ? 0.28 : 0.24)),
-        );
-        final teacherFontSize = math.min(
-          compact ? 10.8 : 12.6,
-          math.max(compact ? 9.2 : 10.2, width * (compact ? 0.24 : 0.21)),
-        );
-        final titleStyle =
+        final showLocation = course.location.trim().isNotEmpty;
+        final showTeacher = course.teacherName.trim().isNotEmpty;
+        final detailLineCount =
+            (showLocation ? 1 : 0) + (showTeacher ? 1 : 0);
+        final titleBaseStyle =
             Theme.of(context).textTheme.bodySmall?.copyWith(
               color: palette.foreground.withValues(alpha: 0.88),
               fontWeight: FontWeight.w700,
-              fontSize: compact ? 10.1 : 11.2,
               height: 1.18,
               letterSpacing: -0.12,
             ) ??
             TextStyle(
               color: palette.foreground.withValues(alpha: 0.88),
               fontWeight: FontWeight.w700,
-              fontSize: compact ? 10.1 : 11.2,
               height: 1.18,
               letterSpacing: -0.12,
             );
+        final horizontalPadding = compact ? 3.5 : 5.0;
+        final topPadding = compact ? 3.5 : 5.0;
+        final bottomPadding = compact ? 2.5 : 4.0;
+        final detailSpacing = detailLineCount == 0 ? 0.0 : (compact ? 1.0 : 2.0);
+        final contentHeight = math.max(
+          0.0,
+          height - topPadding - bottomPadding,
+        );
+        final minTitleHeight = compact ? 9.0 : 11.5;
+        final preferredDetailLineHeight = compact ? 9.4 : 11.8;
+        final detailHeightBudget = math.max(
+          0.0,
+          contentHeight - minTitleHeight - detailSpacing * detailLineCount,
+        );
+        final detailLineHeight =
+            detailLineCount == 0
+                ? 0.0
+                : math.min(
+                  preferredDetailLineHeight,
+                  detailHeightBudget / detailLineCount,
+                );
+        final titleReferenceLineHeight = compact ? 10.6 : 12.4;
+        final titleMinFontSize = compact ? 7.8 : 8.8;
+        final titleMaxFontSize = math.min(
+          compact ? 15.0 : 16.8,
+          math.max(compact ? 10.6 : 11.8, width * (compact ? 0.34 : 0.29)),
+        );
+        final detailFontSize = math.max(
+          compact ? 8.0 : 9.0,
+          detailLineHeight * (compact ? 0.92 : 0.94),
+        );
         final locationStyle =
             Theme.of(context).textTheme.labelSmall?.copyWith(
               color: palette.foreground.withValues(alpha: 0.88),
-              fontSize: locationFontSize,
+              fontSize: detailFontSize,
               fontWeight: FontWeight.w700,
               height: 1,
             ) ??
             TextStyle(
               color: palette.foreground.withValues(alpha: 0.88),
-              fontSize: locationFontSize,
+              fontSize: detailFontSize,
               fontWeight: FontWeight.w700,
               height: 1,
             );
         final teacherStyle =
             Theme.of(context).textTheme.labelSmall?.copyWith(
               color: palette.foreground.withValues(alpha: 0.82),
-              fontSize: teacherFontSize,
+              fontSize: detailFontSize,
               fontWeight: FontWeight.w600,
               height: 1,
             ) ??
             TextStyle(
               color: palette.foreground.withValues(alpha: 0.82),
-              fontSize: teacherFontSize,
+              fontSize: detailFontSize,
               fontWeight: FontWeight.w600,
               height: 1,
             );
-        final secondaryInfoStyle = teacherStyle.copyWith(
-          color: palette.foreground.withValues(alpha: 0.82),
-          fontWeight: FontWeight.w600,
-        );
-        final horizontalPadding = compact ? 3.5 : 5.0;
-        final topPadding = compact ? 3.5 : 5.0;
-        final bottomPadding = compact ? 2.5 : 4.0;
-        final detailSpacing = compact ? 1.0 : 2.0;
-        final titleBottomSpacing =
-            (showLocation || showTeacher) ? detailSpacing : 0.0;
-        final locationLineHeight = locationFontSize * 1.08;
-        final teacherLineHeight = teacherFontSize * 1.08;
-        final reservedDetailHeight =
-            (showLocation ? locationLineHeight : 0.0) +
-            (showTeacher ? teacherLineHeight : 0.0) +
-            (showLocation && showTeacher ? detailSpacing : 0.0);
-        final titleLineHeight =
-            (titleStyle.fontSize ?? 11.4) * (titleStyle.height ?? 1.15);
-        final availableTitleHeight = math.max(
-          titleLineHeight,
-          height -
-              topPadding -
-              bottomPadding -
-              reservedDetailHeight -
-              titleBottomSpacing,
-        );
-        final titleMaxLines = math.max(
-          1,
-          (availableTitleHeight / titleLineHeight).floor(),
-        );
 
         return Material(
           color: Colors.transparent,
@@ -1377,14 +2809,23 @@ class _ScheduleCourseCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Align(
-                            alignment: Alignment.topLeft,
-                            child: Text(
-                              course.name,
-                              maxLines: ultraCompact ? 1 : titleMaxLines,
-                              overflow: TextOverflow.ellipsis,
-                              style: titleStyle,
-                            ),
+                          child: LayoutBuilder(
+                            builder: (context, titleConstraints) {
+                              final titleHeight = titleConstraints.maxHeight;
+                              final titleMaxLines = math.max(
+                                1,
+                                (titleHeight / titleReferenceLineHeight)
+                                    .floor(),
+                              );
+                              return _AdaptiveCourseTitleText(
+                                text: course.name,
+                                style: titleBaseStyle,
+                                maxLines: titleMaxLines,
+                                maxHeight: titleHeight,
+                                minFontSize: titleMinFontSize,
+                                maxFontSize: titleMaxFontSize,
+                              );
+                            },
                           ),
                         ),
                         if (showLocation) ...[
@@ -1392,15 +2833,15 @@ class _ScheduleCourseCard extends StatelessWidget {
                           _SingleLineScaleText(
                             text: course.location,
                             style: locationStyle,
-                            height: locationLineHeight,
+                            height: detailLineHeight,
                           ),
                         ],
                         if (showTeacher) ...[
                           SizedBox(height: detailSpacing),
                           _SingleLineScaleText(
                             text: course.teacherName,
-                            style: secondaryInfoStyle,
-                            height: teacherLineHeight,
+                            style: teacherStyle,
+                            height: detailLineHeight,
                           ),
                         ],
                       ],
@@ -1413,6 +2854,117 @@ class _ScheduleCourseCard extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _AdaptiveCourseTitleText extends StatelessWidget {
+  const _AdaptiveCourseTitleText({
+    required this.text,
+    required this.style,
+    required this.maxLines,
+    required this.maxHeight,
+    required this.minFontSize,
+    required this.maxFontSize,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int maxLines;
+  final double maxHeight;
+  final double minFontSize;
+  final double maxFontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.trim().isEmpty || maxHeight <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        if (maxWidth <= 0) {
+          return const SizedBox.shrink();
+        }
+
+        final textDirection = Directionality.of(context);
+        final maxReadableFontSize = _maxFontSizeForSample(
+          sample: '课程名',
+          style: style,
+          maxWidth: maxWidth,
+          minFontSize: minFontSize,
+          maxFontSize: maxFontSize,
+          textDirection: textDirection,
+        );
+        double low = minFontSize;
+        double high = maxReadableFontSize;
+        double best = minFontSize;
+
+        for (var index = 0; index < 9; index++) {
+          final current = (low + high) / 2;
+          final painter = TextPainter(
+            text: TextSpan(text: text, style: style.copyWith(fontSize: current)),
+            textDirection: textDirection,
+            maxLines: maxLines,
+            ellipsis: '…',
+          )..layout(maxWidth: maxWidth);
+
+          if (painter.height <= maxHeight + 0.01) {
+            best = current;
+            low = current;
+          } else {
+            high = current;
+          }
+        }
+
+        return ClipRect(
+          child: SizedBox(
+            width: double.infinity,
+            height: maxHeight,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Text(
+                text,
+                maxLines: maxLines,
+                overflow: TextOverflow.ellipsis,
+                style: style.copyWith(fontSize: best),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  double _maxFontSizeForSample({
+    required String sample,
+    required TextStyle style,
+    required double maxWidth,
+    required double minFontSize,
+    required double maxFontSize,
+    required ui.TextDirection textDirection,
+  }) {
+    double low = minFontSize;
+    double high = maxFontSize;
+    double best = minFontSize;
+
+    for (var index = 0; index < 9; index++) {
+      final current = (low + high) / 2;
+      final painter = TextPainter(
+        text: TextSpan(text: sample, style: style.copyWith(fontSize: current)),
+        textDirection: textDirection,
+        maxLines: 1,
+      )..layout(maxWidth: double.infinity);
+
+      if (painter.width <= maxWidth + 0.01) {
+        best = current;
+        low = current;
+      } else {
+        high = current;
+      }
+    }
+
+    return best;
   }
 }
 
@@ -1435,16 +2987,317 @@ class _SingleLineScaleText extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return SizedBox(
-      width: double.infinity,
-      height: height,
-      child: Align(
-        alignment: alignment,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: alignment,
-          child: Text(text, maxLines: 1, softWrap: false, style: style),
+    final resolvedStyle = style;
+    if (resolvedStyle == null) {
+      return const SizedBox.shrink();
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth;
+        if (maxWidth <= 0 || height <= 0) {
+          return const SizedBox.shrink();
+        }
+
+        final textDirection = Directionality.of(context);
+        final baseFontSize = resolvedStyle.fontSize ?? 12;
+        final minFontSize = math.max(1.0, baseFontSize * 0.55);
+        final maxFontSize = baseFontSize;
+        double low = minFontSize;
+        double high = maxFontSize;
+        double best = minFontSize;
+
+        for (var index = 0; index < 9; index++) {
+          final current = (low + high) / 2;
+          final painter = TextPainter(
+            text: TextSpan(
+              text: text,
+              style: resolvedStyle.copyWith(fontSize: current),
+            ),
+            textDirection: textDirection,
+            maxLines: 1,
+          )..layout(maxWidth: double.infinity);
+
+          if (painter.width <= maxWidth + 0.01 &&
+              painter.height <= height + 0.01) {
+            best = current;
+            low = current;
+          } else {
+            high = current;
+          }
+        }
+
+        return SizedBox(
+          width: double.infinity,
+          height: height,
+          child: Align(
+            alignment: alignment,
+            child: Text(
+              text,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              style: resolvedStyle.copyWith(fontSize: best),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ScheduleBadge extends StatelessWidget {
+  const _ScheduleBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colorScheme.onPrimaryContainer,
+          fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+enum _ScheduleManagerActionType {
+  scanImport,
+  clipboardImport,
+  fileImport,
+  manualImport,
+  copyShareCode,
+  showQrCode,
+  exportFile,
+  shareFile,
+  syncMine,
+  switchSchedule,
+  renameSchedule,
+  deleteSchedule,
+}
+
+class _ScheduleManagerAction {
+  const _ScheduleManagerAction._(this.type, {this.schedule});
+
+  const _ScheduleManagerAction.scanImport()
+    : this._(_ScheduleManagerActionType.scanImport);
+
+  const _ScheduleManagerAction.clipboardImport()
+    : this._(_ScheduleManagerActionType.clipboardImport);
+
+  const _ScheduleManagerAction.fileImport()
+    : this._(_ScheduleManagerActionType.fileImport);
+
+  const _ScheduleManagerAction.manualImport()
+    : this._(_ScheduleManagerActionType.manualImport);
+
+  const _ScheduleManagerAction.copyShareCode()
+    : this._(_ScheduleManagerActionType.copyShareCode);
+
+  const _ScheduleManagerAction.showQrCode()
+    : this._(_ScheduleManagerActionType.showQrCode);
+
+  const _ScheduleManagerAction.exportFile()
+    : this._(_ScheduleManagerActionType.exportFile);
+
+  const _ScheduleManagerAction.shareFile()
+    : this._(_ScheduleManagerActionType.shareFile);
+
+  const _ScheduleManagerAction.syncMine()
+    : this._(_ScheduleManagerActionType.syncMine);
+
+  factory _ScheduleManagerAction.switchSchedule(
+    SavedCourseSchedule schedule,
+  ) => _ScheduleManagerAction._(
+    _ScheduleManagerActionType.switchSchedule,
+    schedule: schedule,
+  );
+
+  factory _ScheduleManagerAction.rename(SavedCourseSchedule schedule) =>
+      _ScheduleManagerAction._(
+        _ScheduleManagerActionType.renameSchedule,
+        schedule: schedule,
+      );
+
+  factory _ScheduleManagerAction.delete(SavedCourseSchedule schedule) =>
+      _ScheduleManagerAction._(
+        _ScheduleManagerActionType.deleteSchedule,
+        schedule: schedule,
+      );
+
+  final _ScheduleManagerActionType type;
+  final SavedCourseSchedule? schedule;
+}
+
+class _CourseShareQrScannerPage extends StatefulWidget {
+  const _CourseShareQrScannerPage();
+
+  @override
+  State<_CourseShareQrScannerPage> createState() =>
+      _CourseShareQrScannerPageState();
+}
+
+class _CourseShareQrScannerPageState extends State<_CourseShareQrScannerPage> {
+  final GlobalKey _qrKey = GlobalKey(debugLabel: 'course-share-qr');
+  QRViewController? _controller;
+  StreamSubscription<Barcode>? _scanSubscription;
+  bool _isFlashOn = false;
+  bool _isScanning = true;
+
+  @override
+  void dispose() {
+    _scanSubscription?.cancel();
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _onQRViewCreated(QRViewController controller) {
+    _controller = controller;
+    _scanSubscription = controller.scannedDataStream.listen((scanData) {
+      final code = scanData.code;
+      if (code == null || code.isEmpty || !_isScanning || !mounted) {
+        return;
+      }
+
+      setState(() {
+        _isScanning = false;
+      });
+      _scanSubscription?.cancel();
+      controller.pauseCamera();
+      Navigator.of(context).pop(code);
+    });
+  }
+
+  Future<void> _toggleFlash() async {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    await controller.toggleFlash();
+    final current = await controller.getFlashStatus() ?? false;
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isFlashOn = current;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final cutOutSize = MediaQuery.sizeOf(context).width * 0.72;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          QRView(
+            key: _qrKey,
+            onQRViewCreated: _onQRViewCreated,
+            overlay: QrScannerOverlayShape(
+              borderColor: colorScheme.primary,
+              borderRadius: 18,
+              borderLength: 30,
+              borderWidth: 4,
+              cutOutSize: cutOutSize,
+              overlayColor: const Color.fromRGBO(0, 0, 0, 0.7),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const Text(
+                    '扫描课表二维码',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.84),
+                  ],
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Text(
+                        '将朋友发来的工大盒子课表二维码放入框内，即可自动识别并导入。',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: _toggleFlash,
+                      icon: Icon(
+                        _isFlashOn
+                            ? Icons.flash_on_rounded
+                            : Icons.flash_off_rounded,
+                      ),
+                      label: Text(_isFlashOn ? '关闭闪光灯' : '打开闪光灯'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

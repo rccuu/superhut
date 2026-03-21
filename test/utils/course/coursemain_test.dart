@@ -113,11 +113,17 @@ void main() {
       final widgetJson =
           jsonDecode(await widgetFile.readAsString()) as Map<String, dynamic>;
       final loadedCourseData = await loadClassFromLocal();
+      final savedSchedules = await loadSavedCourseSchedules();
 
       expect((appJson['2026-03-19'] as List).single['name'], '软件工程');
       expect((widgetJson['2026-03-19'] as List).single['location'], '公共201');
       expect(loadedCourseData['2026-03-19']?.single.name, '软件工程');
       expect(loadedCourseData['2026-03-19']?.single.teacherName, '张老师');
+      expect(savedSchedules, hasLength(1));
+      expect(
+        savedSchedules.single.courseData['2026-03-19']?.single.name,
+        '软件工程',
+      );
       expect(widgetRefreshCalls.map((call) => call.method).toList(), [
         'refreshCourseTableWidget',
       ]);
@@ -130,6 +136,220 @@ void main() {
       expect(await loadClassFromLocal(), isEmpty);
     },
   );
+
+  test('buildCourseScheduleShareCode round-trips through parser', () async {
+    final schedule = SavedCourseSchedule(
+      id: 'schedule-1',
+      name: '张三的课表',
+      ownerName: '张三',
+      termLabel: '2025-2026-2',
+      semesterId: '2025-2026-2',
+      firstDay: '2026-03-16',
+      maxWeek: 20,
+      sourceType: CourseScheduleSourceType.selfSync,
+      isReadOnly: false,
+      createdAt: '2026-03-16T08:00:00.000',
+      updatedAt: '2026-03-16T08:00:00.000',
+      courseData: {
+        '2026-03-16': [
+          Course(
+            name: '软件工程',
+            teacherName: '张老师',
+            weekDuration: '1-16',
+            location: '公共201',
+            startSection: 1,
+            duration: 2,
+            isExp: true,
+            pcid: 'pcid-1',
+          ),
+        ],
+      },
+    );
+
+    final shareCode = buildCourseScheduleShareCode(schedule);
+    final imported = parseCourseScheduleShareCode(shareCode);
+
+    expect(shareCode, startsWith('SUPERHUT1:'));
+    expect(imported.name, '张三的课表');
+    expect(imported.ownerName, '张三');
+    expect(imported.sourceType, CourseScheduleSourceType.shareImport);
+    expect(imported.isReadOnly, isTrue);
+    expect(imported.courseData['2026-03-16']?.single.name, '软件工程');
+    expect(imported.courseData['2026-03-16']?.single.pcid, isEmpty);
+  });
+
+  test(
+    'buildCourseScheduleExportJsonString round-trips through parser',
+    () async {
+      final schedule = SavedCourseSchedule(
+        id: 'schedule-file-1',
+        name: '王五的课表',
+        ownerName: '王五',
+        termLabel: '2025-2026-2',
+        semesterId: '2025-2026-2',
+        firstDay: '2026-03-16',
+        maxWeek: 20,
+        sourceType: CourseScheduleSourceType.selfSync,
+        isReadOnly: false,
+        createdAt: '2026-03-16T08:00:00.000',
+        updatedAt: '2026-03-16T08:00:00.000',
+        courseData: {
+          '2026-03-18': [
+            Course(
+              name: '编译原理',
+              teacherName: '王老师',
+              weekDuration: '1-16',
+              location: '信工楼301',
+              startSection: 5,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      final exportJson = buildCourseScheduleExportJsonString(schedule);
+      final imported = parseCourseScheduleExportJsonString(exportJson);
+
+      expect(exportJson, contains('superhut_course_schedule_file'));
+      expect(imported.name, '王五的课表');
+      expect(imported.ownerName, '王五');
+      expect(imported.courseData['2026-03-18']?.single.name, '编译原理');
+    },
+  );
+
+  test(
+    'saveImportedCourseScheduleFromShareCode stores imported schedule',
+    () async {
+      final sourceSchedule = SavedCourseSchedule(
+        id: 'schedule-2',
+        name: '朋友课表',
+        ownerName: '李四',
+        termLabel: '2025-2026-2',
+        semesterId: '2025-2026-2',
+        firstDay: '2026-03-16',
+        maxWeek: 20,
+        sourceType: CourseScheduleSourceType.selfSync,
+        isReadOnly: false,
+        createdAt: '2026-03-16T08:00:00.000',
+        updatedAt: '2026-03-16T08:00:00.000',
+        courseData: {
+          '2026-03-16': [
+            Course(
+              name: '离散数学',
+              teacherName: '李老师',
+              weekDuration: '1-16',
+              location: '公教101',
+              startSection: 3,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      final shareCode = buildCourseScheduleShareCode(sourceSchedule);
+      final imported = await saveImportedCourseScheduleFromShareCode(shareCode);
+      final activeCourseData = await loadClassFromLocal();
+      final savedSchedules = await loadSavedCourseSchedules();
+
+      expect(imported.name, '朋友课表');
+      expect(savedSchedules, hasLength(1));
+      expect(
+        savedSchedules.single.sourceType,
+        CourseScheduleSourceType.shareImport,
+      );
+      expect(activeCourseData['2026-03-16']?.single.name, '离散数学');
+      expect(widgetRefreshCalls.map((call) => call.method).toList(), [
+        'refreshCourseTableWidget',
+      ]);
+    },
+  );
+
+  test(
+    'saveImportedCourseScheduleFromFileContent stores imported schedule',
+    () async {
+      final sourceSchedule = SavedCourseSchedule(
+        id: 'schedule-file-2',
+        name: '文件课表',
+        ownerName: '赵六',
+        termLabel: '2025-2026-2',
+        semesterId: '2025-2026-2',
+        firstDay: '2026-03-16',
+        maxWeek: 20,
+        sourceType: CourseScheduleSourceType.selfSync,
+        isReadOnly: false,
+        createdAt: '2026-03-16T08:00:00.000',
+        updatedAt: '2026-03-16T08:00:00.000',
+        courseData: {
+          '2026-03-20': [
+            Course(
+              name: '操作系统',
+              teacherName: '周老师',
+              weekDuration: '1-16',
+              location: '计科楼201',
+              startSection: 1,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      final exportJson = buildCourseScheduleExportJsonString(sourceSchedule);
+      final imported = await saveImportedCourseScheduleFromFileContent(
+        exportJson,
+      );
+      final activeCourseData = await loadClassFromLocal();
+      final savedSchedules = await loadSavedCourseSchedules();
+
+      expect(imported.name, '文件课表');
+      expect(savedSchedules, hasLength(1));
+      expect(savedSchedules.single.ownerName, '赵六');
+      expect(activeCourseData['2026-03-20']?.single.name, '操作系统');
+      expect(widgetRefreshCalls.map((call) => call.method).toList(), [
+        'refreshCourseTableWidget',
+      ]);
+    },
+  );
+
+  test('renameCourseSchedule updates saved schedule name', () async {
+    final schedule = SavedCourseSchedule(
+      id: 'schedule-rename-1',
+      name: '原始名称',
+      ownerName: '测试用户',
+      termLabel: '2025-2026-2',
+      semesterId: '2025-2026-2',
+      firstDay: '2026-03-16',
+      maxWeek: 20,
+      sourceType: CourseScheduleSourceType.manual,
+      isReadOnly: false,
+      createdAt: '2026-03-16T08:00:00.000',
+      updatedAt: '2026-03-16T08:00:00.000',
+      courseData: {
+        '2026-03-17': [
+          Course(
+            name: '数据库原理',
+            teacherName: '周老师',
+            weekDuration: '1-16',
+            location: '信工楼201',
+            startSection: 1,
+            duration: 2,
+          ),
+        ],
+      },
+    );
+
+    await saveCourseSchedule(schedule, setActive: true);
+    await renameCourseSchedule(schedule.id, '新名称');
+
+    final activeSchedule = await loadActiveCourseSchedule();
+    final savedSchedules = await loadSavedCourseSchedules();
+
+    expect(activeSchedule?.name, '新名称');
+    expect(savedSchedules.single.name, '新名称');
+    expect(widgetRefreshCalls.map((call) => call.method).toList(), [
+      'refreshCourseTableWidget',
+      'refreshCourseTableWidget',
+    ]);
+  });
 
   testWidgets(
     'saveClassToLocal trusts curriculum fetch and does not require noticeTab precheck',
@@ -203,13 +423,21 @@ void main() {
 
       late CourseSyncResult result;
       late Map<String, List<Course>> cachedCourses;
+      late List<SavedCourseSchedule> savedSchedules;
       await tester.runAsync(() async {
         result = await saveClassToLocal('jwxt-token', context);
         cachedCourses = await loadClassFromLocal();
+        savedSchedules = await loadSavedCourseSchedules();
       });
 
       expect(result.success, isTrue);
       expect(cachedCourses['2026-03-16']?.single.name, '软件工程');
+      expect(savedSchedules, hasLength(1));
+      expect(
+        savedSchedules.single.sourceType,
+        CourseScheduleSourceType.selfSync,
+      );
+      expect(savedSchedules.single.semesterId, '2025-2026-2');
       expect(widgetRefreshCalls.map((call) => call.method), [
         'refreshCourseTableWidget',
       ]);

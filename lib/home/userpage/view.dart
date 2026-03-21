@@ -1,4 +1,3 @@
-import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,50 +21,119 @@ class UserPage extends StatefulWidget {
 }
 
 class _UserPageState extends State<UserPage> {
+  static const String _cachedBalanceKey = 'user_page_cached_balance';
   final hutUserApi = HutUserApi();
   final Uri _url = Uri.parse(
     'alipays://platformapi/startapp?appId=2019030163398604&page=pages/index/index',
   );
-  late final Future<_UserPageData> _pageDataFuture;
+  bool _isInitialized = false;
+  bool _hasLinkedCampusAccount = false;
+  bool _isLoadingBalance = false;
+  bool _isRefreshingBalance = false;
+  String _balance = '--';
+  Map<String, String> _profile = _defaultProfile();
 
   @override
   void initState() {
     super.initState();
-    _pageDataFuture = _loadPageData();
+    _loadPageData();
   }
 
-  Future<_UserPageData> _loadPageData() async {
+  static Map<String, String> _defaultProfile() {
+    return {
+      'name': '同学',
+      'entranceYear': '--',
+      'academyName': '未绑定学院',
+      'clsName': '未绑定班级',
+      'yxzxf': '-',
+      'zxfjd': '-',
+      'pjxfjd': '-',
+    };
+  }
+
+  Map<String, String> _profileFromPrefs(SharedPreferences prefs) {
+    return {
+      'name': prefs.getString('name') ?? '同学',
+      'entranceYear': prefs.getString('entranceYear') ?? '--',
+      'academyName': prefs.getString('academyName') ?? '未绑定学院',
+      'clsName': prefs.getString('clsName') ?? '未绑定班级',
+      'yxzxf': prefs.getString('yxzxf') ?? '-',
+      'zxfjd': prefs.getString('zxfjd') ?? '-',
+      'pjxfjd': prefs.getString('pjxfjd') ?? '-',
+    };
+  }
+
+  String _normalizeBalance(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed == 'null') {
+      return '--';
+    }
+    return trimmed;
+  }
+
+  Future<void> _loadPageData() async {
     final prefs = await SharedPreferences.getInstance();
     final storage = AppAuthStorage.instance;
     final hasLinkedCampusAccount = await storage.hasLinkedCampusAccount();
-    var balance = '--';
+    final profile = _profileFromPrefs(prefs);
+    final cachedBalance = _normalizeBalance(
+      prefs.getString(_cachedBalanceKey) ?? '--',
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isInitialized = true;
+      _hasLinkedCampusAccount = hasLinkedCampusAccount;
+      _profile = profile;
+      _balance = hasLinkedCampusAccount ? cachedBalance : '--';
+      _isLoadingBalance = false;
+    });
+
+    if (hasLinkedCampusAccount) {
+      await _refreshBalance(showStatus: cachedBalance == '--');
+    }
+  }
+
+  Future<void> _refreshBalance({bool showStatus = true}) async {
+    if (!_hasLinkedCampusAccount || _isRefreshingBalance) {
+      return;
+    }
+
+    _isRefreshingBalance = true;
+    if (showStatus && mounted) {
+      setState(() {
+        _isLoadingBalance = true;
+      });
+    }
 
     try {
-      if (hasLinkedCampusAccount) {
-        final value = await hutUserApi.getCardBalance();
-        balance = value.isEmpty ? '--' : value;
+      final value = await hutUserApi.getCardBalance();
+      final normalized = _normalizeBalance(value);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cachedBalanceKey, normalized);
+      if (!mounted) {
+        return;
       }
+      setState(() {
+        _balance = normalized;
+      });
     } catch (error, stackTrace) {
       AppLogger.error(
         'Failed to load card balance on user page',
         error: error,
         stackTrace: stackTrace,
       );
+    } finally {
+      _isRefreshingBalance = false;
+      if (mounted) {
+        setState(() {
+          _isLoadingBalance = false;
+        });
+      }
     }
-
-    return _UserPageData(
-      hasLinkedCampusAccount: hasLinkedCampusAccount,
-      balance: balance,
-      profile: {
-        "name": prefs.getString('name') ?? "同学",
-        "entranceYear": prefs.getString('entranceYear') ?? "--",
-        "academyName": prefs.getString('academyName') ?? "未绑定学院",
-        "clsName": prefs.getString('clsName') ?? "未绑定班级",
-        "yxzxf": prefs.getString('yxzxf') ?? "-",
-        "zxfjd": prefs.getString('zxfjd') ?? "-",
-        "pjxfjd": prefs.getString('pjxfjd') ?? "-",
-      },
-    );
   }
 
   Future<void> _launchUrl() async {
@@ -78,6 +146,7 @@ class _UserPageState extends State<UserPage> {
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (context) => const UnifiedLoginPage()));
+    await _loadPageData();
   }
 
   Future<void> _openAboutPage() async {
@@ -118,8 +187,10 @@ class _UserPageState extends State<UserPage> {
 
   Future<void> _logout() async {
     final storage = AppAuthStorage.instance;
+    final prefs = await SharedPreferences.getInstance();
     await storage.clearAllAuthData();
     await storage.setFirstOpen(false);
+    await prefs.remove(_cachedBalanceKey);
     if (!mounted) {
       return;
     }
@@ -132,88 +203,117 @@ class _UserPageState extends State<UserPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
-        child: EnhancedFutureBuilder(
-          future: _pageDataFuture,
-          rememberFutureResult: true,
-          whenDone: (data) {
-            final pageData = data;
-            return SafeArea(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-                children: [
-                  if (!pageData.hasLinkedCampusAccount) ...[
-                    _buildGuestCard(theme),
-                    const SizedBox(height: 16),
-                    _buildActionPanel(
-                      children: [
-                        _buildActionTile(
-                          icon: Ionicons.information_circle_outline,
-                          title: '关于工大盒子',
-                          subtitle: '查看版本信息、开源说明与更新入口',
-                          onTap: _openAboutPage,
-                        ),
-                      ],
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+            children: [
+              if (!_isInitialized)
+                _buildLoadingShell(theme)
+              else if (!_hasLinkedCampusAccount) ...[
+                _buildGuestCard(theme),
+                const SizedBox(height: 16),
+                _buildActionPanel(
+                  children: [
+                    _buildActionTile(
+                      icon: Ionicons.information_circle_outline,
+                      title: '关于工大盒子',
+                      subtitle: '查看版本信息、开源说明与更新入口',
+                      onTap: _openAboutPage,
                     ),
-                  ] else ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            title: '已修学分',
-                            value: pageData.profile['yxzxf'] ?? '-',
-                            accent: const Color(0xFF1E8A6F),
-                            icon: Ionicons.ribbon_outline,
-                            onTap: _openScorePage,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _buildStatCard(
-                            title: '平均绩点',
-                            value: pageData.profile['pjxfjd'] ?? '-',
-                            accent: const Color(0xFFE28A2E),
-                            icon: Ionicons.stats_chart_outline,
-                            onTap: _openScorePage,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildBalanceCard(theme, pageData.balance),
-                    const SizedBox(height: 16),
-                    _buildActionPanel(
-                      children: [
-                        _buildActionTile(
-                          icon: Ionicons.refresh_outline,
-                          title: '刷新课表',
-                          subtitle: '需要时再手动同步本地课表',
-                          onTap: _refreshCourse,
-                        ),
-                        _buildDivider(),
-                        _buildActionTile(
-                          icon: Ionicons.information_circle_outline,
-                          title: '关于工大盒子',
-                          subtitle: '查看版本信息、开源说明与更新入口',
-                          onTap: _openAboutPage,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildDangerTile(),
                   ],
-                ],
-              ),
-            );
-          },
-          whenNotDone: Center(
-            child: CircularProgressIndicator(color: colorScheme.primary),
+                ),
+              ] else ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        title: '已修学分',
+                        value: _profile['yxzxf'] ?? '-',
+                        accent: const Color(0xFF1E8A6F),
+                        icon: Ionicons.ribbon_outline,
+                        onTap: _openScorePage,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _buildStatCard(
+                        title: '平均绩点',
+                        value: _profile['pjxfjd'] ?? '-',
+                        accent: const Color(0xFFE28A2E),
+                        icon: Ionicons.stats_chart_outline,
+                        onTap: _openScorePage,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildBalanceCard(theme, _balance, isLoading: _isLoadingBalance),
+                const SizedBox(height: 16),
+                _buildActionPanel(
+                  children: [
+                    _buildActionTile(
+                      icon: Ionicons.refresh_outline,
+                      title: '刷新课表',
+                      subtitle: '需要时再手动同步本地课表',
+                      onTap: _refreshCourse,
+                    ),
+                    _buildDivider(),
+                    _buildActionTile(
+                      icon: Ionicons.information_circle_outline,
+                      title: '关于工大盒子',
+                      subtitle: '查看版本信息、开源说明与更新入口',
+                      onTap: _openAboutPage,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildDangerTile(),
+              ],
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingShell(ThemeData theme) {
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return GlassPanel(
+      blur: 22,
+      borderRadius: BorderRadius.circular(32),
+      padding: const EdgeInsets.all(24),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.white.withValues(alpha: isDark ? 0.14 : 0.80),
+          colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.14),
+          colorScheme.secondary.withValues(alpha: isDark ? 0.16 : 0.12),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '正在读取个人信息',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '页面会先显示本地内容，再后台刷新需要联网的数据。',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -350,7 +450,11 @@ class _UserPageState extends State<UserPage> {
     );
   }
 
-  Widget _buildBalanceCard(ThemeData theme, String balance) {
+  Widget _buildBalanceCard(
+    ThemeData theme,
+    String balance, {
+    required bool isLoading,
+  }) {
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
@@ -379,10 +483,19 @@ class _UserPageState extends State<UserPage> {
                 ),
               ),
               const Spacer(),
-              Icon(
-                Ionicons.wallet_outline,
-                color: colorScheme.primary.withValues(alpha: 0.78),
-              ),
+              if (isLoading)
+                Text(
+                  '更新中',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                )
+              else
+                Icon(
+                  Ionicons.wallet_outline,
+                  color: colorScheme.primary.withValues(alpha: 0.78),
+                ),
             ],
           ),
           const SizedBox(height: 18),
@@ -509,18 +622,6 @@ class _UserPageState extends State<UserPage> {
       ),
     );
   }
-}
-
-class _UserPageData {
-  const _UserPageData({
-    required this.hasLinkedCampusAccount,
-    required this.balance,
-    required this.profile,
-  });
-
-  final bool hasLinkedCampusAccount;
-  final String balance;
-  final Map<String, String> profile;
 }
 
 class _GuestFeatureChip extends StatelessWidget {
