@@ -12,37 +12,203 @@ class DrinkBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final Color accent = colorScheme.primary;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 800),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [
-            Colors.blue.withAlpha(60),
-            Colors.blue.withAlpha(70),
-            Colors.transparent,
+            accent.withValues(alpha: drinkStatus ? 0.20 : 0.12),
+            accent.withValues(alpha: drinkStatus ? 0.10 : 0.04),
+            colorScheme.surface,
           ],
-          stops: drinkStatus ? [0.0, 0.8, 1.0] : [0.0, 0.2, 1.0],
+          stops: drinkStatus ? const [0.0, 0.45, 1.0] : const [0.0, 0.18, 1.0],
         ),
       ),
     );
   }
 }
 
-class DrinkStatusHeader extends StatelessWidget {
-  const DrinkStatusHeader({super.key, required this.drinkStatus});
-
-  final bool drinkStatus;
+class DrinkLoadingState extends StatelessWidget {
+  const DrinkLoadingState({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 32,
+            height: 32,
+            child: CircularProgressIndicator(color: colorScheme.primary),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '正在同步设备信息',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text('请稍候片刻', style: TextStyle(color: colorScheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+}
+
+class DrinkStatusHeader extends StatelessWidget {
+  const DrinkStatusHeader({
+    super.key,
+    required this.drinkStatus,
+    required this.deviceCount,
+    required this.deviceName,
+  });
+
+  final bool drinkStatus;
+  final int deviceCount;
+  final String? deviceName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    const Color restingCardTop = Color(0xFFFFFFFF);
+    const Color restingCardBottom = Color(0xFFF2F8FF);
+    const Color restingText = Color(0xFF14324D);
+    const Color restingSubtleText = Color(0xFF5E748A);
+    final Color emphasisColor = drinkStatus ? Colors.white : restingText;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-      child: Text(
-        drinkStatus ? '正在接水中' : '未开启接水',
-        style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors:
+              drinkStatus
+                  ? [
+                    colorScheme.primary,
+                    colorScheme.primary.withValues(alpha: 0.82),
+                  ]
+                  : const [restingCardTop, restingCardBottom],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color:
+              drinkStatus
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : colorScheme.primary.withValues(alpha: 0.16),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                drinkStatus
+                    ? colorScheme.primary.withValues(alpha: 0.24)
+                    : colorScheme.primary.withValues(alpha: 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color:
+                      drinkStatus
+                          ? Colors.white.withValues(alpha: 0.18)
+                          : colorScheme.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  drinkStatus ? Ionicons.water : Ionicons.water_outline,
+                  color: drinkStatus ? Colors.white : colorScheme.primary,
+                  size: 24,
+                ),
+              ),
+              const Spacer(),
+              _DrinkInfoBadge(
+                icon: Ionicons.hardware_chip_outline,
+                label: '$deviceCount 台设备',
+                highlight: drinkStatus,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            drinkStatus ? '正在接水中' : '准备就绪',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: emphasisColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            drinkStatus ? '水流已开启，结束后记得结算' : '先选择设备，再开始本次用水',
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color:
+                  drinkStatus
+                      ? Colors.white.withValues(alpha: 0.84)
+                      : restingSubtleText,
+            ),
+          ),
+          if (deviceName != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(
+                  Ionicons.location_outline,
+                  size: 16,
+                  color:
+                      drinkStatus
+                          ? Colors.white.withValues(alpha: 0.82)
+                          : restingSubtleText,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    deviceName!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: drinkStatus ? Colors.white : restingText,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (drinkStatus) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                minHeight: 6,
+                backgroundColor: Colors.white.withValues(alpha: 0.22),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -52,43 +218,289 @@ class DrinkCurrentDeviceCard extends StatelessWidget {
   const DrinkCurrentDeviceCard({
     super.key,
     required this.deviceName,
+    required this.deviceCount,
     required this.onTap,
   });
 
-  final String? deviceName;
+  final String deviceName;
+  final int deviceCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-      child: GestureDetector(
+    final colorScheme = Theme.of(context).colorScheme;
+    const Color cardTop = Color(0xFFFFFFFF);
+    const Color cardBottom = Color(0xFFF3F9FF);
+    const Color cardText = Color(0xFF14324D);
+    const Color cardSubtleText = Color(0xFF5E748A);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(22),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
         onTap: onTap,
-        child: SizedBox(
-          width: double.infinity,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('当前设备'),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    deviceName ?? '未选择设备',
-                    style: const TextStyle(
-                      fontSize: 35,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ],
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [cardTop, cardBottom],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: colorScheme.primary.withValues(alpha: 0.14),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: colorScheme.primary.withValues(alpha: 0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '当前设备',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: cardText,
+                      ),
+                    ),
+                    const Spacer(),
+                    _DrinkInfoBadge(
+                      icon: Ionicons.layers_outline,
+                      label: '$deviceCount 台已收藏',
+                      highlight: false,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Ionicons.water_outline,
+                        color: colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            deviceName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: cardText,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            '点击切换设备或查看全部收藏设备',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: cardSubtleText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 18,
+                      color: cardSubtleText,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class DrinkEmptyDeviceCard extends StatelessWidget {
+  const DrinkEmptyDeviceCard({super.key, required this.onAddDevice});
+
+  final VoidCallback onAddDevice;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.8),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Ionicons.scan_outline,
+              color: colorScheme.primary,
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '还没有可用设备',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '先扫码收藏宿舍饮水设备，后续就能直接开始用水。',
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: onAddDevice,
+            icon: const Icon(Ionicons.scan_outline),
+            label: const Text('添加设备'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class DrinkQuickActions extends StatelessWidget {
+  const DrinkQuickActions({
+    super.key,
+    required this.onManageDevices,
+    required this.onAddDevice,
+  });
+
+  final VoidCallback onManageDevices;
+  final VoidCallback onAddDevice;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final Color manageBackground = colorScheme.primary.withValues(alpha: 0.14);
+    final Color addBackground = colorScheme.primary.withValues(alpha: 0.96);
+
+    return Row(
+      children: [
+        Expanded(
+          child: FilledButton.tonalIcon(
+            onPressed: onManageDevices,
+            icon: const Icon(Ionicons.settings_outline),
+            label: const Text('管理设备'),
+            style: FilledButton.styleFrom(
+              backgroundColor: manageBackground,
+              foregroundColor: colorScheme.primary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton.tonalIcon(
+            onPressed: onAddDevice,
+            icon: const Icon(Ionicons.add_circle_outline),
+            label: const Text('添加设备'),
+            style: FilledButton.styleFrom(
+              backgroundColor: addBackground,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DrinkInfoBadge extends StatelessWidget {
+  const _DrinkInfoBadge({
+    required this.icon,
+    required this.label,
+    required this.highlight,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color:
+            highlight
+                ? Colors.white.withValues(alpha: 0.16)
+                : colorScheme.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: highlight ? Colors.white : colorScheme.primary,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: highlight ? Colors.white : colorScheme.primary,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -98,56 +510,39 @@ class DrinkActionButton extends StatelessWidget {
   const DrinkActionButton({
     super.key,
     required this.drinkStatus,
+    required this.enabled,
     required this.onTap,
   });
 
   final bool drinkStatus;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: TextButton(
-        onPressed: onTap,
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.all(
-            Theme.of(context).colorScheme.primary,
-          ),
-          foregroundColor: WidgetStateProperty.all(Colors.white),
-          padding: WidgetStateProperty.all(
-            const EdgeInsets.symmetric(vertical: 15),
-          ),
-          shape: WidgetStateProperty.all(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-        child: Text(
-          drinkStatus ? '结算' : '开启用水',
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-}
-
-class DrinkMoreFunctionsButton extends StatelessWidget {
-  const DrinkMoreFunctionsButton({super.key, required this.onTap});
-
+  final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return TextButton(
-      onPressed: onTap,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('展开更多功能', style: TextStyle(color: colorScheme.onSurfaceVariant)),
-          Icon(Icons.keyboard_arrow_right, color: colorScheme.onSurfaceVariant),
-        ],
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: enabled ? onTap : null,
+        icon: Icon(
+          drinkStatus ? Ionicons.checkmark_circle : Ionicons.water_outline,
+        ),
+        style: FilledButton.styleFrom(
+          backgroundColor: colorScheme.primary,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: colorScheme.surfaceContainerHighest,
+          disabledForegroundColor: colorScheme.onSurfaceVariant,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+        ),
+        label: Text(
+          drinkStatus ? '结束并结算' : '开始用水',
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
       ),
     );
   }
@@ -188,6 +583,241 @@ class DrinkSheetHandle extends StatelessWidget {
   }
 }
 
+class _DrinkSheetHeader extends StatelessWidget {
+  const _DrinkSheetHeader({
+    required this.title,
+    required this.subtitle,
+    this.badge,
+  });
+
+  final String title;
+  final String subtitle;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 18),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (badge != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                badge!,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: colorScheme.primary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DrinkSheetEmptyCard extends StatelessWidget {
+  const _DrinkSheetEmptyCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.8),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: colorScheme.primary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(icon, color: colorScheme.primary, size: 28),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.45,
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DrinkSheetDeviceCard extends StatelessWidget {
+  const _DrinkSheetDeviceCard({
+    required this.title,
+    required this.subtitle,
+    this.selected = false,
+    this.trailing,
+    this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final Widget? trailing;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+      child: Material(
+        color:
+            selected
+                ? colorScheme.primary.withValues(alpha: 0.10)
+                : colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color:
+                    selected
+                        ? colorScheme.primary.withValues(alpha: 0.40)
+                        : colorScheme.outlineVariant.withValues(alpha: 0.7),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color:
+                        selected
+                            ? colorScheme.primary.withValues(alpha: 0.16)
+                            : colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Ionicons.hardware_chip_outline,
+                    color:
+                        selected
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                trailing ??
+                    Icon(
+                      selected
+                          ? Ionicons.checkmark_circle
+                          : Ionicons.chevron_forward,
+                      color:
+                          selected
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                    ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class DrinkDeviceSelectionSheet extends StatelessWidget {
   const DrinkDeviceSelectionSheet({
     super.key,
@@ -209,23 +839,22 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const DrinkSheetHandle(),
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              '选择设备',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+          _DrinkSheetHeader(
+            title: '选择设备',
+            subtitle: '选择本次要使用的饮水设备',
+            badge: '${devices.length} 台',
           ),
           if (devices.isEmpty)
             const Padding(
-              padding: EdgeInsets.all(20),
-              child: _DrinkEmptyState(
+              padding: EdgeInsets.only(bottom: 12),
+              child: _DrinkSheetEmptyCard(
                 icon: Icons.device_unknown,
-                message: '暂无可用设备，请先添加设备',
+                title: '暂无可用设备',
+                subtitle: '先添加设备，之后就可以在这里快速切换。',
               ),
             )
           else
-            Container(
+            ConstrainedBox(
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.sizeOf(context).height * 0.5,
               ),
@@ -239,18 +868,12 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
                   final String deviceName = formatDeviceName(
                     device['name']?.toString() ?? '未知设备',
                   );
-                  return ListTile(
-                    title: Text(
-                      deviceName,
-                      style: const TextStyle(fontSize: 20),
-                    ),
-                    trailing:
-                        selectedIndex == index
-                            ? Icon(
-                              Ionicons.checkmark_circle,
-                              color: Theme.of(context).primaryColor,
-                            )
-                            : null,
+                  final bool isSelected = selectedIndex == index;
+
+                  return _DrinkSheetDeviceCard(
+                    title: deviceName,
+                    subtitle: 'ID: ${device['id']?.toString() ?? ''}',
+                    selected: isSelected,
                     onTap: () => onSelectDevice(index),
                   );
                 },
@@ -274,62 +897,20 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
   }
 }
 
-class DrinkMoreFunctionsSheet extends StatelessWidget {
-  const DrinkMoreFunctionsSheet({
-    super.key,
-    required this.onManageDevices,
-    required this.onAddDevice,
-  });
-
-  final VoidCallback onManageDevices;
-  final VoidCallback onAddDevice;
-
-  @override
-  Widget build(BuildContext context) {
-    return DrinkBottomSheetScaffold(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const DrinkSheetHandle(),
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              '更多功能',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Ionicons.grid_outline, color: Colors.blue),
-            title: const Text('设备管理'),
-            onTap: onManageDevices,
-          ),
-          ListTile(
-            leading: const Icon(
-              Ionicons.add_circle_outline,
-              color: Colors.blue,
-            ),
-            title: const Text('添加设备'),
-            onTap: onAddDevice,
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-}
-
 class DrinkDeviceManagementSheet extends StatelessWidget {
   const DrinkDeviceManagementSheet({
     super.key,
     required this.devices,
     required this.formatDeviceName,
     required this.onClose,
+    required this.onAddDevice,
     required this.onDeleteDevice,
   });
 
   final List<dynamic> devices;
   final String Function(String name) formatDeviceName;
   final VoidCallback onClose;
+  final VoidCallback onAddDevice;
   final ValueChanged<int> onDeleteDevice;
 
   @override
@@ -339,22 +920,21 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const DrinkSheetHandle(),
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              '设备管理',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+          _DrinkSheetHeader(
+            title: '设备管理',
+            subtitle: '查看已收藏设备，删除不再使用的设备',
+            badge: '${devices.length} 台',
           ),
           SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.4,
+            height: MediaQuery.sizeOf(context).height * 0.42,
             child:
                 devices.isEmpty
                     ? const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: _DrinkEmptyState(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: _DrinkSheetEmptyCard(
                         icon: Ionicons.water_outline,
-                        message: '暂无收藏设备，请先添加设备',
+                        title: '还没有收藏设备',
+                        subtitle: '扫码添加宿舍设备后，后续就能直接在这里管理。',
                       ),
                     )
                     : ListView.builder(
@@ -365,135 +945,34 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
                         final String deviceName = formatDeviceName(
                           device['name']?.toString() ?? '未知设备',
                         );
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 4,
-                          ),
-                          child: Card(
-                            elevation: 0,
-                            color:
-                                Theme.of(context).colorScheme.surfaceContainer,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
+                        return _DrinkSheetDeviceCard(
+                          title: deviceName,
+                          subtitle: 'ID: ${device['id']?.toString() ?? ''}',
+                          trailing: IconButton(
+                            tooltip: '删除设备',
+                            icon: const Icon(
+                              Ionicons.trash_outline,
+                              color: Colors.red,
                             ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              title: Text(
-                                deviceName,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              subtitle: Text(
-                                'ID: ${device['id']?.toString() ?? ''}',
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Ionicons.remove_circle_outline,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () => onDeleteDevice(index),
-                              ),
-                            ),
+                            onPressed: () => onDeleteDevice(index),
                           ),
                         );
                       },
                     ),
           ),
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(onPressed: onClose, child: const Text('确认')),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class DrinkAddDeviceOptionsSheet extends StatelessWidget {
-  const DrinkAddDeviceOptionsSheet({
-    super.key,
-    required this.onScan,
-    required this.onCancel,
-  });
-
-  final VoidCallback onScan;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    return DrinkBottomSheetScaffold(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const DrinkSheetHandle(),
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text(
-              '添加设备',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Ionicons.information_circle_outline,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '扫描设备上的二维码，添加到您的设备列表',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ],
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: onAddDevice,
+                    icon: const Icon(Ionicons.add_circle_outline),
+                    label: const Text('添加设备'),
                   ),
                 ),
-                const SizedBox(height: 30),
-                FilledButton.icon(
-                  onPressed: onScan,
-                  icon: const Icon(Ionicons.scan_outline, size: 24),
-                  label: const Text('扫描设备二维码', style: TextStyle(fontSize: 16)),
-                  style: const ButtonStyle(
-                    padding: WidgetStatePropertyAll(
-                      EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(onPressed: onCancel, child: const Text('取消')),
+                const SizedBox(width: 12),
+                TextButton(onPressed: onClose, child: const Text('关闭')),
               ],
             ),
           ),
@@ -512,10 +991,10 @@ class DrinkQrCodeScannerPage extends StatefulWidget {
 
 class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
   final GlobalKey _qrKey = GlobalKey(debugLabel: 'QR');
-  final double _scanArea = 300;
   QRViewController? _controller;
   StreamSubscription<Barcode>? _scanSubscription;
   bool _isFlashOn = false;
+  bool _isScanning = true;
 
   @override
   void dispose() {
@@ -528,10 +1007,13 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
     _controller = controller;
     _scanSubscription = controller.scannedDataStream.listen((scanData) {
       final String? code = scanData.code;
-      if (code == null || !mounted) {
+      if (code == null || !mounted || !_isScanning) {
         return;
       }
 
+      setState(() {
+        _isScanning = false;
+      });
       _scanSubscription?.cancel();
       controller.pauseCamera();
       Navigator.of(context).pop(code);
@@ -540,90 +1022,269 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final double cutOutSize = MediaQuery.sizeOf(context).width * 0.72;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('扫描设备二维码', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
           QRView(
             key: _qrKey,
             onQRViewCreated: _onQRViewCreated,
             overlay: QrScannerOverlayShape(
-              borderColor: Colors.blue,
-              borderRadius: 10,
-              borderLength: 30,
-              borderWidth: 10,
-              cutOutSize: _scanArea,
+              borderColor: colorScheme.primary,
+              borderRadius: 16,
+              borderLength: 32,
+              borderWidth: 4,
+              cutOutSize: cutOutSize,
               overlayColor: const Color.fromRGBO(0, 0, 0, 0.7),
             ),
           ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(
+                      Ionicons.close,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const Text(
+                    '扫描设备二维码',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+          ),
           Positioned(
-            bottom: 40,
+            bottom: 0,
             left: 0,
             right: 0,
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 40),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 15,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surface.withValues(alpha: 0.88),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Ionicons.information_circle_outline,
-                        color: Theme.of(context).colorScheme.primary,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.82),
+                  ],
+                ),
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '将二维码放入框内，即可自动扫描',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.onSurface,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Ionicons.information_circle_outline,
+                            color: Colors.white.withValues(alpha: 0.92),
+                            size: 20,
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '将设备二维码放入框内自动扫描',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.92),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _DrinkScannerActionButton(
+                          icon:
+                              _isFlashOn
+                                  ? Ionicons.flash
+                                  : Ionicons.flash_outline,
+                          label: _isFlashOn ? '关闭闪光灯' : '打开闪光灯',
+                          onTap: () {
+                            setState(() {
+                              _isFlashOn = !_isFlashOn;
+                            });
+                            _controller?.toggleFlash();
+                          },
+                        ),
+                        const SizedBox(width: 32),
+                        _DrinkScannerActionButton(
+                          icon: Ionicons.camera_reverse_outline,
+                          label: '切换摄像头',
+                          onTap: () {
+                            _controller?.flipCamera();
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _isFlashOn = !_isFlashOn;
-                    });
-                    _controller?.toggleFlash();
-                  },
-                  icon: Icon(
-                    _isFlashOn
-                        ? Ionicons.flashlight
-                        : Ionicons.flashlight_outline,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                  label: Text(
-                    _isFlashOn ? '关闭闪光灯' : '打开闪光灯',
-                    style: const TextStyle(color: Colors.white),
-                  ),
+              ),
+            ),
+          ),
+          if (_isScanning)
+            Positioned.fill(
+              child: Center(
+                child: SizedBox(
+                  width: cutOutSize,
+                  height: cutOutSize,
+                  child: _DrinkScannerLine(color: colorScheme.primary),
                 ),
-              ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DrinkScannerActionButton extends StatelessWidget {
+  const _DrinkScannerActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 12,
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _DrinkScannerLine extends StatefulWidget {
+  const _DrinkScannerLine({required this.color});
+
+  final Color color;
+
+  @override
+  State<_DrinkScannerLine> createState() => _DrinkScannerLineState();
+}
+
+class _DrinkScannerLineState extends State<_DrinkScannerLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+    _animation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return CustomPaint(
+          size: Size.infinite,
+          painter: _DrinkScannerLinePainter(
+            progress: _animation.value,
+            color: widget.color,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DrinkScannerLinePainter extends CustomPainter {
+  const _DrinkScannerLinePainter({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final Paint paint =
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Colors.transparent,
+              color.withValues(alpha: 0.78),
+              color,
+              color.withValues(alpha: 0.78),
+              Colors.transparent,
+            ],
+            stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
+          ).createShader(Rect.fromLTWH(0, 0, size.width, 4));
+
+    final double y = size.height * progress;
+    canvas.drawRect(Rect.fromLTWH(0, y, size.width, 3), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _DrinkScannerLinePainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
   }
 }
 
@@ -826,26 +1487,6 @@ class _AnimatedDrinkBubbleState extends State<_AnimatedDrinkBubble>
           ),
         );
       },
-    );
-  }
-}
-
-class _DrinkEmptyState extends StatelessWidget {
-  const _DrinkEmptyState({required this.icon, required this.message});
-
-  final IconData icon;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        children: [
-          Icon(icon, size: 48, color: Colors.grey),
-          const SizedBox(height: 10),
-          Text(message),
-        ],
-      ),
     );
   }
 }

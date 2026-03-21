@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'logic.dart';
 import 'widgets/drink_page_widgets.dart';
@@ -86,25 +87,6 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     );
   }
 
-  void _showMoreFunctionsBottomSheet() {
-    showCupertinoModalBottomSheet(
-      context: context,
-      expand: false,
-      backgroundColor: Colors.transparent,
-      builder:
-          (sheetContext) => DrinkMoreFunctionsSheet(
-            onManageDevices: () {
-              Navigator.of(sheetContext).pop();
-              _showDeviceManagementSheet();
-            },
-            onAddDevice: () {
-              Navigator.of(sheetContext).pop();
-              _showAddDeviceOptions();
-            },
-          ),
-    );
-  }
-
   Future<void> _confirmDeleteDevice(String deviceName, String deviceId) async {
     final shouldDelete =
         await showDialog<bool>(
@@ -161,6 +143,10 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
                 devices: List<dynamic>.from(logic.state.deviceList),
                 formatDeviceName: logic.formatDeviceName,
                 onClose: () => Navigator.of(sheetContext).pop(),
+                onAddDevice: () async {
+                  Navigator.of(sheetContext).pop();
+                  await _scanQRCodeAndAddDevice();
+                },
                 onDeleteDevice: (index) {
                   final Map<String, dynamic> device = Map<String, dynamic>.from(
                     logic.state.deviceList[index] as Map,
@@ -178,24 +164,35 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     );
   }
 
-  void _showAddDeviceOptions() {
-    showCupertinoModalBottomSheet(
-      context: context,
-      expand: false,
-      backgroundColor: Colors.transparent,
-      builder:
-          (sheetContext) => DrinkAddDeviceOptionsSheet(
-            onCancel: () => Navigator.of(sheetContext).pop(),
-            onScan: () async {
-              Navigator.of(sheetContext).pop();
-              await _scanQRCodeAndAddDevice();
-            },
-          ),
-    );
-  }
-
   Future<bool> _scanQRCodeAndAddDevice() async {
     try {
+      final PermissionStatus cameraPermission =
+          await Permission.camera.request();
+      if (!cameraPermission.isGranted) {
+        if (!mounted) {
+          return false;
+        }
+
+        final bool needsSettings =
+            cameraPermission.isPermanentlyDenied ||
+            cameraPermission.isRestricted;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              needsSettings
+                  ? '相机权限已关闭，请在系统设置中允许工大盒子访问相机后再扫描。'
+                  : '未授予相机权限，无法扫描设备二维码。',
+            ),
+            action:
+                needsSettings
+                    ? SnackBarAction(label: '去设置', onPressed: openAppSettings)
+                    : null,
+          ),
+        );
+        return false;
+      }
+
       final result = await Get.to<String>(() => const DrinkQrCodeScannerPage());
       if (result == null || result.isEmpty) {
         return false;
@@ -231,12 +228,78 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool canPop = Navigator.of(context).canPop();
+
+    String? selectedDeviceName(FunctionDrinkLogic currentLogic) {
+      if (currentLogic.state.deviceList.isEmpty ||
+          currentLogic.state.choiceDevice.value == -1) {
+        return null;
+      }
+
+      return currentLogic.formatDeviceName(
+        currentLogic
+            .state
+            .deviceList[currentLogic.state.choiceDevice.value]['name']
+            .toString(),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading:
+            canPop
+                ? Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHigh
+                          .withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: IconButton(
+                      tooltip: '返回',
+                      onPressed: () => Navigator.maybePop(context),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                  ),
+                )
+                : null,
         title: const Text('慧生活798'),
+        titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+          fontSize: 24,
+          fontWeight: FontWeight.w800,
+          color: Theme.of(context).colorScheme.onSurface,
+          letterSpacing: -0.3,
+        ),
         elevation: 0,
         backgroundColor: Colors.transparent,
+        actions: [
+          GetBuilder<FunctionDrinkLogic>(
+            builder: (logic) {
+              if (logic.state.isRefreshing.value) {
+                return const Padding(
+                  padding: EdgeInsets.only(right: 18),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.2),
+                    ),
+                  ),
+                );
+              }
+
+              return IconButton(
+                tooltip: '刷新设备',
+                onPressed: () => logic.getDeviceList(showRefreshing: true),
+                icon: const Icon(Icons.refresh_rounded),
+              );
+            },
+          ),
+        ],
       ),
       extendBodyBehindAppBar: true,
       body: Stack(
@@ -251,71 +314,75 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
             ),
           ),
           SafeArea(
-            child: Column(
-              children: [
-                GetBuilder<FunctionDrinkLogic>(
-                  builder: (logic) {
-                    return DrinkStatusHeader(
-                      drinkStatus: logic.state.drinkStatus.value,
-                    );
-                  },
-                ),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          GetBuilder<FunctionDrinkLogic>(
-                            builder: (logic) {
-                              final String? deviceName =
-                                  logic.state.deviceList.isEmpty ||
-                                          logic.state.choiceDevice.value == -1
-                                      ? null
-                                      : logic.formatDeviceName(
-                                        logic
-                                            .state
-                                            .deviceList[logic
-                                                .state
-                                                .choiceDevice
-                                                .value]['name']
-                                            .toString(),
-                                      );
-                              return DrinkCurrentDeviceCard(
+            child: GetBuilder<FunctionDrinkLogic>(
+              builder: (logic) {
+                final String? deviceName = selectedDeviceName(logic);
+                final bool hasDevice = deviceName != null;
+
+                if (logic.state.isLoading.value) {
+                  return const DrinkLoadingState();
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () => logic.getDeviceList(showRefreshing: true),
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              DrinkStatusHeader(
+                                drinkStatus: logic.state.drinkStatus.value,
+                                deviceCount: logic.state.deviceList.length,
                                 deviceName: deviceName,
-                                onTap: _showDeviceSelectionDialog,
-                              );
-                            },
+                              ),
+                              const SizedBox(height: 18),
+                              hasDevice
+                                  ? DrinkCurrentDeviceCard(
+                                    deviceName: deviceName,
+                                    deviceCount: logic.state.deviceList.length,
+                                    onTap: _showDeviceSelectionDialog,
+                                  )
+                                  : DrinkEmptyDeviceCard(
+                                    onAddDevice: _scanQRCodeAndAddDevice,
+                                  ),
+                              const SizedBox(height: 14),
+                              DrinkQuickActions(
+                                onManageDevices: _showDeviceManagementSheet,
+                                onAddDevice: _scanQRCodeAndAddDevice,
+                              ),
+                              const Spacer(),
+                              DrinkActionButton(
+                                drinkStatus: logic.state.drinkStatus.value,
+                                enabled: hasDevice,
+                                onTap: _handleDrinkToggle,
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                hasDevice
+                                    ? '设备可切换，开始用水后会自动检测状态。'
+                                    : '添加设备后即可开始用水。',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: GetBuilder<FunctionDrinkLogic>(
-                              builder: (logic) {
-                                return DrinkActionButton(
-                                  drinkStatus: logic.state.drinkStatus.value,
-                                  onTap: _handleDrinkToggle,
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ),
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: DrinkMoreFunctionsButton(
-                      onTap: _showMoreFunctionsBottomSheet,
-                    ),
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
           Positioned.fill(
