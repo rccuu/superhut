@@ -177,17 +177,31 @@ class _FunctionPageState extends State<FunctionPage> {
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
         child: SafeArea(
-          child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 0.96,
-            ),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              return _buildFeatureCard(items[index]);
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final double width = constraints.maxWidth;
+              final bool isWide = width >= 700;
+              final int crossAxisCount = isWide ? 3 : 2;
+              final double childAspectRatio =
+                  isWide
+                      ? 1.14
+                      : width >= 430
+                      ? 1.10
+                      : 1.04;
+
+              return GridView.builder(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  mainAxisSpacing: 14,
+                  crossAxisSpacing: 14,
+                  childAspectRatio: childAspectRatio,
+                ),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  return _buildFeatureCard(items[index]);
+                },
+              );
             },
           ),
         ),
@@ -207,8 +221,8 @@ class _FunctionPageState extends State<FunctionPage> {
       color: Colors.transparent,
       child: GlassPanel(
         blur: 18,
-        borderRadius: BorderRadius.circular(30),
-        padding: const EdgeInsets.all(18),
+        borderRadius: BorderRadius.circular(26),
+        padding: const EdgeInsets.all(16),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -225,7 +239,7 @@ class _FunctionPageState extends State<FunctionPage> {
             Icon(
               item.icon,
               color: foreground,
-              size: 28,
+              size: 26,
               shadows: [
                 Shadow(
                   color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.10),
@@ -240,11 +254,12 @@ class _FunctionPageState extends State<FunctionPage> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleLarge?.copyWith(
+                fontSize: 20,
                 letterSpacing: -0.4,
                 color: foreground,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Row(
               children: [
                 Container(

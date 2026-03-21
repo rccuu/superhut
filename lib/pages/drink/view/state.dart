@@ -7,6 +7,12 @@ class FunctionDrinkState {
   // 设备列表
   RxList deviceList = [].obs;
 
+  // 页面加载状态
+  RxBool isLoading = true.obs;
+
+  // 刷新状态
+  RxBool isRefreshing = false.obs;
+
   // 选中的设备值
   RxInt choiceDevice = (-1).obs;
 

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:superhut/pages/drink/login/command.dart';
 
-import '../../../generated/assets.dart';
-import '../api/drink_api.dart';
+import 'command.dart';
+import 'widgets/login_widgets.dart';
 
 class DrinkLoginPage2 extends StatefulWidget {
   final String phoneNumber;
@@ -24,157 +22,108 @@ class DrinkLoginPage2 extends StatefulWidget {
 }
 
 class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
-  final TextEditingController _userNoController = TextEditingController();
+  final TextEditingController _codeController = TextEditingController();
   final DrinkLoginCommand _command = DrinkLoginCommand();
-  var api = DrinkApi();
+  bool _isSubmitting = false;
 
   @override
   void dispose() {
-    _userNoController.dispose();
+    _codeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submitLogin() async {
+    if (_codeController.text.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入短信验证码')));
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await _command.login(widget.phoneNumber, _codeController.text, context);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).cardColor,
-      resizeToAvoidBottomInset: true,
-      body: Padding(
-        padding: const EdgeInsets.all(0),
-        child: Stack(
-          children: [
-            Container(
-              width: 1000,
-              height: 400,
-              color: Theme.of(context).secondaryHeaderColor,
-              padding: EdgeInsets.only(top: 200, right: 20, left: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "短信验证",
-                    style: TextStyle(
-                      fontSize: 35,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                  ),
-                  Text(
-                    "验证码已发送至 ${widget.phoneNumber}",
-                    style: TextStyle(
-                      // fontSize: 35,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).primaryColor,
-                    ),
-                  ),
-                ],
-              ),
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DrinkLoginShell(
+      headerTitle: '短信验证',
+      headerSubtitle: '验证码已发送到 ${widget.phoneNumber}，输入后即可完成登录。',
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const DrinkLoginFieldLabel(label: '短信验证码'),
+          const SizedBox(height: 8),
+          DrinkLoginInputField(
+            controller: _codeController,
+            hintText: '请输入短信验证码',
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            autofocus: true,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 6,
+              color: colorScheme.onSurface,
             ),
-            MediaQuery.removePadding(
-              context: context,
-              removeTop: true,
-              child: ListView(
-                children: [
-                  Container(
-                    margin: EdgeInsets.only(top: 200),
-                    child: Stack(
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(20),
-                              topRight: Radius.circular(20),
-                            ),
-                          ),
-                          margin: EdgeInsets.only(top: 100),
-                          padding: EdgeInsets.only(
-                            top: 40,
-                            right: 20,
-                            left: 20,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "输入短信验证码",
-                                style: TextStyle(
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).primaryColor,
-                                ),
-                              ),
-                              SizedBox(height: 10),
-                              Container(
-                                width: 400,
-                                padding: EdgeInsets.fromLTRB(10, 0, 10, 0),
-                                //      margin: EdgeInsets.only(left: 5,right: 5),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(15),
-                                  color: Theme.of(context).highlightColor,
-                                ),
-                                child: TextField(
-                                  keyboardType: TextInputType.number,
-                                  style: TextStyle(fontSize: 18),
-                                  maxLength: 13,
-                                  decoration: InputDecoration(
-                                    filled: false,
-                                    hintText: "短信验证码",
-                                    border: InputBorder.none,
-                                    counterText: '',
-                                  ),
-                                  controller: _userNoController,
-                                ),
-                              ),
-                              SizedBox(height: 10),
-                              const SizedBox(height: 20),
-                              Flex(
-                                direction: Axis.horizontal,
-                                children: [
-                                  Expanded(
-                                    child: FilledButton(
-                                      onPressed: () {
-                                        if (_userNoController.text.isEmpty) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('请输入短信验证码'),
-                                            ),
-                                          );
-                                          return;
-                                        }
-                                        _command.login(
-                                          widget.phoneNumber,
-                                          _userNoController.text,
-                                          context,
-                                        );
-                                      },
-                                      child: const Text('完成登录'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.only(right: 20),
-                          alignment: Alignment.topRight,
-                          margin: EdgeInsets.only(top: 0),
-                          child: SvgPicture.asset(
-                            Assets.illustrationLogin,
-                            width: 150,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 18,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => Navigator.maybePop(context),
+              child: const Text('重新获取验证码'),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: FilledButton(
+              onPressed: _isSubmitting ? null : _submitLogin,
+              child:
+                  _isSubmitting
+                      ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Colors.white,
+                        ),
+                      )
+                      : const Text(
+                        '完成登录',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '若未收到短信，可返回上一页重新获取。',
+            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+          ),
+        ],
       ),
     );
   }

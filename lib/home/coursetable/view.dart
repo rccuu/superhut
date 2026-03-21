@@ -1113,6 +1113,14 @@ class _ScheduleCourseCard extends StatelessWidget {
         final showLocation = course.location.isNotEmpty && !ultraCompact;
         final showTeacher =
             course.teacherName.isNotEmpty && height >= 58 && width >= 34;
+        final locationFontSize = math.min(
+          compact ? 12.0 : 13.8,
+          math.max(compact ? 10.0 : 11.0, width * (compact ? 0.28 : 0.24)),
+        );
+        final teacherFontSize = math.min(
+          compact ? 10.8 : 12.6,
+          math.max(compact ? 9.2 : 10.2, width * (compact ? 0.24 : 0.21)),
+        );
         final titleStyle =
             Theme.of(context).textTheme.bodySmall?.copyWith(
               color: palette.foreground.withValues(alpha: 0.88),
@@ -1128,20 +1136,33 @@ class _ScheduleCourseCard extends StatelessWidget {
               height: 1.18,
               letterSpacing: -0.12,
             );
-        final infoStyle =
+        final locationStyle =
             Theme.of(context).textTheme.labelSmall?.copyWith(
               color: palette.foreground.withValues(alpha: 0.88),
-              fontSize: compact ? 9.0 : 9.4,
+              fontSize: locationFontSize,
               fontWeight: FontWeight.w700,
               height: 1,
             ) ??
             TextStyle(
               color: palette.foreground.withValues(alpha: 0.88),
-              fontSize: compact ? 9.0 : 9.4,
+              fontSize: locationFontSize,
               fontWeight: FontWeight.w700,
               height: 1,
             );
-        final secondaryInfoStyle = infoStyle.copyWith(
+        final teacherStyle =
+            Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: palette.foreground.withValues(alpha: 0.82),
+              fontSize: teacherFontSize,
+              fontWeight: FontWeight.w600,
+              height: 1,
+            ) ??
+            TextStyle(
+              color: palette.foreground.withValues(alpha: 0.82),
+              fontSize: teacherFontSize,
+              fontWeight: FontWeight.w600,
+              height: 1,
+            );
+        final secondaryInfoStyle = teacherStyle.copyWith(
           color: palette.foreground.withValues(alpha: 0.82),
           fontWeight: FontWeight.w600,
         );
@@ -1151,8 +1172,8 @@ class _ScheduleCourseCard extends StatelessWidget {
         final detailSpacing = compact ? 1.0 : 2.0;
         final titleBottomSpacing =
             (showLocation || showTeacher) ? detailSpacing : 0.0;
-        final locationLineHeight = compact ? 10.0 : 11.0;
-        final teacherLineHeight = compact ? 9.0 : 10.0;
+        final locationLineHeight = locationFontSize * 1.08;
+        final teacherLineHeight = teacherFontSize * 1.08;
         final reservedDetailHeight =
             (showLocation ? locationLineHeight : 0.0) +
             (showTeacher ? teacherLineHeight : 0.0) +
@@ -1199,25 +1220,6 @@ class _ScheduleCourseCard extends StatelessWidget {
               ),
               child: Stack(
                 children: [
-                  Positioned(
-                    top: -18,
-                    right: -12,
-                    child: IgnorePointer(
-                      child: Container(
-                        width: compact ? 34 : 52,
-                        height: compact ? 34 : 52,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              Colors.white.withValues(alpha: 0.26),
-                              Colors.white.withValues(alpha: 0),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                   Padding(
                     padding: EdgeInsets.fromLTRB(
                       horizontalPadding,
@@ -1243,7 +1245,7 @@ class _ScheduleCourseCard extends StatelessWidget {
                           SizedBox(height: detailSpacing),
                           _SingleLineScaleText(
                             text: course.location,
-                            style: infoStyle,
+                            style: locationStyle,
                             height: locationLineHeight,
                           ),
                         ],
