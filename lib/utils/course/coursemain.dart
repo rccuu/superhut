@@ -4,10 +4,41 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/widget_refresh_service.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../core/services/app_logger.dart';
 import 'get_course.dart';
+
+const int _courseScheduleArchiveSchemaVersion = 1;
+const int _courseScheduleShareSchemaVersion = 1;
+const int _courseScheduleFileSchemaVersion = 1;
+const String _courseScheduleArchiveFileName = 'course_schedules.json';
+const String _legacyCourseDataFileName = 'course_data.json';
+const String _courseSharePrefix = 'SUPERHUT1:';
+const String _courseScheduleSharePayloadType = 'superhut_course_schedule_share';
+const String _courseScheduleFilePayloadType = 'superhut_course_schedule_file';
+const Uuid _uuid = Uuid();
+
+abstract final class CourseScheduleSourceType {
+  static const String selfSync = 'self_sync';
+  static const String shareImport = 'share_import';
+  static const String migratedLegacy = 'migrated_legacy';
+  static const String manual = 'manual';
+}
+
+String _stringValue(dynamic value) => value?.toString() ?? '';
+
+int _intValue(dynamic value, {int fallback = 0}) {
+  if (value is int) {
+    return value;
+  }
+  if (value is String) {
+    return int.tryParse(value) ?? fallback;
+  }
+  return fallback;
+}
 
 class Course {
   final String name;
@@ -57,6 +88,219 @@ class Course {
       pcid: json['pcid'] ?? '',
     );
   }
+
+  Course sanitizedForShare() {
+    return Course(
+      name: name,
+      teacherName: teacherName,
+      weekDuration: weekDuration,
+      location: location,
+      startSection: startSection,
+      duration: duration,
+      isExp: isExp,
+      pcid: '',
+    );
+  }
+}
+
+class SavedCourseSchedule {
+  const SavedCourseSchedule({
+    required this.id,
+    required this.name,
+    required this.ownerName,
+    required this.termLabel,
+    required this.semesterId,
+    required this.firstDay,
+    required this.maxWeek,
+    required this.sourceType,
+    required this.isReadOnly,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.courseData,
+  });
+
+  final String id;
+  final String name;
+  final String ownerName;
+  final String termLabel;
+  final String semesterId;
+  final String firstDay;
+  final int maxWeek;
+  final String sourceType;
+  final bool isReadOnly;
+  final String createdAt;
+  final String updatedAt;
+  final Map<String, List<Course>> courseData;
+
+  factory SavedCourseSchedule.fromJson(Map<String, dynamic> json) {
+    final rawCourseData = Map<String, dynamic>.from(
+      json['courseData'] as Map? ?? const <String, dynamic>{},
+    );
+    final courseData = <String, List<Course>>{};
+    rawCourseData.forEach((date, rawCourses) {
+      final courseList = rawCourses is List ? rawCourses : const <dynamic>[];
+      courseData[date] =
+          courseList
+              .map(
+                (rawCourse) => Course.fromJson(
+                  Map<String, dynamic>.from(rawCourse as Map),
+                ),
+              )
+              .toList();
+    });
+
+    return SavedCourseSchedule(
+      id: _stringValue(json['id']),
+      name: _stringValue(json['name']),
+      ownerName: _stringValue(json['ownerName']),
+      termLabel: _stringValue(json['termLabel']),
+      semesterId: _stringValue(json['semesterId']),
+      firstDay: _stringValue(json['firstDay']),
+      maxWeek: _intValue(json['maxWeek'], fallback: 20),
+      sourceType: _stringValue(json['sourceType']),
+      isReadOnly: json['isReadOnly'] == true,
+      createdAt: _stringValue(json['createdAt']),
+      updatedAt: _stringValue(json['updatedAt']),
+      courseData: courseData,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'ownerName': ownerName,
+      'termLabel': termLabel,
+      'semesterId': semesterId,
+      'firstDay': firstDay,
+      'maxWeek': maxWeek,
+      'sourceType': sourceType,
+      'isReadOnly': isReadOnly,
+      'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'courseData': _encodeCourseDataMap(courseData),
+    };
+  }
+
+  Map<String, dynamic> toShareJson() {
+    final sharedCourseData = <String, List<Course>>{};
+    courseData.forEach((date, courses) {
+      sharedCourseData[date] =
+          courses.map((course) => course.sanitizedForShare()).toList();
+    });
+
+    return {
+      'name': name,
+      'ownerName': ownerName,
+      'termLabel': termLabel,
+      'semesterId': semesterId,
+      'firstDay': firstDay,
+      'maxWeek': maxWeek,
+      'courseData': _encodeCourseDataMap(sharedCourseData),
+    };
+  }
+
+  SavedCourseSchedule copyWith({
+    String? id,
+    String? name,
+    String? ownerName,
+    String? termLabel,
+    String? semesterId,
+    String? firstDay,
+    int? maxWeek,
+    String? sourceType,
+    bool? isReadOnly,
+    String? createdAt,
+    String? updatedAt,
+    Map<String, List<Course>>? courseData,
+  }) {
+    return SavedCourseSchedule(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      ownerName: ownerName ?? this.ownerName,
+      termLabel: termLabel ?? this.termLabel,
+      semesterId: semesterId ?? this.semesterId,
+      firstDay: firstDay ?? this.firstDay,
+      maxWeek: maxWeek ?? this.maxWeek,
+      sourceType: sourceType ?? this.sourceType,
+      isReadOnly: isReadOnly ?? this.isReadOnly,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      courseData: courseData ?? this.courseData,
+    );
+  }
+}
+
+class CourseScheduleArchive {
+  const CourseScheduleArchive({
+    required this.schemaVersion,
+    required this.activeScheduleId,
+    required this.schedules,
+  });
+
+  const CourseScheduleArchive.empty()
+    : this(
+        schemaVersion: _courseScheduleArchiveSchemaVersion,
+        activeScheduleId: '',
+        schedules: const [],
+      );
+
+  final int schemaVersion;
+  final String activeScheduleId;
+  final List<SavedCourseSchedule> schedules;
+
+  factory CourseScheduleArchive.fromJson(Map<String, dynamic> json) {
+    final rawSchedules = json['schedules'] as List? ?? const <dynamic>[];
+    return CourseScheduleArchive(
+      schemaVersion: _intValue(
+        json['schemaVersion'],
+        fallback: _courseScheduleArchiveSchemaVersion,
+      ),
+      activeScheduleId: _stringValue(json['activeScheduleId']),
+      schedules:
+          rawSchedules
+              .map(
+                (rawSchedule) => SavedCourseSchedule.fromJson(
+                  Map<String, dynamic>.from(rawSchedule as Map),
+                ),
+              )
+              .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'schemaVersion': schemaVersion,
+      'activeScheduleId': activeScheduleId,
+      'schedules': schedules.map((schedule) => schedule.toJson()).toList(),
+    };
+  }
+
+  CourseScheduleArchive copyWith({
+    int? schemaVersion,
+    String? activeScheduleId,
+    List<SavedCourseSchedule>? schedules,
+  }) {
+    return CourseScheduleArchive(
+      schemaVersion: schemaVersion ?? this.schemaVersion,
+      activeScheduleId: activeScheduleId ?? this.activeScheduleId,
+      schedules: schedules ?? this.schedules,
+    );
+  }
+}
+
+class CourseSyncSnapshot {
+  const CourseSyncSnapshot({
+    required this.courseData,
+    required this.semesterId,
+    required this.firstDay,
+    required this.maxWeek,
+  });
+
+  final Map<String, List<Course>> courseData;
+  final String semesterId;
+  final String firstDay;
+  final int maxWeek;
 }
 
 class CourseSyncResult {
@@ -107,34 +351,498 @@ Future<void> saveExperimentRawDataToJson(
   await file.writeAsString(jsonEncode(experimentRawData));
 }
 
-Future<void> saveCourseDataToJson(Map<String, List<Course>> courseData) async {
-  // 将 Course 对象列表转换为 Map 列表
-  Map<String, List<Map<String, dynamic>>> courseDataMap = {};
-  courseData.forEach((key, courses) {
-    courseDataMap[key] = courses.map((course) => course.toJson()).toList();
+Map<String, List<Map<String, dynamic>>> _encodeCourseDataMap(
+  Map<String, List<Course>> courseData,
+) {
+  final courseDataMap = <String, List<Map<String, dynamic>>>{};
+  courseData.forEach((date, courses) {
+    courseDataMap[date] = courses.map((course) => course.toJson()).toList();
   });
+  return courseDataMap;
+}
 
-  // 将 Map 转换为 JSON 字符串
-  String jsonString = jsonEncode(courseDataMap);
-  final Directory appDocumentsDir = await getApplicationDocumentsDirectory();
-  final String appDocumentsPath = appDocumentsDir.path;
+String _findFirstCourseDate(Map<String, List<Course>> courseData) {
+  if (courseData.isEmpty) {
+    return '';
+  }
 
-  // 确保 app_flutter 目录存在
-  final flutterDir = Directory('$appDocumentsPath/app_flutter');
+  final dates = courseData.keys.toList()..sort();
+  return dates.first;
+}
+
+Future<Directory> _ensureCourseWidgetDirectory() async {
+  final appDocumentsDir = await getApplicationDocumentsDirectory();
+  final flutterDir = Directory('${appDocumentsDir.path}/app_flutter');
   if (!flutterDir.existsSync()) {
     flutterDir.createSync(recursive: true);
   }
+  return flutterDir;
+}
 
-  // 将 JSON 字符串写入文件（保存在应用文档目录下）
-  final file = File('$appDocumentsPath/course_data.json');
+Future<File> _courseArchiveFile() async {
+  final appDocumentsDir = await getApplicationDocumentsDirectory();
+  return File('${appDocumentsDir.path}/$_courseScheduleArchiveFileName');
+}
+
+Future<File> _legacyCourseCacheFile() async {
+  final appDocumentsDir = await getApplicationDocumentsDirectory();
+  return File('${appDocumentsDir.path}/$_legacyCourseDataFileName');
+}
+
+DateTime? _tryParseIsoTime(String value) {
+  if (value.isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(value);
+}
+
+int _compareScheduleTimestamp(
+  SavedCourseSchedule left,
+  SavedCourseSchedule right,
+) {
+  final leftTime = _tryParseIsoTime(left.updatedAt);
+  final rightTime = _tryParseIsoTime(right.updatedAt);
+  if (leftTime == null && rightTime == null) {
+    return right.name.compareTo(left.name);
+  }
+  if (leftTime == null) {
+    return 1;
+  }
+  if (rightTime == null) {
+    return -1;
+  }
+  return rightTime.compareTo(leftTime);
+}
+
+List<SavedCourseSchedule> _sortSchedulesForArchive(
+  List<SavedCourseSchedule> schedules,
+  String activeScheduleId,
+) {
+  final sorted = [...schedules];
+  sorted.sort((left, right) {
+    final leftActive = left.id == activeScheduleId;
+    final rightActive = right.id == activeScheduleId;
+    if (leftActive != rightActive) {
+      return leftActive ? -1 : 1;
+    }
+    return _compareScheduleTimestamp(left, right);
+  });
+  return sorted;
+}
+
+SavedCourseSchedule? _resolveArchiveActiveSchedule(
+  CourseScheduleArchive archive,
+) {
+  if (archive.schedules.isEmpty) {
+    return null;
+  }
+
+  for (final schedule in archive.schedules) {
+    if (schedule.id == archive.activeScheduleId) {
+      return schedule;
+    }
+  }
+  return archive.schedules.first;
+}
+
+Future<void> _writeLegacyCourseDataCache(
+  Map<String, List<Course>> courseData, {
+  bool refreshWidget = true,
+}) async {
+  final jsonString = jsonEncode(_encodeCourseDataMap(courseData));
+  final file = await _legacyCourseCacheFile();
   await file.writeAsString(jsonString);
 
-  // 同时保存一份到 app_flutter 目录（供桌面小组件访问）
-  final widgetFile = File('${flutterDir.path}/course_data.json');
+  final flutterDir = await _ensureCourseWidgetDirectory();
+  final widgetFile = File('${flutterDir.path}/$_legacyCourseDataFileName');
   await widgetFile.writeAsString(jsonString);
 
-  // 刷新桌面小组件
-  await WidgetRefreshService.refreshCourseTableWidget();
+  if (refreshWidget) {
+    await WidgetRefreshService.refreshCourseTableWidget();
+  }
+}
+
+Future<void> _persistCourseScheduleArchive(
+  CourseScheduleArchive archive, {
+  bool refreshWidget = true,
+}) async {
+  final archiveFile = await _courseArchiveFile();
+  await archiveFile.writeAsString(jsonEncode(archive.toJson()));
+
+  final activeSchedule = _resolveArchiveActiveSchedule(archive);
+  await _writeLegacyCourseDataCache(
+    activeSchedule?.courseData ?? const <String, List<Course>>{},
+    refreshWidget: refreshWidget,
+  );
+}
+
+Future<SavedCourseSchedule?> _migrateLegacyCourseCacheIfNeeded() async {
+  final legacyFile = await _legacyCourseCacheFile();
+  if (!legacyFile.existsSync()) {
+    return null;
+  }
+
+  final legacyCourseData = await readCourseDataFromJson(legacyFile.path);
+  if (legacyCourseData.isEmpty) {
+    return null;
+  }
+
+  final prefs = await SharedPreferences.getInstance();
+  final ownerName = prefs.getString('name') ?? '';
+  final firstDay =
+      prefs.getString('firstDay') ?? _findFirstCourseDate(legacyCourseData);
+  final maxWeek = prefs.getInt('maxWeek') ?? 20;
+  final now = DateTime.now().toIso8601String();
+  final termLabel = firstDay.isEmpty ? '本地课表' : '$firstDay 开始';
+  final name = ownerName.isEmpty ? '本地课表' : '$ownerName的课表';
+
+  return SavedCourseSchedule(
+    id: _uuid.v4(),
+    name: name,
+    ownerName: ownerName,
+    termLabel: termLabel,
+    semesterId: '',
+    firstDay: firstDay,
+    maxWeek: maxWeek,
+    sourceType: CourseScheduleSourceType.migratedLegacy,
+    isReadOnly: false,
+    createdAt: now,
+    updatedAt: now,
+    courseData: legacyCourseData,
+  );
+}
+
+Future<CourseScheduleArchive> loadCourseScheduleArchive() async {
+  final archiveFile = await _courseArchiveFile();
+  if (archiveFile.existsSync()) {
+    try {
+      final archiveJson =
+          jsonDecode(await archiveFile.readAsString()) as Map<String, dynamic>;
+      final archive = CourseScheduleArchive.fromJson(archiveJson);
+      if (archive.schedules.isNotEmpty) {
+        final activeId =
+            archive.schedules.any((item) => item.id == archive.activeScheduleId)
+                ? archive.activeScheduleId
+                : archive.schedules.first.id;
+        final sortedSchedules = _sortSchedulesForArchive(
+          archive.schedules,
+          activeId,
+        );
+        return archive.copyWith(
+          activeScheduleId: activeId,
+          schedules: sortedSchedules,
+        );
+      }
+      return archive;
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Error reading course schedule archive',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  final migratedSchedule = await _migrateLegacyCourseCacheIfNeeded();
+  if (migratedSchedule == null) {
+    return const CourseScheduleArchive.empty();
+  }
+
+  final migratedArchive = CourseScheduleArchive(
+    schemaVersion: _courseScheduleArchiveSchemaVersion,
+    activeScheduleId: migratedSchedule.id,
+    schedules: [migratedSchedule],
+  );
+  await _persistCourseScheduleArchive(migratedArchive, refreshWidget: false);
+  return migratedArchive;
+}
+
+Future<List<SavedCourseSchedule>> loadSavedCourseSchedules() async {
+  final archive = await loadCourseScheduleArchive();
+  return _sortSchedulesForArchive(archive.schedules, archive.activeScheduleId);
+}
+
+Future<SavedCourseSchedule?> loadActiveCourseSchedule() async {
+  final archive = await loadCourseScheduleArchive();
+  return _resolveArchiveActiveSchedule(archive);
+}
+
+Future<void> saveCourseSchedule(
+  SavedCourseSchedule schedule, {
+  bool setActive = true,
+  bool refreshWidget = true,
+}) async {
+  final archive = await loadCourseScheduleArchive();
+  final normalizedSchedule =
+      schedule.id.isEmpty ? schedule.copyWith(id: _uuid.v4()) : schedule;
+
+  final schedules = [...archive.schedules];
+  final existingIndex = schedules.indexWhere(
+    (item) => item.id == normalizedSchedule.id,
+  );
+  if (existingIndex >= 0) {
+    schedules[existingIndex] = normalizedSchedule;
+  } else {
+    schedules.add(normalizedSchedule);
+  }
+
+  final activeScheduleId =
+      setActive
+          ? normalizedSchedule.id
+          : archive.activeScheduleId.isNotEmpty
+          ? archive.activeScheduleId
+          : normalizedSchedule.id;
+  final sortedSchedules = _sortSchedulesForArchive(schedules, activeScheduleId);
+
+  await _persistCourseScheduleArchive(
+    CourseScheduleArchive(
+      schemaVersion: _courseScheduleArchiveSchemaVersion,
+      activeScheduleId: activeScheduleId,
+      schedules: sortedSchedules,
+    ),
+    refreshWidget: refreshWidget,
+  );
+}
+
+Future<void> renameCourseSchedule(String scheduleId, String newName) async {
+  final normalizedName = newName.trim();
+  if (normalizedName.isEmpty) {
+    throw StateError('课表名称不能为空');
+  }
+
+  final archive = await loadCourseScheduleArchive();
+  final scheduleIndex = archive.schedules.indexWhere(
+    (schedule) => schedule.id == scheduleId,
+  );
+  if (scheduleIndex < 0) {
+    throw StateError('未找到要重命名的课表');
+  }
+
+  final updatedSchedule = archive.schedules[scheduleIndex].copyWith(
+    name: normalizedName,
+    updatedAt: DateTime.now().toIso8601String(),
+  );
+  await saveCourseSchedule(
+    updatedSchedule,
+    setActive: archive.activeScheduleId == scheduleId,
+  );
+}
+
+Future<void> setActiveCourseSchedule(String scheduleId) async {
+  final archive = await loadCourseScheduleArchive();
+  if (!archive.schedules.any((schedule) => schedule.id == scheduleId)) {
+    throw StateError('未找到要切换的课表');
+  }
+
+  await _persistCourseScheduleArchive(
+    CourseScheduleArchive(
+      schemaVersion: archive.schemaVersion,
+      activeScheduleId: scheduleId,
+      schedules: _sortSchedulesForArchive(archive.schedules, scheduleId),
+    ),
+  );
+}
+
+Future<bool> deleteCourseSchedule(String scheduleId) async {
+  final archive = await loadCourseScheduleArchive();
+  final remainingSchedules =
+      archive.schedules.where((schedule) => schedule.id != scheduleId).toList();
+  if (remainingSchedules.length == archive.schedules.length) {
+    return false;
+  }
+
+  final nextActiveId =
+      remainingSchedules.any(
+            (schedule) => schedule.id == archive.activeScheduleId,
+          )
+          ? archive.activeScheduleId
+          : remainingSchedules.isEmpty
+          ? ''
+          : remainingSchedules.first.id;
+
+  await _persistCourseScheduleArchive(
+    CourseScheduleArchive(
+      schemaVersion: archive.schemaVersion,
+      activeScheduleId: nextActiveId,
+      schedules: _sortSchedulesForArchive(remainingSchedules, nextActiveId),
+    ),
+  );
+  return true;
+}
+
+Map<String, dynamic> _buildCourseScheduleTransferPayload({
+  required SavedCourseSchedule schedule,
+  required int schemaVersion,
+  required String type,
+}) {
+  return {
+    'schemaVersion': schemaVersion,
+    'type': type,
+    'exportedAt': DateTime.now().toIso8601String(),
+    'schedule': schedule.toShareJson(),
+  };
+}
+
+SavedCourseSchedule _parseImportedSchedulePayload(
+  Map<String, dynamic> payloadJson, {
+  required Set<String> acceptedTypes,
+}) {
+  final payloadType = _stringValue(payloadJson['type']);
+  if (!acceptedTypes.contains(payloadType)) {
+    throw const FormatException('分享内容类型不匹配');
+  }
+
+  final rawSchedule = Map<String, dynamic>.from(
+    payloadJson['schedule'] as Map? ?? const <String, dynamic>{},
+  );
+  final now = DateTime.now().toIso8601String();
+  final imported = SavedCourseSchedule.fromJson({
+    'id': _uuid.v4(),
+    'name':
+        _stringValue(rawSchedule['name']).isEmpty
+            ? '分享课表'
+            : rawSchedule['name'],
+    'ownerName': _stringValue(rawSchedule['ownerName']),
+    'termLabel': _stringValue(rawSchedule['termLabel']),
+    'semesterId': _stringValue(rawSchedule['semesterId']),
+    'firstDay': _stringValue(rawSchedule['firstDay']),
+    'maxWeek': _intValue(rawSchedule['maxWeek'], fallback: 20),
+    'sourceType': CourseScheduleSourceType.shareImport,
+    'isReadOnly': true,
+    'createdAt': now,
+    'updatedAt': now,
+    'courseData': rawSchedule['courseData'],
+  });
+
+  if (imported.courseData.isEmpty) {
+    throw const FormatException('分享内容里没有可导入的课表数据');
+  }
+  return imported;
+}
+
+String buildCourseScheduleShareCode(SavedCourseSchedule schedule) {
+  final payload = _buildCourseScheduleTransferPayload(
+    schedule: schedule,
+    schemaVersion: _courseScheduleShareSchemaVersion,
+    type: _courseScheduleSharePayloadType,
+  );
+  final compressed = gzip.encode(utf8.encode(jsonEncode(payload)));
+  return '$_courseSharePrefix${base64Url.encode(compressed)}';
+}
+
+String _normalizeCourseShareCode(String rawCode) {
+  final compact = rawCode.replaceAll(RegExp(r'\s+'), '');
+  final prefixIndex = compact.indexOf(_courseSharePrefix);
+  if (prefixIndex < 0) {
+    throw const FormatException('未识别到工大盒子课表分享码');
+  }
+  return compact.substring(prefixIndex + _courseSharePrefix.length);
+}
+
+String _normalizeBase64Payload(String encoded) {
+  final remainder = encoded.length % 4;
+  if (remainder == 0) {
+    return encoded;
+  }
+  return encoded.padRight(encoded.length + 4 - remainder, '=');
+}
+
+SavedCourseSchedule parseCourseScheduleShareCode(String rawCode) {
+  try {
+    final encodedPayload = _normalizeCourseShareCode(rawCode);
+    final rawBytes = base64Url.decode(_normalizeBase64Payload(encodedPayload));
+    final payloadString = utf8.decode(gzip.decode(rawBytes));
+    final payloadJson = jsonDecode(payloadString) as Map<String, dynamic>;
+    return _parseImportedSchedulePayload(
+      payloadJson,
+      acceptedTypes: {_courseScheduleSharePayloadType},
+    );
+  } on FormatException {
+    rethrow;
+  } catch (error) {
+    throw FormatException('分享码解析失败：$error');
+  }
+}
+
+String buildCourseScheduleExportJsonString(SavedCourseSchedule schedule) {
+  final payload = _buildCourseScheduleTransferPayload(
+    schedule: schedule,
+    schemaVersion: _courseScheduleFileSchemaVersion,
+    type: _courseScheduleFilePayloadType,
+  );
+  const encoder = JsonEncoder.withIndent('  ');
+  return encoder.convert(payload);
+}
+
+SavedCourseSchedule parseCourseScheduleExportJsonString(String rawJson) {
+  try {
+    final payloadJson = jsonDecode(rawJson) as Map<String, dynamic>;
+    return _parseImportedSchedulePayload(
+      payloadJson,
+      acceptedTypes: {
+        _courseScheduleFilePayloadType,
+        _courseScheduleSharePayloadType,
+      },
+    );
+  } on FormatException {
+    rethrow;
+  } catch (error) {
+    throw FormatException('课表文件解析失败：$error');
+  }
+}
+
+Future<SavedCourseSchedule> saveImportedCourseScheduleFromShareCode(
+  String rawCode,
+) async {
+  final importedSchedule = parseCourseScheduleShareCode(rawCode);
+  await saveCourseSchedule(importedSchedule, setActive: true);
+  return importedSchedule;
+}
+
+Future<SavedCourseSchedule> saveImportedCourseScheduleFromFileContent(
+  String rawJson,
+) async {
+  final importedSchedule = parseCourseScheduleExportJsonString(rawJson);
+  await saveCourseSchedule(importedSchedule, setActive: true);
+  return importedSchedule;
+}
+
+Future<void> saveCourseDataToJson(Map<String, List<Course>> courseData) async {
+  final archive = await loadCourseScheduleArchive();
+  final activeSchedule = _resolveArchiveActiveSchedule(archive);
+  final prefs = await SharedPreferences.getInstance();
+  final ownerName =
+      activeSchedule?.ownerName ?? (prefs.getString('name') ?? '');
+  final firstDay =
+      _findFirstCourseDate(courseData).isNotEmpty
+          ? _findFirstCourseDate(courseData)
+          : activeSchedule?.firstDay ?? (prefs.getString('firstDay') ?? '');
+  final maxWeek = activeSchedule?.maxWeek ?? (prefs.getInt('maxWeek') ?? 20);
+  final now = DateTime.now().toIso8601String();
+
+  final schedule =
+      activeSchedule?.copyWith(
+        firstDay: firstDay,
+        maxWeek: maxWeek,
+        updatedAt: now,
+        courseData: courseData,
+      ) ??
+      SavedCourseSchedule(
+        id: _uuid.v4(),
+        name: ownerName.isEmpty ? '本地课表' : '$ownerName的课表',
+        ownerName: ownerName,
+        termLabel: firstDay.isEmpty ? '本地课表' : '$firstDay 开始',
+        semesterId: '',
+        firstDay: firstDay,
+        maxWeek: maxWeek,
+        sourceType: CourseScheduleSourceType.manual,
+        isReadOnly: false,
+        createdAt: now,
+        updatedAt: now,
+        courseData: courseData,
+      );
+
+  await saveCourseSchedule(schedule, setActive: true);
 }
 
 // 从 JSON 文件读取并转换为 Map<String, List<Course>>
@@ -162,17 +870,17 @@ Future<Map<String, List<Course>>> readCourseDataFromJson(
 }
 
 Future<Map<String, List<Course>>> loadClassFromLocal() async {
-  final Directory appDocumentsDir = await getApplicationDocumentsDirectory();
-  final String appDocumentsPath = appDocumentsDir.path;
-  final file = File('$appDocumentsPath/course_data.json');
-  if (!file.existsSync()) {
-    return {};
-  }
   try {
-    final Map<String, List<Course>> courseData = await readCourseDataFromJson(
-      file.path,
-    );
-    return courseData;
+    final activeSchedule = await loadActiveCourseSchedule();
+    if (activeSchedule != null) {
+      return activeSchedule.courseData;
+    }
+
+    final legacyFile = await _legacyCourseCacheFile();
+    if (!legacyFile.existsSync()) {
+      return {};
+    }
+    return await readCourseDataFromJson(legacyFile.path);
   } catch (error, stackTrace) {
     AppLogger.error(
       'Error reading course JSON file',
@@ -196,15 +904,72 @@ Future<CourseSyncResult> saveClassToLocal(
   }
 
   try {
-    final Map<String, List<Course>> courseData = await loadClassFormUrl(
-      token,
-      context,
-    );
-    if (courseData.isEmpty) {
+    final snapshot = await loadCourseSyncSnapshotFromUrl(token, context);
+    if (snapshot.courseData.isEmpty) {
       return const CourseSyncResult.failure('未获取到任何课表数据，请确认当前学期已有课表');
     }
-    await saveCourseDataToJson(courseData);
-    return CourseSyncResult.success('课表同步完成，共更新 ${courseData.length} 天的数据');
+
+    final prefs = await SharedPreferences.getInstance();
+    final ownerName = prefs.getString('name') ?? '';
+    final archive = await loadCourseScheduleArchive();
+    SavedCourseSchedule? matchedSchedule;
+    for (final schedule in archive.schedules) {
+      final sameSelfSync =
+          schedule.sourceType == CourseScheduleSourceType.selfSync;
+      final sameSemester =
+          snapshot.semesterId.isNotEmpty &&
+          schedule.semesterId == snapshot.semesterId;
+      if (sameSelfSync && (sameSemester || matchedSchedule == null)) {
+        matchedSchedule = schedule;
+        if (sameSemester) {
+          break;
+        }
+      }
+    }
+
+    final now = DateTime.now().toIso8601String();
+    final scheduleName = ownerName.isEmpty ? '我的课表' : '$ownerName的课表';
+    final termLabel =
+        snapshot.semesterId.isNotEmpty
+            ? snapshot.semesterId
+            : snapshot.firstDay.isEmpty
+            ? '当前课表'
+            : '${snapshot.firstDay} 开始';
+    final savedSchedule =
+        matchedSchedule?.copyWith(
+          name:
+              matchedSchedule.name.isEmpty
+                  ? scheduleName
+                  : matchedSchedule.name,
+          ownerName: ownerName,
+          termLabel: termLabel,
+          semesterId: snapshot.semesterId,
+          firstDay: snapshot.firstDay,
+          maxWeek: snapshot.maxWeek,
+          sourceType: CourseScheduleSourceType.selfSync,
+          isReadOnly: false,
+          updatedAt: now,
+          courseData: snapshot.courseData,
+        ) ??
+        SavedCourseSchedule(
+          id: _uuid.v4(),
+          name: scheduleName,
+          ownerName: ownerName,
+          termLabel: termLabel,
+          semesterId: snapshot.semesterId,
+          firstDay: snapshot.firstDay,
+          maxWeek: snapshot.maxWeek,
+          sourceType: CourseScheduleSourceType.selfSync,
+          isReadOnly: false,
+          createdAt: now,
+          updatedAt: now,
+          courseData: snapshot.courseData,
+        );
+
+    await saveCourseSchedule(savedSchedule, setActive: true);
+    return CourseSyncResult.success(
+      '课表同步完成，共更新 ${snapshot.courseData.length} 天的数据',
+    );
   } on StateError catch (error, stackTrace) {
     AppLogger.error(
       'Course sync failed with state error',
@@ -230,19 +995,30 @@ Future<Map<String, List<Course>>> testc() async {
   return courseData;
 }
 
-Future<Map<String, List<Course>>> loadClassFormUrl(
+Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
   String token,
   BuildContext context,
 ) async {
   final GetOrgDataWeb getOrgDataWeb = GetOrgDataWeb(token: token);
   getOrgDataWeb.initData();
+  await getOrgDataWeb.getCurrentSemesterId();
   if (!context.mounted) {
-    return {};
+    return const CourseSyncSnapshot(
+      courseData: <String, List<Course>>{},
+      semesterId: '',
+      firstDay: '',
+      maxWeek: 20,
+    );
   }
   final Map<String, List<Course>> courseData = await getOrgDataWeb
       .getAllWeekClass(context);
   if (!context.mounted) {
-    return courseData;
+    return CourseSyncSnapshot(
+      courseData: courseData,
+      semesterId: getOrgDataWeb.semesterId ?? '',
+      firstDay: _findFirstCourseDate(courseData),
+      maxWeek: getOrgDataWeb.maxWeek,
+    );
   }
   final Map<String, List<Course>> expCourseData = await getOrgDataWeb
       .getAllWeekExpClass(context);
@@ -262,5 +1038,18 @@ Future<Map<String, List<Course>>> loadClassFormUrl(
       courseData[date] = list;
     }
   });
-  return courseData;
+  return CourseSyncSnapshot(
+    courseData: courseData,
+    semesterId: getOrgDataWeb.semesterId ?? '',
+    firstDay: _findFirstCourseDate(courseData),
+    maxWeek: getOrgDataWeb.maxWeek,
+  );
+}
+
+Future<Map<String, List<Course>>> loadClassFormUrl(
+  String token,
+  BuildContext context,
+) async {
+  final snapshot = await loadCourseSyncSnapshotFromUrl(token, context);
+  return snapshot.courseData;
 }

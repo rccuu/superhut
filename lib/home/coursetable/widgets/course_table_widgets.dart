@@ -13,6 +13,7 @@ class CourseTableToolbar extends StatelessWidget {
     required this.currentWeekLabel,
     required this.isShowingCurrentWeek,
     required this.onBackToCurrentWeek,
+    required this.onManageSchedules,
     required this.showExperimentCourses,
     required this.onShowExperimentCoursesChanged,
   });
@@ -22,6 +23,7 @@ class CourseTableToolbar extends StatelessWidget {
   final String currentWeekLabel;
   final bool isShowingCurrentWeek;
   final VoidCallback onBackToCurrentWeek;
+  final VoidCallback onManageSchedules;
   final bool showExperimentCourses;
   final ValueChanged<bool> onShowExperimentCoursesChanged;
 
@@ -68,20 +70,29 @@ class CourseTableToolbar extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  currentWeekLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
+                if (currentWeekLabel.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    currentWeekLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
           const SizedBox(width: 8),
+          _ToolbarAction(
+            icon: Ionicons.layers_outline,
+            semanticLabel: '管理课表',
+            isActive: true,
+            onTap: onManageSchedules,
+          ),
+          const SizedBox(width: 6),
           _ToolbarAction(
             icon:
                 showExperimentCourses ? Ionicons.flask : Ionicons.flask_outline,
