@@ -225,14 +225,14 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                                   onTap: () {
                                     if (service.serviceType == "1") {
                                       Get.to(
-                                        Type1Webview(
+                                        () => Type1Webview(
                                           serviceUrl: service.serviceUrl,
                                           serviceName: service.serviceName,
                                         ),
                                       );
                                     } else if (service.serviceType == "2") {
                                       Get.to(
-                                        Type2Webview(
+                                        () => Type2Webview(
                                           serviceUrl: service.serviceUrl,
                                           serviceName: service.serviceName,
                                           tokenAccept: service.tokenAccept,
@@ -299,7 +299,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                                   onTap: () {
                                     if (service.serviceType == "1") {
                                       Get.to(
-                                        Type1Webview(
+                                        () => Type1Webview(
                                           serviceUrl: service.serviceUrl,
                                           serviceName: service.serviceName,
                                         ),
@@ -307,7 +307,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                                     } else if (service.serviceType == "2" ||
                                         service.serviceType == "4") {
                                       Get.to(
-                                        Type2Webview(
+                                        () => Type2Webview(
                                           serviceUrl: service.serviceUrl,
                                           serviceName: service.serviceName,
                                           tokenAccept: service.tokenAccept,

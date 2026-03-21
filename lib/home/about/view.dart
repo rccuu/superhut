@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -8,6 +9,38 @@ import '../../core/ui/apple_glass.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
+
+  static Route<void> route() {
+    final isAndroid =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    if (!isAndroid) {
+      return MaterialPageRoute<void>(builder: (context) => const AboutPage());
+    }
+
+    return PageRouteBuilder<void>(
+      transitionDuration: const Duration(milliseconds: 160),
+      reverseTransitionDuration: const Duration(milliseconds: 140),
+      pageBuilder:
+          (context, animation, secondaryAnimation) => const AboutPage(),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curve = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curve,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.02),
+              end: Offset.zero,
+            ).animate(curve),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
 
   @override
   State<AboutPage> createState() => _AboutPageState();
@@ -27,7 +60,9 @@ class _AboutPageState extends State<AboutPage> {
   @override
   void initState() {
     super.initState();
-    _loadVersion();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadVersion();
+    });
   }
 
   Future<void> _loadVersion() async {
@@ -144,60 +179,76 @@ class _AboutPageState extends State<AboutPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final topInset = MediaQuery.paddingOf(context).top;
+    final useLiteLayout =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: AppGlassBackground(
+      body: _buildPageBackground(
+        context,
+        useLiteLayout: useLiteLayout,
         child: Stack(
           children: [
             ListView(
               padding: EdgeInsets.fromLTRB(16, topInset + 74, 16, 28),
               children: [
-                _AboutHeroCard(
-                  version: _version,
-                  isCheckingUpdate: _isCheckingUpdate,
-                  onCheckUpdates:
-                      _isCheckingUpdate || _version == '--'
-                          ? null
-                          : _checkForUpdates,
-                ),
-                const SizedBox(height: 16),
-                _AboutSectionPanel(
-                  icon: Ionicons.logo_github,
-                  title: '仓库',
-                  tint: colorScheme.primary,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _RepoTile(
-                        title: '当前仓库',
-                        subtitle: 'rccuu/superhut',
-                        url: _forkRepoUrl.toString(),
-                        icon: Ionicons.git_branch_outline,
-                        accent: colorScheme.primary,
-                        onTap: () => _openUrl(_forkRepoUrl),
-                      ),
-                      const SizedBox(height: 12),
-                      _RepoTile(
-                        title: '原作仓库',
-                        subtitle: 'cc2562/superhut',
-                        url: _upstreamRepoUrl.toString(),
-                        icon: Ionicons.logo_github,
-                        accent: colorScheme.secondary,
-                        onTap: () => _openUrl(_upstreamRepoUrl),
-                      ),
-                    ],
+                RepaintBoundary(
+                  child: _AboutHeroCard(
+                    version: _version,
+                    isCheckingUpdate: _isCheckingUpdate,
+                    useLiteEffects: useLiteLayout,
+                    onCheckUpdates:
+                        _isCheckingUpdate || _version == '--'
+                            ? null
+                            : _checkForUpdates,
                   ),
                 ),
                 const SizedBox(height: 16),
-                _AboutSectionPanel(
-                  icon: Ionicons.person_outline,
-                  title: '开发者',
-                  tint: colorScheme.tertiary,
-                  child: _ContributorTile(
-                    name: 'CC米饭',
-                    role: '原项目作者',
-                    accent: colorScheme.tertiary,
+                RepaintBoundary(
+                  child: _AboutSectionPanel(
+                    icon: Ionicons.logo_github,
+                    title: '仓库',
+                    tint: colorScheme.primary,
+                    useLiteEffects: useLiteLayout,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _RepoTile(
+                          title: '当前仓库',
+                          subtitle: 'rccuu/superhut',
+                          url: _forkRepoUrl.toString(),
+                          icon: Ionicons.git_branch_outline,
+                          accent: colorScheme.primary,
+                          useLiteEffects: useLiteLayout,
+                          onTap: () => _openUrl(_forkRepoUrl),
+                        ),
+                        const SizedBox(height: 12),
+                        _RepoTile(
+                          title: '原作仓库',
+                          subtitle: 'cc2562/superhut',
+                          url: _upstreamRepoUrl.toString(),
+                          icon: Ionicons.logo_github,
+                          accent: colorScheme.secondary,
+                          useLiteEffects: useLiteLayout,
+                          onTap: () => _openUrl(_upstreamRepoUrl),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                RepaintBoundary(
+                  child: _AboutSectionPanel(
+                    icon: Ionicons.person_outline,
+                    title: '开发者',
+                    tint: colorScheme.tertiary,
+                    useLiteEffects: useLiteLayout,
+                    child: _ContributorTile(
+                      name: 'CC米饭',
+                      role: '原项目作者',
+                      accent: colorScheme.tertiary,
+                      useLiteEffects: useLiteLayout,
+                    ),
                   ),
                 ),
               ],
@@ -206,6 +257,7 @@ class _AboutPageState extends State<AboutPage> {
               top: topInset + 12,
               left: 16,
               child: _AboutBackButton(
+                useLiteEffects: useLiteLayout,
                 onTap: () => Navigator.of(context).maybePop(),
               ),
             ),
@@ -214,17 +266,55 @@ class _AboutPageState extends State<AboutPage> {
       ),
     );
   }
+
+  Widget _buildPageBackground(
+    BuildContext context, {
+    required bool useLiteLayout,
+    required Widget child,
+  }) {
+    if (!useLiteLayout) {
+      return AppGlassBackground(child: child);
+    }
+
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomCenter,
+          colors:
+              isDark
+                  ? const [
+                    Color(0xFF0F1722),
+                    Color(0xFF101827),
+                    Color(0xFF0B111A),
+                  ]
+                  : [
+                    colorScheme.surfaceContainerLowest,
+                    colorScheme.surface,
+                    colorScheme.surfaceContainerLow,
+                  ],
+        ),
+      ),
+      child: child,
+    );
+  }
 }
 
 class _AboutHeroCard extends StatelessWidget {
   const _AboutHeroCard({
     required this.version,
     required this.isCheckingUpdate,
+    required this.useLiteEffects,
     required this.onCheckUpdates,
   });
 
   final String version;
   final bool isCheckingUpdate;
+  final bool useLiteEffects;
   final VoidCallback? onCheckUpdates;
 
   @override
@@ -234,7 +324,8 @@ class _AboutHeroCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
-      blur: 24,
+      blur: useLiteEffects ? 0 : 24,
+      useBackdropFilter: !useLiteEffects,
       borderRadius: BorderRadius.circular(34),
       padding: const EdgeInsets.all(24),
       gradient: LinearGradient(
@@ -277,13 +368,14 @@ class _AboutHeroCard extends StatelessWidget {
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: onCheckUpdates,
-              icon: isCheckingUpdate
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Ionicons.refresh_outline, size: 18),
+              icon:
+                  isCheckingUpdate
+                      ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Ionicons.refresh_outline, size: 18),
               label: Text(isCheckingUpdate ? '检查中...' : '检查更新'),
             ),
           ),
@@ -298,12 +390,14 @@ class _AboutSectionPanel extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.tint,
+    required this.useLiteEffects,
     required this.child,
   });
 
   final IconData icon;
   final String title;
   final Color tint;
+  final bool useLiteEffects;
   final Widget child;
 
   @override
@@ -313,7 +407,8 @@ class _AboutSectionPanel extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
-      blur: 22,
+      blur: useLiteEffects ? 0 : 22,
+      useBackdropFilter: !useLiteEffects,
       borderRadius: BorderRadius.circular(30),
       padding: const EdgeInsets.all(22),
       gradient: LinearGradient(
@@ -352,9 +447,10 @@ class _AboutSectionPanel extends StatelessWidget {
 }
 
 class _AboutBackButton extends StatelessWidget {
-  const _AboutBackButton({required this.onTap});
+  const _AboutBackButton({required this.onTap, required this.useLiteEffects});
 
   final VoidCallback onTap;
+  final bool useLiteEffects;
 
   @override
   Widget build(BuildContext context) {
@@ -363,7 +459,8 @@ class _AboutBackButton extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
-      blur: 18,
+      blur: useLiteEffects ? 0 : 18,
+      useBackdropFilter: !useLiteEffects,
       borderRadius: BorderRadius.circular(18),
       padding: EdgeInsets.zero,
       onTap: onTap,
@@ -408,9 +505,7 @@ class _AboutPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: tint.withValues(alpha: isDark ? 0.14 : 0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: tint.withValues(alpha: isDark ? 0.24 : 0.18),
-        ),
+        border: Border.all(color: tint.withValues(alpha: isDark ? 0.24 : 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -420,9 +515,9 @@ class _AboutPill extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: tint,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: tint,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -437,6 +532,7 @@ class _RepoTile extends StatelessWidget {
     required this.url,
     required this.icon,
     required this.accent,
+    required this.useLiteEffects,
     required this.onTap,
   });
 
@@ -445,6 +541,7 @@ class _RepoTile extends StatelessWidget {
   final String url;
   final IconData icon;
   final Color accent;
+  final bool useLiteEffects;
   final VoidCallback onTap;
 
   @override
@@ -453,7 +550,8 @@ class _RepoTile extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
-      blur: 18,
+      blur: useLiteEffects ? 0 : 18,
+      useBackdropFilter: !useLiteEffects,
       borderRadius: BorderRadius.circular(22),
       padding: const EdgeInsets.all(16),
       onTap: onTap,
@@ -512,11 +610,13 @@ class _ContributorTile extends StatelessWidget {
     required this.name,
     required this.role,
     required this.accent,
+    required this.useLiteEffects,
   });
 
   final String name;
   final String role;
   final Color accent;
+  final bool useLiteEffects;
 
   @override
   Widget build(BuildContext context) {
@@ -527,19 +627,21 @@ class _ContributorTile extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.42),
+        color:
+            useLiteEffects
+                ? theme.colorScheme.surfaceContainerHigh
+                : Colors.white.withValues(alpha: isDark ? 0.08 : 0.42),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.60),
+          color:
+              useLiteEffects
+                  ? accent.withValues(alpha: isDark ? 0.18 : 0.14)
+                  : Colors.white.withValues(alpha: isDark ? 0.08 : 0.60),
         ),
       ),
       child: Row(
         children: [
-          GlassIconBadge(
-            icon: Ionicons.person_outline,
-            tint: accent,
-            size: 44,
-          ),
+          GlassIconBadge(icon: Ionicons.person_outline, tint: accent, size: 44),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

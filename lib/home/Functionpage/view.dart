@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
@@ -47,9 +48,7 @@ class _FunctionPageState extends State<FunctionPage> {
       final isReady = await renewToken(context);
       if (!isReady || !mounted) {
         if (mounted) {
-          await Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const UnifiedLoginPage()),
-          );
+          await Navigator.of(context).push(UnifiedLoginPage.route());
         }
         return;
       }
@@ -206,100 +205,107 @@ class _FunctionPageState extends State<FunctionPage> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final isLoading = _isLoading(item.id);
+    final useLiteCards =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     final lightColor = _shiftAccent(item.accent, lightnessDelta: 0.10);
     final deepColor = _shiftAccent(item.accent, lightnessDelta: -0.05);
     const foreground = Colors.white;
 
-    return Material(
-      color: Colors.transparent,
-      child: GlassPanel(
-        blur: 18,
-        borderRadius: BorderRadius.circular(26),
-        padding: const EdgeInsets.all(16),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            lightColor.withValues(alpha: isDark ? 0.82 : 0.74),
-            deepColor.withValues(alpha: isDark ? 0.74 : 0.70),
-          ],
-        ),
-        borderColor: Colors.white.withValues(alpha: isDark ? 0.12 : 0.24),
-        onTap: isLoading ? null : () => item.onTap(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              item.icon,
-              color: foreground,
-              size: 26,
-              shadows: [
-                Shadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.10),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              item.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontSize: 20,
-                letterSpacing: -0.4,
+    return RepaintBoundary(
+      child: Material(
+        color: Colors.transparent,
+        child: GlassPanel(
+          blur: useLiteCards ? 0 : 18,
+          useBackdropFilter: !useLiteCards,
+          borderRadius: BorderRadius.circular(26),
+          padding: const EdgeInsets.all(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              lightColor.withValues(alpha: isDark ? 0.82 : 0.74),
+              deepColor.withValues(alpha: isDark ? 0.74 : 0.70),
+            ],
+          ),
+          borderColor: Colors.white.withValues(alpha: isDark ? 0.12 : 0.24),
+          onTap: isLoading ? null : () => item.onTap(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                item.icon,
                 color: foreground,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
+                size: 26,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.10),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.14),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
+                ],
+              ),
+              const Spacer(),
+              Text(
+                item.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontSize: 20,
+                  letterSpacing: -0.4,
+                  color: foreground,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
                       color: Colors.white.withValues(
-                        alpha: isDark ? 0.08 : 0.18,
+                        alpha: isDark ? 0.10 : 0.14,
+                      ),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: Colors.white.withValues(
+                          alpha: isDark ? 0.08 : 0.18,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      '进入',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: foreground.withValues(alpha: 0.92),
                       ),
                     ),
                   ),
-                  child: Text(
-                    '进入',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: foreground.withValues(alpha: 0.92),
-                    ),
-                  ),
-                ),
-                const Spacer(),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child:
-                      isLoading
-                          ? SizedBox(
-                            key: const ValueKey('loading'),
-                            width: 24,
-                            height: 24,
-                            child: LoadingAnimationWidget.inkDrop(
-                              color: foreground,
-                              size: 20,
+                  const Spacer(),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child:
+                        isLoading
+                            ? SizedBox(
+                              key: const ValueKey('loading'),
+                              width: 24,
+                              height: 24,
+                              child: LoadingAnimationWidget.inkDrop(
+                                color: foreground,
+                                size: 20,
+                              ),
+                            )
+                            : Icon(
+                              key: const ValueKey('arrow'),
+                              Ionicons.arrow_forward,
+                              size: 18,
+                              color: foreground.withValues(alpha: 0.92),
                             ),
-                          )
-                          : Icon(
-                            key: const ValueKey('arrow'),
-                            Ionicons.arrow_forward,
-                            size: 18,
-                            color: foreground.withValues(alpha: 0.92),
-                          ),
-                ),
-              ],
-            ),
-          ],
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

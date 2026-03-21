@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class AppGlassBackground extends StatelessWidget {
@@ -12,6 +13,9 @@ class AppGlassBackground extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    final useLiteEffects =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final orbBlurSigma = useLiteEffects ? 34.0 : 56.0;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -39,6 +43,7 @@ class AppGlassBackground extends StatelessWidget {
             alignment: const Alignment(-1.15, -0.92),
             width: 280,
             height: 280,
+            blurSigma: orbBlurSigma,
             colors: [
               colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.18),
               colorScheme.primary.withValues(alpha: 0),
@@ -48,6 +53,7 @@ class AppGlassBackground extends StatelessWidget {
             alignment: const Alignment(1.08, -0.78),
             width: 250,
             height: 250,
+            blurSigma: orbBlurSigma,
             colors: [
               colorScheme.secondary.withValues(alpha: isDark ? 0.14 : 0.14),
               colorScheme.secondary.withValues(alpha: 0),
@@ -57,6 +63,7 @@ class AppGlassBackground extends StatelessWidget {
             alignment: const Alignment(0.9, 0.78),
             width: 340,
             height: 340,
+            blurSigma: orbBlurSigma,
             colors: [
               colorScheme.tertiary.withValues(alpha: isDark ? 0.11 : 0.10),
               colorScheme.tertiary.withValues(alpha: 0),
@@ -96,6 +103,7 @@ class GlassPanel extends StatelessWidget {
     this.gradient,
     this.borderColor,
     this.onTap,
+    this.useBackdropFilter = true,
   });
 
   final Widget child;
@@ -107,12 +115,19 @@ class GlassPanel extends StatelessWidget {
   final Gradient? gradient;
   final Color? borderColor;
   final VoidCallback? onTap;
+  final bool useBackdropFilter;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    final useLiteEffects =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final effectiveBlur = useLiteEffects ? blur.clamp(0.0, 12.0) : blur;
+    final effectiveShadowBlur = useLiteEffects ? 22.0 : 32.0;
+    final effectiveShadowOffset =
+        useLiteEffects ? const Offset(0, 12) : const Offset(0, 18);
     final decoration = BoxDecoration(
       color:
           gradient == null
@@ -137,8 +152,8 @@ class GlassPanel extends StatelessWidget {
       boxShadow: [
         BoxShadow(
           color: colorScheme.shadow.withValues(alpha: isDark ? 0.22 : 0.08),
-          blurRadius: 32,
-          offset: const Offset(0, 18),
+          blurRadius: effectiveShadowBlur,
+          offset: effectiveShadowOffset,
         ),
       ],
     );
@@ -155,14 +170,22 @@ class GlassPanel extends StatelessWidget {
               ),
             );
 
+    final panelBody = DecoratedBox(decoration: decoration, child: content);
+
     return Container(
       margin: margin,
       child: ClipRRect(
         borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: DecoratedBox(decoration: decoration, child: content),
-        ),
+        child:
+            useBackdropFilter && effectiveBlur > 0.01
+                ? BackdropFilter(
+                  filter: ImageFilter.blur(
+                    sigmaX: effectiveBlur,
+                    sigmaY: effectiveBlur,
+                  ),
+                  child: panelBody,
+                )
+                : panelBody,
       ),
     );
   }
@@ -238,12 +261,14 @@ class _AmbientOrb extends StatelessWidget {
     required this.alignment,
     required this.width,
     required this.height,
+    required this.blurSigma,
     required this.colors,
   });
 
   final Alignment alignment;
   final double width;
   final double height;
+  final double blurSigma;
   final List<Color> colors;
 
   @override
@@ -252,7 +277,7 @@ class _AmbientOrb extends StatelessWidget {
       child: Align(
         alignment: alignment,
         child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 56, sigmaY: 56),
+          imageFilter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
           child: Container(
             width: width,
             height: height,

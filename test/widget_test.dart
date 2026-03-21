@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ionicons/ionicons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:superhut/main.dart';
@@ -50,7 +51,13 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
 
-    expect(find.byType(PageView), findsOneWidget);
+    expect(find.byType(IndexedStack), findsOneWidget);
     expect(find.text('功能'), findsOneWidget);
+    expect(find.text('空教室查询'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Ionicons.person_outline));
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前未登录'), findsOneWidget);
   });
 }

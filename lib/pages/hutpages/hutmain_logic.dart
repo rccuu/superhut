@@ -27,7 +27,7 @@ class HutMainLogic extends GetxController {
 
     if (hsa == false) {
       Future.delayed(const Duration(milliseconds: 100), () {
-        Get.off(HutLoginPage());
+        Get.off(() => HutLoginPage());
       });
     }
   }

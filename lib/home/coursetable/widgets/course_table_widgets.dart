@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
@@ -520,6 +521,8 @@ class ExperimentStudentsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final useLitePanels =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return Material(
       color: Colors.transparent,
@@ -565,7 +568,8 @@ class ExperimentStudentsSheet extends StatelessWidget {
                         borderRadius: BorderRadius.circular(22),
                       ),
                       child: GlassPanel(
-                        blur: 12,
+                        blur: useLitePanels ? 0 : 12,
+                        useBackdropFilter: !useLitePanels,
                         borderRadius: BorderRadius.circular(22),
                         padding: EdgeInsets.zero,
                         child: ListTile(
@@ -628,8 +632,12 @@ class _CourseDetailGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final useLitePanels =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
     return GlassPanel(
-      blur: 12,
+      blur: useLitePanels ? 0 : 12,
+      useBackdropFilter: !useLitePanels,
       borderRadius: BorderRadius.circular(24),
       padding: EdgeInsets.zero,
       child: Column(

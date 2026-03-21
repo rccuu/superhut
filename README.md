@@ -87,14 +87,14 @@ flutter run --release
 ### 构建发布版本
 
 ```bash
-# Android APK
-flutter build apk --release
+# Android 分架构 APK，并移动到 releases/
+bash scripts/build_android_release.sh
 
 # Android App Bundle
 flutter build appbundle --release
 
-# iOS
-flutter build ios --release
+# iOS 未签名 IPA
+bash scripts/build_ios_quick.sh
 
 ```
 

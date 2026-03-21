@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +10,7 @@ import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../login/unified_login_page.dart';
+import '../../pages/score/logic.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/hut_user_api.dart';
 import '../../utils/token.dart';
@@ -30,6 +33,7 @@ class _UserPageState extends State<UserPage> {
   bool _hasLinkedCampusAccount = false;
   bool _isLoadingBalance = false;
   bool _isRefreshingBalance = false;
+  bool _isRefreshingScoreSummary = false;
   String _balance = '--';
   Map<String, String> _profile = _defaultProfile();
 
@@ -93,7 +97,53 @@ class _UserPageState extends State<UserPage> {
     });
 
     if (hasLinkedCampusAccount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_refreshScoreSummaryInBackground());
+      });
       await _refreshBalance(showStatus: cachedBalance == '--');
+    }
+  }
+
+  Future<void> _reloadProfileFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final nextProfile = _profileFromPrefs(prefs);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _profile = nextProfile;
+    });
+  }
+
+  Future<void> _refreshScoreSummaryInBackground() async {
+    if (!_hasLinkedCampusAccount || _isRefreshingScoreSummary) {
+      return;
+    }
+
+    _isRefreshingScoreSummary = true;
+    try {
+      final scoreData = await getScore('');
+      if (!mounted || scoreData.errorMessage != null) {
+        return;
+      }
+
+      setState(() {
+        _profile = {
+          ..._profile,
+          'yxzxf': scoreData.yxzxf,
+          'zxfjd': scoreData.zxfjd,
+          'pjxfjd': scoreData.pjxfjd,
+        };
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to refresh score summary on user page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      _isRefreshingScoreSummary = false;
     }
   }
 
@@ -143,16 +193,12 @@ class _UserPageState extends State<UserPage> {
   }
 
   Future<void> _openLoginPage() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => const UnifiedLoginPage()));
+    await Navigator.of(context).push(UnifiedLoginPage.route());
     await _loadPageData();
   }
 
   Future<void> _openAboutPage() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (context) => AboutPage()));
+    await Navigator.of(context).push(AboutPage.route());
   }
 
   Future<void> _openScorePage() async {
@@ -169,6 +215,8 @@ class _UserPageState extends State<UserPage> {
       context,
       MaterialPageRoute(builder: (context) => const ScorePage()),
     );
+    await _reloadProfileFromPrefs();
+    unawaited(_refreshScoreSummaryInBackground());
   }
 
   Future<void> _refreshCourse() async {
@@ -194,10 +242,9 @@ class _UserPageState extends State<UserPage> {
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const UnifiedLoginPage()),
-      (route) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(UnifiedLoginPage.route(), (route) => false);
   }
 
   @override
@@ -251,7 +298,11 @@ class _UserPageState extends State<UserPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                _buildBalanceCard(theme, _balance, isLoading: _isLoadingBalance),
+                _buildBalanceCard(
+                  theme,
+                  _balance,
+                  isLoading: _isLoadingBalance,
+                ),
                 const SizedBox(height: 16),
                 _buildActionPanel(
                   children: [
