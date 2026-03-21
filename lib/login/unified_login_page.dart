@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:superhut/core/services/app_logger.dart';
@@ -13,6 +14,40 @@ import '../core/ui/apple_glass.dart';
 class UnifiedLoginPage extends StatefulWidget {
   const UnifiedLoginPage({super.key});
 
+  static Route<bool?> route() {
+    final isAndroid =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    if (!isAndroid) {
+      return MaterialPageRoute<bool?>(
+        builder: (context) => const UnifiedLoginPage(),
+      );
+    }
+
+    return PageRouteBuilder<bool?>(
+      transitionDuration: const Duration(milliseconds: 160),
+      reverseTransitionDuration: const Duration(milliseconds: 140),
+      pageBuilder:
+          (context, animation, secondaryAnimation) => const UnifiedLoginPage(),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curve = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curve,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 0.018),
+              end: Offset.zero,
+            ).animate(curve),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   State<UnifiedLoginPage> createState() => _UnifiedLoginPageState();
 }
@@ -25,7 +60,9 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   @override
   void initState() {
     super.initState();
-    _loadSavedCredentials();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSavedCredentials();
+    });
   }
 
   @override
@@ -160,6 +197,8 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final useLiteLayout =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -201,107 +240,118 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    GlassPanel(
-                      blur: 24,
-                      borderRadius: BorderRadius.circular(34),
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '登录',
-                                      style: theme.textTheme.headlineMedium,
+                    RepaintBoundary(
+                      child: GlassPanel(
+                        blur: useLiteLayout ? 0 : 24,
+                        useBackdropFilter: !useLiteLayout,
+                        borderRadius: BorderRadius.circular(34),
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '登录',
+                                        style: theme.textTheme.headlineMedium,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '支持智慧工大和教务系统账号登录',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                useLiteLayout
+                                    ? GlassIconBadge(
+                                      icon: Icons.login_rounded,
+                                      tint: colorScheme.primary,
+                                      size: 56,
+                                    )
+                                    : Opacity(
+                                      opacity: 0.92,
+                                      child: SvgPicture.asset(
+                                        Assets.illustrationLogin,
+                                        width: 92,
+                                      ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '支持智慧工大和教务系统账号登录',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            TextField(
+                              keyboardType: TextInputType.number,
+                              style: theme.textTheme.titleMedium,
+                              maxLength: 13,
+                              decoration: const InputDecoration(
+                                hintText: '学号 / 手机号',
+                                counterText: '',
+                                prefixIcon: Icon(Icons.person_outline_rounded),
+                              ),
+                              controller: _userNoController,
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              style: theme.textTheme.titleMedium,
+                              maxLength: 40,
+                              decoration: const InputDecoration(
+                                hintText: '密码',
+                                counterText: '',
+                                prefixIcon: Icon(Icons.lock_outline_rounded),
+                              ),
+                              controller: _pwdController,
+                              obscureText: true,
+                            ),
+                            const SizedBox(height: 18),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                onPressed: _isLoading ? null : _loginWithCAS,
+                                child:
+                                    _isLoading
+                                        ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
                                           ),
-                                    ),
-                                  ],
+                                        )
+                                        : const Text('登录并继续'),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton(
+                                onPressed: _isLoading ? null : _continueAsGuest,
+                                child: Text(
+                                  Navigator.of(context).canPop()
+                                      ? '暂不登录'
+                                      : '先逛功能',
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Opacity(
-                                opacity: 0.92,
-                                child: SvgPicture.asset(
-                                  Assets.illustrationLogin,
-                                  width: 92,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          TextField(
-                            keyboardType: TextInputType.number,
-                            style: theme.textTheme.titleMedium,
-                            maxLength: 13,
-                            decoration: const InputDecoration(
-                              hintText: '学号 / 手机号',
-                              counterText: '',
-                              prefixIcon: Icon(Icons.person_outline_rounded),
                             ),
-                            controller: _userNoController,
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            style: theme.textTheme.titleMedium,
-                            maxLength: 40,
-                            decoration: const InputDecoration(
-                              hintText: '密码',
-                              counterText: '',
-                              prefixIcon: Icon(Icons.lock_outline_rounded),
-                            ),
-                            controller: _pwdController,
-                            obscureText: true,
-                          ),
-                          const SizedBox(height: 18),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed: _isLoading ? null : _loginWithCAS,
-                              child:
-                                  _isLoading
-                                      ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                      : const Text('登录并继续'),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton(
-                              onPressed: _isLoading ? null : _continueAsGuest,
-                              child: Text(
-                                Navigator.of(context).canPop()
-                                    ? '暂不登录'
-                                    : '先逛功能',
+                            const SizedBox(height: 14),
+                            Text(
+                              '如智慧工大不可用，将自动切换到教务系统官方页面。课表同步改为在课表页手动触发。',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            '如智慧工大不可用，将自动切换到教务系统官方页面。课表同步改为在课表页手动触发。',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ],

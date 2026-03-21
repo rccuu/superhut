@@ -317,29 +317,33 @@ class _ElectricityPageState extends State<ElectricityPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final roomCardColor = colorScheme.primaryContainer;
-    final roomCardForeground = colorScheme.onPrimaryContainer;
-    final chargeCardColor = colorScheme.secondaryContainer;
-    final chargeCardForeground = colorScheme.onSecondaryContainer;
-    final mutedRoomCardForeground = roomCardForeground.withValues(alpha: 0.72);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final roomAccent = colorScheme.primary;
+    final chargeAccent = colorScheme.secondary;
+    final cardForeground = colorScheme.onSurface;
+    final mutedForeground = colorScheme.onSurfaceVariant;
+    final inputFillColor =
+        theme.brightness == Brightness.dark
+            ? colorScheme.surface.withValues(alpha: 0.76)
+            : colorScheme.surfaceContainerHigh;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: Text('电费充值'),
+        title: const Text('电费充值'),
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
       body: Container(
-        padding: EdgeInsets.fromLTRB(12, 0, 12, 0),
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
         child: ListView(
           children: [
             Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: roomCardColor,
+              padding: const EdgeInsets.all(18),
+              decoration: _buildSectionCardDecoration(
+                context,
+                accent: roomAccent,
               ),
               child: EnhancedFutureBuilder(
                 future: getHisRoomInfo(),
@@ -348,46 +352,71 @@ class _ElectricityPageState extends State<ElectricityPage> {
                   if (roomLoadErrorMessage != null) {
                     return Text(
                       roomLoadErrorMessage!,
-                      style: TextStyle(color: roomCardForeground),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cardForeground,
+                      ),
                     );
                   }
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                setRoomName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  color: roomCardForeground,
+                          _buildSectionBadge(
+                            context,
+                            icon: Ionicons.flash_outline,
+                            accent: roomAccent,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '当前房间',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    color: mutedForeground,
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  setRoomName,
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: cardForeground,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 18),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
-                            roomCount,
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: roomCardForeground,
+                          Flexible(
+                            child: Text(
+                              roomCount,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.displaySmall?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: cardForeground,
+                                height: 1,
+                              ),
                             ),
                           ),
-                          SizedBox(width: 5),
-                          Text(
-                            'CNY',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w100,
-                              color: mutedRoomCardForeground,
+                          const SizedBox(width: 8),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 5),
+                            child: Text(
+                              'CNY',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.8,
+                                color: mutedForeground,
+                              ),
                             ),
                           ),
                         ],
@@ -397,139 +426,187 @@ class _ElectricityPageState extends State<ElectricityPage> {
                 },
                 whenNotDone: Center(
                   child: LoadingAnimationWidget.inkDrop(
-                    color: Theme.of(context).primaryColor,
+                    color: roomAccent,
                     size: 40,
                   ),
                 ),
               ),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: chargeCardColor,
+              padding: const EdgeInsets.all(18),
+              decoration: _buildSectionCardDecoration(
+                context,
+                accent: chargeAccent,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            '通过校园卡充值',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              color: chargeCardForeground,
+                      _buildSectionBadge(
+                        context,
+                        icon: Ionicons.card_outline,
+                        accent: chargeAccent,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '充值方式',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: mutedForeground,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Text(
+                              '通过校园卡充值',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: cardForeground,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                  SizedBox(height: 8),
+                  const SizedBox(height: 18),
                   TextField(
                     controller: _paymentController,
-                    keyboardType: TextInputType.numberWithOptions(
+                    keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    cursorColor: chargeCardForeground,
-                    style: TextStyle(fontSize: 32, color: chargeCardForeground),
+                    cursorColor: chargeAccent,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cardForeground,
+                    ),
                     maxLength: 10,
                     inputFormatters: [
                       FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                       DecimalTextInputFormatter(),
                     ],
                     decoration: InputDecoration(
-                      filled: false,
-                      hintText: "输入充值金额",
-                      hintStyle: TextStyle(
-                        color: chargeCardForeground.withValues(alpha: 0.68),
+                      filled: true,
+                      fillColor: inputFillColor,
+                      hintText: '输入充值金额',
+                      hintStyle: theme.textTheme.titleLarge?.copyWith(
+                        color: mutedForeground,
                       ),
-                      border: InputBorder.none,
+                      prefixIcon: Icon(
+                        Icons.currency_yen_rounded,
+                        color: chargeAccent,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.72,
+                          ),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.72,
+                          ),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(
+                          color: chargeAccent.withValues(alpha: 0.92),
+                          width: 1.4,
+                        ),
+                      ),
                       counterText: '',
                     ),
                   ),
-                  Row(
-                    children: [
-                      Text(
-                        '校园卡余额:',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: chargeCardForeground,
-                          fontWeight: FontWeight.normal,
-                        ),
-                      ),
-                      Text(
-                        balance,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.normal,
-                          color: chargeCardForeground,
-                        ),
-                      ),
-                    ],
-                  ),
-                  TextButton(
-                    onPressed: _handleChargePressed,
-                    style: ButtonStyle(
-                      backgroundColor: WidgetStateProperty.all(
-                        colorScheme.primary,
-                      ),
-                      foregroundColor: WidgetStateProperty.all(
-                        colorScheme.onPrimary,
-                      ),
-                      shape: WidgetStateProperty.all(
-                        RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: inputFillColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.64,
                         ),
                       ),
                     ),
-                    child:
-                        isChargeLoading
-                            ? LoadingAnimationWidget.inkDrop(
-                              color: colorScheme.onPrimary,
-                              size: 10,
-                            )
-                            : Text('充值'),
+                    child: Row(
+                      children: [
+                        Text(
+                          '校园卡余额',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: mutedForeground,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          balance,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cardForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: isChargeLoading ? null : _handleChargePressed,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: chargeAccent,
+                        foregroundColor: colorScheme.onSecondary,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child:
+                          isChargeLoading
+                              ? SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: colorScheme.onSecondary,
+                                ),
+                              )
+                              : const Text('充值'),
+                    ),
                   ),
                 ],
               ),
             ),
-            SizedBox(height: 12),
-            Container(
-              margin: EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: ListTile(
-                leading: Icon(
-                  Ionicons.grid_outline,
-                  color: Theme.of(context).primaryColor,
-                ),
-                title: Text(
-                  "更改充值房间",
-                  style: TextStyle(fontWeight: FontWeight.w500),
-                ),
-                trailing:
-                    isRoomLoading
-                        ? LoadingAnimationWidget.inkDrop(
-                          color: Theme.of(context).primaryColor,
-                          size: 20,
-                        )
-                        : Icon(
-                          Icons.chevron_right,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                onTap: _handleRoomPickerPressed,
-              ),
+            const SizedBox(height: 12),
+            _buildActionTile(
+              icon: Ionicons.grid_outline,
+              title: '更改充值房间',
+              onTap: _handleRoomPickerPressed,
+              trailing:
+                  isRoomLoading
+                      ? LoadingAnimationWidget.inkDrop(
+                        color: colorScheme.primary,
+                        size: 20,
+                      )
+                      : Icon(
+                        Icons.chevron_right,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
             ),
             _buildFunctionItem(
               icon: Ionicons.alert_circle_outline,
-              title: "电费预警",
+              title: '电费预警',
               onTap: _showAlertBottomSheet,
             ),
           ],
@@ -540,7 +617,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
 
   // 显示所有充值房间
   void _showAllRoomBottomSheet(List<dynamic> roomList) {
-    String searchQuery = ""; // 搜索关键词状态
+    String searchQuery = '';
 
     showCupertinoModalBottomSheet(
       context: context,
@@ -548,9 +625,9 @@ class _ElectricityPageState extends State<ElectricityPage> {
       backgroundColor: Colors.transparent,
       builder:
           (context) => StatefulBuilder(
-            // 使用 StatefulBuilder 管理搜索状态
             builder: (context, setState) {
-              // 根据搜索词过滤房间列表
+              final theme = Theme.of(context);
+              final colorScheme = theme.colorScheme;
               final filteredRooms =
                   roomList.whereType<Map<dynamic, dynamic>>().where((room) {
                     final name = room['acname'].toString().toLowerCase();
@@ -560,69 +637,60 @@ class _ElectricityPageState extends State<ElectricityPage> {
                   }).toList();
 
               return Material(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(15),
-                  topRight: Radius.circular(15),
+                color: colorScheme.surface,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
                 ),
                 child: SafeArea(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // 顶部拖动指示条
                       Container(
                         width: 40,
                         height: 4,
-                        margin: EdgeInsets.symmetric(vertical: 12),
+                        margin: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.outlineVariant,
+                          color: colorScheme.outlineVariant,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
-
-                      // 标题
                       Padding(
-                        padding: EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         child: Text(
                           '更改房间',
-                          style: TextStyle(
-                            fontSize: 18,
+                          style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-
-                      // 搜索框
                       Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: TextField(
                           decoration: InputDecoration(
                             hintText: '搜索房间名称或ID',
                             prefixIcon: Icon(
                               Icons.search,
                               size: 24,
-                              color:
-                                  Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
+                              color: colorScheme.onSurfaceVariant,
                             ),
                             filled: true,
-                            fillColor:
-                                Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
+                            fillColor: colorScheme.surfaceContainerHighest,
+                            hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                               borderSide: BorderSide.none,
                             ),
-                            contentPadding: EdgeInsets.symmetric(vertical: 14),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
                           ),
                           onChanged:
                               (value) => setState(() => searchQuery = value),
                         ),
                       ),
-
-                      // 房间列表
                       SizedBox(
                         height: 400,
                         child: ListView.builder(
@@ -634,10 +702,15 @@ class _ElectricityPageState extends State<ElectricityPage> {
                             return ListTile(
                               leading: Icon(
                                 Ionicons.shapes_outline,
-                                color: Theme.of(context).colorScheme.primary,
+                                color: colorScheme.primary,
                               ),
                               title: Text(roomName),
-                              //subtitle: Text(room['acguid']),
+                              subtitle: Text(
+                                roomId,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                               onTap: () async {
                                 Navigator.of(context).pop();
                                 await getNewRoomInfo(roomId);
@@ -646,8 +719,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
                           },
                         ),
                       ),
-
-                      SizedBox(height: 20),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -675,211 +747,313 @@ class _ElectricityPageState extends State<ElectricityPage> {
       context: context,
       expand: false,
       backgroundColor: Colors.transparent,
-      builder:
-          (sheetContext) => Material(
-            color: Theme.of(sheetContext).colorScheme.surface,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(15),
-              topRight: Radius.circular(15),
-            ),
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-                ),
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 4,
-                          margin: EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text(
-                            '电费预警',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 5),
-                        // 输入框
-                        TextField(
-                          controller: deviceCodeController,
-                          decoration: InputDecoration(
-                            hintText: '输入预警金额',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            filled: true,
-                            fillColor: Colors.white.withAlpha(20),
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            prefixIcon: Icon(
-                              Ionicons.alert_circle_outline,
-                              color: Colors.orange,
-                            ),
-                          ),
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          style: TextStyle(fontSize: 18),
-                        ),
-                        SizedBox(height: 20),
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final colorScheme = theme.colorScheme;
+        final isDark = theme.brightness == Brightness.dark;
+        final panelColor =
+            isDark
+                ? colorScheme.surfaceContainerHigh
+                : colorScheme.surfaceContainerLow;
+        final panelBorder = colorScheme.outlineVariant.withValues(
+          alpha: isDark ? 0.42 : 0.72,
+        );
+        final accent = colorScheme.tertiary;
 
-                        // 提交按钮
+        return Material(
+          color: colorScheme.surface,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+              ),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.outlineVariant,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          '电费预警',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: deviceCodeController,
+                        keyboardType: TextInputType.number,
+                        maxLength: 6,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: '输入预警金额',
+                          hintStyle: theme.textTheme.titleMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                          filled: true,
+                          fillColor: panelColor,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          prefixIcon: Icon(
+                            Ionicons.alert_circle_outline,
+                            color: accent,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: panelBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: panelBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: accent.withValues(alpha: 0.92),
+                              width: 1.4,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: FilledButton(
+                          onPressed: () async {
+                            final alertCount = deviceCodeController.text.trim();
+                            final validationMessage = _validateAlertAmount(
+                              alertCount,
+                            );
+                            if (validationMessage != null) {
+                              _showSnackBar(validationMessage);
+                              return;
+                            }
+
+                            await _saveAlertSettings(alertCount);
+                            if (!sheetContext.mounted) {
+                              return;
+                            }
+
+                            Navigator.of(sheetContext).pop();
+                            _showSnackBar(
+                              alertSettings.isEnabled ? '预警已更新' : '预警已开启',
+                            );
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: accent,
+                            foregroundColor: colorScheme.onTertiary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            alertSettings.isEnabled ? '更改预警' : '设置预警',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: colorScheme.onTertiary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (alertSettings.isEnabled) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: panelColor,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: panelBorder),
+                          ),
+                          child: Text(
+                            '目前设置：\n当房间${alertSettings.roomName}${alertSettings.roomId.isEmpty ? '' : '（${alertSettings.roomId}）'}的电费低于${alertSettings.bill}元时进行提醒',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         SizedBox(
                           width: double.infinity,
                           height: 50,
-                          child: ElevatedButton(
+                          child: OutlinedButton(
                             onPressed: () async {
-                              final alertCount =
-                                  deviceCodeController.text.trim();
-                              final validationMessage = _validateAlertAmount(
-                                alertCount,
-                              );
-                              if (validationMessage != null) {
-                                _showSnackBar(validationMessage);
-                                return;
-                              }
-
-                              await _saveAlertSettings(alertCount);
+                              await _disableAlertSettings();
                               if (!sheetContext.mounted) {
                                 return;
                               }
 
                               Navigator.of(sheetContext).pop();
-                              _showSnackBar(
-                                alertSettings.isEnabled ? '预警已更新' : '预警已开启',
-                              );
+                              _showSnackBar('预警已关闭');
                             },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
-                              foregroundColor: Colors.white,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: accent,
+                              side: BorderSide(
+                                color: accent.withValues(alpha: 0.42),
+                              ),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                             ),
-                            child: Text(
-                              alertSettings.isEnabled ? '更改预警' : '设置预警',
-                              style: TextStyle(fontSize: 18),
-                            ),
+                            child: const Text('关闭预警'),
                           ),
                         ),
-                        Visibility(
-                          visible: alertSettings.isEnabled,
-                          child: Column(
-                            children: [
-                              Card(
-                                elevation: 0,
-                                color: Colors.transparent,
-                                child: Container(
-                                  padding: EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withAlpha(20),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      SizedBox(height: 8),
-                                      Text(
-                                        '目前设置：\n当房间${alertSettings.roomName}${alertSettings.roomId.isEmpty ? '' : '（${alertSettings.roomId}）'}的电费低于${alertSettings.bill}元时进行提醒',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 50,
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    await _disableAlertSettings();
-                                    if (!sheetContext.mounted) {
-                                      return;
-                                    }
-
-                                    Navigator.of(sheetContext).pop();
-                                    _showSnackBar('预警已关闭');
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orange,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    '关闭预警',
-                                    style: TextStyle(fontSize: 18),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                      ],
+                      const SizedBox(height: 18),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: panelColor,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: panelBorder),
                         ),
-                        // 提示信息
-                        SizedBox(height: 20),
-                        Card(
-                          elevation: 0,
-                          color: Colors.transparent,
-                          child: Container(
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withAlpha(20),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.info_outline,
-                                      color: Colors.orange,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      '温馨提示',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 8),
+                                Icon(Icons.info_outline, color: accent),
+                                const SizedBox(width: 8),
                                 Text(
-                                  '当检测到$setRoomName的电费小于预警值后，将会在进入工大盒子时进行提醒',
+                                  '温馨提示',
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '当检测到$setRoomName的电费小于预警值后，将会在进入工大盒子时进行提醒',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
-                        SizedBox(height: 20),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
+        );
+      },
     );
     deviceCodeController.dispose();
+  }
+
+  BoxDecoration _buildSectionCardDecoration(
+    BuildContext context, {
+    required Color accent,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return BoxDecoration(
+      color:
+          isDark
+              ? colorScheme.surfaceContainerHigh
+              : colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: accent.withValues(alpha: isDark ? 0.26 : 0.12)),
+      boxShadow: [
+        if (!isDark)
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSectionBadge(
+    BuildContext context, {
+    required IconData icon,
+    required Color accent,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: isDark ? 0.22 : 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: accent.withValues(alpha: isDark ? 0.26 : 0.18),
+        ),
+      ),
+      child: Icon(icon, color: accent, size: 20),
+    );
+  }
+
+  Widget _buildActionTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    Widget? trailing,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color:
+            isDark
+                ? colorScheme.surfaceContainerLow
+                : colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outlineVariant.withValues(alpha: 0.72),
+        ),
+      ),
+      child: ListTile(
+        leading: _buildSectionBadge(
+          context,
+          icon: icon,
+          accent: colorScheme.primary,
+        ),
+        title: Text(
+          title,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        trailing:
+            trailing ??
+            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+        onTap: onTap,
+      ),
+    );
   }
 
   Widget _buildFunctionItem({
@@ -887,22 +1061,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
     required String title,
     required VoidCallback onTap,
   }) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).primaryColor),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.w500)),
-        trailing: Icon(
-          Icons.chevron_right,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        onTap: onTap,
-      ),
-    );
+    return _buildActionTile(icon: icon, title: title, onTap: onTap);
   }
 }
 

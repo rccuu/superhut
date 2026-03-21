@@ -78,7 +78,7 @@ class FunctionHotWaterLogic extends GetxController {
 
     if (_hutUserInfo["hutIsLogin"] == false) {
       Future.delayed(const Duration(milliseconds: 100), () {
-        Get.off(HutLoginPage());
+        Get.off(() => HutLoginPage());
       });
     } else {
       //setHutUserInfo("hutIsLogin", true);

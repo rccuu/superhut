@@ -41,7 +41,7 @@ class FunctionDrinkLogic extends GetxController {
     if (!isLogin) {
       state.isLoading.value = false;
       update();
-      Get.off(const DrinkLoginPage());
+      Get.off(() => const DrinkLoginPage());
       return;
     }
 
@@ -78,7 +78,7 @@ class FunctionDrinkLogic extends GetxController {
         state.isLoading.value = false;
         state.isRefreshing.value = false;
         update();
-        Get.off(const DrinkLoginPage());
+        Get.off(() => const DrinkLoginPage());
         return;
       }
 

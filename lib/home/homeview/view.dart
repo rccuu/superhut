@@ -22,28 +22,23 @@ class HomeviewPage extends StatefulWidget {
   State<HomeviewPage> createState() => _HomeviewPageState();
 }
 
-class _HomeviewPageState extends State<HomeviewPage>
-    with AutomaticKeepAliveClientMixin {
+class _HomeviewPageState extends State<HomeviewPage> {
   static const _pages = [CourseTableView(), FunctionPage(), UserPage()];
   String _currentVersion = '0.0.1'; // 默认版本号
-  late final PageController _pageController;
   late int _selectedIndex;
+  late final List<bool> _loadedPages;
+  int _tabAnimationSeed = 0;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex.clamp(0, _pages.length - 1);
-    _pageController = PageController(initialPage: _selectedIndex);
+    _loadedPages = List<bool>.filled(_pages.length, false);
+    _loadedPages[_selectedIndex] = true;
     _getCurrentVersion().then((_) {
       _checkVersion();
     });
     checkAlert();
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
   }
 
   Future<void> _getCurrentVersion() async {
@@ -195,18 +190,11 @@ class _HomeviewPageState extends State<HomeviewPage>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     return Scaffold(
       extendBody: true,
-      body: PageView(
-        physics: const NeverScrollableScrollPhysics(),
-        controller: _pageController,
-        onPageChanged: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        children: _pages,
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: List.generate(_pages.length, _buildPageSlot),
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(18, 0, 18, 18),
@@ -249,19 +237,92 @@ class _HomeviewPageState extends State<HomeviewPage>
     );
   }
 
-  void _onTabChange(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
+  Widget _buildPageSlot(int index) {
+    if (!_loadedPages[index]) {
+      return const SizedBox.expand();
+    }
+
+    return RepaintBoundary(
+      child: _AnimatedTabPage(
+        isActive: _selectedIndex == index,
+        animationSeed: _tabAnimationSeed,
+        child: KeyedSubtree(
+          key: PageStorageKey<String>('home-tab-$index'),
+          child: _pages[index],
+        ),
+      ),
     );
   }
 
+  void _onTabChange(int index) {
+    if (_selectedIndex == index) {
+      return;
+    }
+
+    setState(() {
+      _selectedIndex = index;
+      _loadedPages[index] = true;
+      _tabAnimationSeed++;
+    });
+  }
+}
+
+class _AnimatedTabPage extends StatefulWidget {
+  const _AnimatedTabPage({
+    required this.child,
+    required this.isActive,
+    required this.animationSeed,
+  });
+
+  final Widget child;
+  final bool isActive;
+  final int animationSeed;
+
   @override
-  bool get wantKeepAlive => true;
+  State<_AnimatedTabPage> createState() => _AnimatedTabPageState();
+}
+
+class _AnimatedTabPageState extends State<_AnimatedTabPage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 150),
+    value: 1,
+  );
+  late final CurvedAnimation _curve = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(0, 0.018),
+    end: Offset.zero,
+  ).animate(_curve);
+
+  @override
+  void didUpdateWidget(covariant _AnimatedTabPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && widget.animationSeed != oldWidget.animationSeed) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isActive) {
+      return widget.child;
+    }
+
+    return FadeTransition(
+      opacity: _curve,
+      child: SlideTransition(position: _slide, child: widget.child),
+    );
+  }
 }
 
 class _NavItem extends StatelessWidget {
@@ -282,69 +343,99 @@ class _NavItem extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient:
-            isSelected
-                ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.72),
-                    colorScheme.primary.withValues(alpha: 0.30),
-                  ],
-                )
-                : null,
-        color:
-            isSelected
-                ? null
-                : Colors.white.withValues(
-                  alpha: theme.brightness == Brightness.dark ? 0.04 : 0.12,
-                ),
-        border: Border.all(
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      scale: isSelected ? 1 : 0.985,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient:
+              isSelected
+                  ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.72),
+                      colorScheme.primary.withValues(alpha: 0.30),
+                    ],
+                  )
+                  : null,
           color:
               isSelected
-                  ? Colors.white.withValues(alpha: 0.72)
-                  : Colors.white.withValues(alpha: 0.18),
+                  ? null
+                  : Colors.white.withValues(
+                    alpha: theme.brightness == Brightness.dark ? 0.04 : 0.12,
+                  ),
+          border: Border.all(
+            color:
+                isSelected
+                    ? Colors.white.withValues(alpha: 0.72)
+                    : Colors.white.withValues(alpha: 0.18),
+          ),
         ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 20,
-                  color:
-                      isSelected
-                          ? colorScheme.primary
-                          : colorScheme.onSurfaceVariant,
-                ),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  child:
-                      isSelected
-                          ? Padding(
-                            padding: const EdgeInsets.only(left: 8),
-                            child: Text(
-                              label,
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: colorScheme.primary,
-                              ),
-                            ),
-                          )
-                          : const SizedBox.shrink(),
-                ),
-              ],
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedScale(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    scale: isSelected ? 1 : 0.94,
+                    child: Icon(
+                      icon,
+                      size: 20,
+                      color:
+                          isSelected
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 180),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, animation) {
+                        final offsetAnimation = Tween<Offset>(
+                          begin: const Offset(0.08, 0),
+                          end: Offset.zero,
+                        ).animate(animation);
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: offsetAnimation,
+                            child: child,
+                          ),
+                        );
+                      },
+                      child:
+                          isSelected
+                              ? Padding(
+                                key: ValueKey(label),
+                                padding: const EdgeInsets.only(left: 8),
+                                child: Text(
+                                  label,
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                              )
+                              : const SizedBox.shrink(key: ValueKey('empty')),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
