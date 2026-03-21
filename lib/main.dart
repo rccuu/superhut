@@ -9,10 +9,10 @@ import 'package:responsive_framework/responsive_framework.dart';
 import 'package:superhut/pages/score/jump_to_score_page.dart';
 import 'home/homeview/view.dart';
 import 'core/services/app_auth_storage.dart';
-import 'login/unified_login_page.dart';
 import 'pages/drink/view/view.dart';
 import 'pages/water/view.dart';
 import 'pages/Electricitybill/electricity_page.dart';
+import 'utils/course/coursemain.dart';
 
 abstract final class AppTheme {
   static const Color _brandBlue = Color(0xFF3B6EEA);
@@ -279,6 +279,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool _hasSession = false;
+  bool _hasLocalCourseCache = false;
   bool _isLoading = true;
   static const platform = MethodChannel(
     'com.superhut.rice.superhut/widget_actions',
@@ -334,20 +335,14 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _resolveStartupState() async {
     final storage = AppAuthStorage.instance;
-    final loginType = await storage.readLoginType();
-    final jwxtToken = await storage.readJwxtToken();
-    final hutToken = await storage.readHutToken();
-
-    final hasSession = switch (loginType) {
-      'jwxt' => jwxtToken.isNotEmpty,
-      'hut' => hutToken.isNotEmpty || jwxtToken.isNotEmpty,
-      _ => jwxtToken.isNotEmpty || hutToken.isNotEmpty,
-    };
+    final hasSession = await storage.hasAnyCampusSession();
+    final hasLocalCourseCache = (await loadClassFromLocal()).isNotEmpty;
     if (!mounted) {
       return;
     }
     setState(() {
       _hasSession = hasSession;
+      _hasLocalCourseCache = hasLocalCourseCache;
       _isLoading = false;
     });
   }
@@ -370,7 +365,9 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
-      home: _hasSession ? const HomeviewPage() : const UnifiedLoginPage(),
+      home: HomeviewPage(
+        initialIndex: _hasSession || _hasLocalCourseCache ? 0 : 1,
+      ),
       builder: (context, child) {
         return ResponsiveBreakpoints.builder(
           breakpoints: [

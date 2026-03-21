@@ -10,6 +10,7 @@ import 'package:superhut/pages/hutpages/hutmain.dart';
 import 'package:superhut/pages/water/view.dart';
 
 import '../../core/ui/apple_glass.dart';
+import '../../login/unified_login_page.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/token.dart';
 
@@ -37,16 +38,6 @@ class _FunctionPageState extends State<FunctionPage> {
     return _loadingFunctions.contains(functionId);
   }
 
-  void _showSnackBar(String message) {
-    if (!mounted) {
-      return;
-    }
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
   Future<void> _openProtectedPage({
     required String functionId,
     required Widget page,
@@ -56,7 +47,9 @@ class _FunctionPageState extends State<FunctionPage> {
       final isReady = await renewToken(context);
       if (!isReady || !mounted) {
         if (mounted) {
-          _showSnackBar('教务系统登录状态已失效，请重新登录后再试');
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => const UnifiedLoginPage()),
+          );
         }
         return;
       }
@@ -161,7 +154,7 @@ class _FunctionPageState extends State<FunctionPage> {
       ),
       _FunctionFeature(
         id: 'hut_main',
-        title: '工大平台',
+        title: '智慧工大',
         icon: Ionicons.phone_portrait_outline,
         accent: const Color(0xFFCC6D2C),
         onTap: () async {

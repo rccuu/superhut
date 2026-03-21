@@ -47,9 +47,9 @@ class _GetcoursepageState extends State<Getcoursepage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(widget.renew ? '课表已刷新' : '课表已加载')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(widget.renew ? '课表已刷新' : '课表已同步')));
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const HomeviewPage()),
       (route) => false,
@@ -83,15 +83,14 @@ class _GetcoursepageState extends State<Getcoursepage> {
           Text(
             _errorMessage ?? '发生未知错误',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(
-              onPressed: _loadClass,
-              child: const Text('重试'),
-            ),
+            child: FilledButton(onPressed: _loadClass, child: const Text('重试')),
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -121,8 +120,8 @@ class _GetcoursepageState extends State<Getcoursepage> {
                       size: 40,
                     ),
                     const SizedBox(height: 16),
-                    const Text('正在加载课表'),
-                    Text(widget.renew ? '正在刷新最新课表数据' : '首次使用需要加载课表'),
+                    Text(widget.renew ? '正在刷新课表' : '正在同步课表'),
+                    Text(widget.renew ? '正在获取最新课表数据' : '正在获取本地尚未同步的课表数据'),
                   ],
                 ),
               )

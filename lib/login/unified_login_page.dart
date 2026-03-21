@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:superhut/bridge/get_course_page.dart';
 import 'package:superhut/core/services/app_logger.dart';
 import 'package:superhut/generated/assets.dart';
+import 'package:superhut/home/homeview/view.dart';
 import 'package:superhut/login/hut_cas_login_page.dart';
 import 'package:superhut/login/webview_login_screen.dart';
 import 'package:superhut/utils/hut_user_api.dart';
@@ -57,6 +57,29 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     );
   }
 
+  void _finishLogin() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => const HomeviewPage(initialIndex: 0),
+      ),
+      (route) => false,
+    );
+  }
+
+  void _continueAsGuest() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(false);
+      return;
+    }
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => const HomeviewPage(initialIndex: 1),
+      ),
+      (route) => false,
+    );
+  }
+
   Future<bool> _tryOfficialJwxtLogin(String reason) async {
     _showSnackBar(reason);
 
@@ -97,7 +120,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
         password: password,
       );
       if (!isLoginSuccess) {
-        await _tryOfficialJwxtLogin('工大平台登录失败，正在切换到教务系统官方登录...');
+        await _tryOfficialJwxtLogin('智慧工大登录失败，正在切换到教务系统官方登录...');
         return;
       }
 
@@ -116,12 +139,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
       if (!mounted) {
         return;
       }
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => const Getcoursepage(renew: false),
-        ),
-      );
+      _finishLogin();
     } catch (error, stackTrace) {
       AppLogger.error(
         'Unified login failed unexpectedly',
@@ -174,7 +192,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '使用工大平台账号登录，快速进入课表与校园服务。',
+                            '登录后可按需同步课表；如果你只是想用慧生活798，也可以先不登录。',
                             style: theme.textTheme.bodyLarge?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -203,7 +221,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      '支持学号或手机号登录',
+                                      '支持智慧工大和教务系统账号登录',
                                       style: theme.textTheme.bodyMedium
                                           ?.copyWith(
                                             color: colorScheme.onSurfaceVariant,
@@ -264,9 +282,21 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                                       : const Text('登录并继续'),
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: _isLoading ? null : _continueAsGuest,
+                              child: Text(
+                                Navigator.of(context).canPop()
+                                    ? '暂不登录'
+                                    : '先逛功能',
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 14),
                           Text(
-                            '如工大平台不可用，将自动切换到教务系统官方页面。',
+                            '如智慧工大不可用，将自动切换到教务系统官方页面。课表同步改为在课表页手动触发。',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),

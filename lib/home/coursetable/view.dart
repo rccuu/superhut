@@ -6,9 +6,13 @@ import 'package:intl/intl.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../bridge/get_course_page.dart';
+import '../../core/services/app_auth_storage.dart';
 import '../../core/ui/apple_glass.dart';
+import '../../login/unified_login_page.dart';
 import '../../utils/course/get_course.dart';
 import '../../utils/course/coursemain.dart';
+import '../../utils/token.dart';
 import '../../widget_refresh_service.dart';
 import 'widgets/course_table_widgets.dart';
 
@@ -50,6 +54,8 @@ class _CourseTableViewState extends State<CourseTableView> {
   static const double _headerGap = 8;
   static const double _cardInnerGap = 2;
   late final Future<void> _initialLoadFuture;
+  bool _hasLinkedCampusAccount = false;
+  bool _isPrimaryActionLoading = false;
 
   // DateTime _currentDate = DateTime.now();
   DateTime _currentDate = getMondayOfCurrentWeek();
@@ -132,6 +138,8 @@ class _CourseTableViewState extends State<CourseTableView> {
     final currentWeek = _resolveCurrentWeek(firstDay);
     final showExperimentCourses =
         prefs.getBool(_showExperimentCoursesKey) ?? true;
+    final hasLinkedCampusAccount =
+        await AppAuthStorage.instance.hasLinkedCampusAccount();
     final courseData = await loadClassFromLocal();
     if (!mounted) {
       return;
@@ -142,6 +150,7 @@ class _CourseTableViewState extends State<CourseTableView> {
       _currentWeek = currentWeek;
       _currentRealWeek = currentWeek;
       _showExperimentCourses = showExperimentCourses;
+      _hasLinkedCampusAccount = hasLinkedCampusAccount;
       _courseData = courseData;
     });
   }
@@ -334,6 +343,139 @@ class _CourseTableViewState extends State<CourseTableView> {
                     }
                     : null,
           ),
+    );
+  }
+
+  Future<void> _openCampusLogin() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const UnifiedLoginPage()));
+  }
+
+  Future<void> _handlePrimaryAction() async {
+    if (_isPrimaryActionLoading) {
+      return;
+    }
+
+    if (!_hasLinkedCampusAccount) {
+      await _openCampusLogin();
+      return;
+    }
+
+    setState(() {
+      _isPrimaryActionLoading = true;
+    });
+
+    try {
+      final renewed = await renewToken(context);
+      if (!mounted) {
+        return;
+      }
+      if (!renewed) {
+        await _openCampusLogin();
+        return;
+      }
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const Getcoursepage(renew: true),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPrimaryActionLoading = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final accent =
+        _hasLinkedCampusAccount ? colorScheme.primary : colorScheme.secondary;
+    final title = _hasLinkedCampusAccount ? '课表暂未同步' : '课表功能需要登录后刷新查看';
+    final description =
+        _hasLinkedCampusAccount ? '点击下方按钮刷新后，即可查看课表。' : '登录校园账号后，即可刷新并查看课表。';
+    final actionLabel = _hasLinkedCampusAccount ? '刷新课表' : '登录校园账号';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: GlassPanel(
+            blur: 26,
+            borderRadius: BorderRadius.circular(34),
+            padding: const EdgeInsets.all(24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: isDark ? 0.14 : 0.82),
+                colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.15),
+                colorScheme.secondary.withValues(alpha: isDark ? 0.16 : 0.12),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                GlassIconBadge(
+                  icon:
+                      _hasLinkedCampusAccount
+                          ? Icons.calendar_month_rounded
+                          : Icons.lock_outline_rounded,
+                  tint: accent,
+                  size: 62,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  title,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    letterSpacing: -0.6,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  description,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed:
+                        _isPrimaryActionLoading ? null : _handlePrimaryAction,
+                    icon:
+                        _isPrimaryActionLoading
+                            ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : Icon(
+                              _hasLinkedCampusAccount
+                                  ? Icons.refresh_rounded
+                                  : Icons.login_rounded,
+                            ),
+                    label: Text(actionLabel),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -539,6 +681,10 @@ class _CourseTableViewState extends State<CourseTableView> {
             future: _initialLoadFuture,
             rememberFutureResult: true,
             whenDone: (_) {
+              if (_courseData.isEmpty) {
+                return _buildEmptyState(context);
+              }
+
               return Padding(
                 padding: const EdgeInsets.fromLTRB(8, 10, 8, 88),
                 child: Column(

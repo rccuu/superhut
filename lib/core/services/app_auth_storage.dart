@@ -25,6 +25,35 @@ class AppAuthStorage {
     return prefs.getBool('isFirstOpen') ?? true;
   }
 
+  Future<bool> hasAnyCampusSession() async {
+    final loginType = await readLoginType();
+    final jwxtToken = await readJwxtToken();
+    final hutToken = await readHutToken();
+
+    return switch (loginType) {
+      'jwxt' => jwxtToken.isNotEmpty,
+      'hut' => hutToken.isNotEmpty || jwxtToken.isNotEmpty,
+      _ => jwxtToken.isNotEmpty || hutToken.isNotEmpty,
+    };
+  }
+
+  Future<bool> hasLinkedCampusAccount() async {
+    final loginType = await readLoginType();
+    final jwxtToken = await readJwxtToken();
+    final hutToken = await readHutToken();
+    final jwxtUser = await readJwxtUsername();
+    final hutUser = await readHutUsername();
+
+    final hasJwxtAccount = jwxtToken.isNotEmpty || jwxtUser.isNotEmpty;
+    final hasHutAccount = hutToken.isNotEmpty || hutUser.isNotEmpty;
+
+    return switch (loginType) {
+      'jwxt' => hasJwxtAccount,
+      'hut' => hasHutAccount || hasJwxtAccount,
+      _ => hasJwxtAccount || hasHutAccount,
+    };
+  }
+
   Future<void> saveJwxtSession({
     required String token,
     String cookie = '',

@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import '../bridge/get_course_page.dart';
 import '../core/services/app_auth_storage.dart';
+import '../home/homeview/view.dart';
 import '../utils/token.dart';
 
 class WebViewLoginScreen extends StatefulWidget {
@@ -86,7 +86,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
     }
     navigator.pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (context) => const Getcoursepage(renew: false),
+        builder: (context) => const HomeviewPage(initialIndex: 0),
       ),
       (route) => false,
     );
