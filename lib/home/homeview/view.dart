@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,10 +12,11 @@ import '../../core/services/app_update_service.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../pages/Electricitybill/electricity_api.dart';
 import '../../pages/Electricitybill/electricity_page.dart';
-import 'logic.dart';
 
 class HomeviewPage extends StatefulWidget {
-  const HomeviewPage({super.key});
+  const HomeviewPage({super.key, this.initialIndex = 0});
+
+  final int initialIndex;
 
   @override
   State<HomeviewPage> createState() => _HomeviewPageState();
@@ -26,16 +26,24 @@ class _HomeviewPageState extends State<HomeviewPage>
     with AutomaticKeepAliveClientMixin {
   static const _pages = [CourseTableView(), FunctionPage(), UserPage()];
   String _currentVersion = '0.0.1'; // 默认版本号
-  final HomeviewLogic _logic = Get.put(HomeviewLogic());
-  int _selectedIndex = 0;
+  late final PageController _pageController;
+  late int _selectedIndex;
 
   @override
   void initState() {
     super.initState();
+    _selectedIndex = widget.initialIndex.clamp(0, _pages.length - 1);
+    _pageController = PageController(initialPage: _selectedIndex);
     _getCurrentVersion().then((_) {
       _checkVersion();
     });
     checkAlert();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _getCurrentVersion() async {
@@ -192,7 +200,7 @@ class _HomeviewPageState extends State<HomeviewPage>
       extendBody: true,
       body: PageView(
         physics: const NeverScrollableScrollPhysics(),
-        controller: _logic.homePageController,
+        controller: _pageController,
         onPageChanged: (index) {
           setState(() {
             _selectedIndex = index;
@@ -245,7 +253,7 @@ class _HomeviewPageState extends State<HomeviewPage>
     setState(() {
       _selectedIndex = index;
     });
-    _logic.homePageController.animateToPage(
+    _pageController.animateToPage(
       index,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOutCubic,

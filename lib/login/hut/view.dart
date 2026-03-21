@@ -35,7 +35,7 @@ class _HutLoginPageState extends State<HutLoginPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "工大平台登录",
+                    "智慧工大登录",
                     style: TextStyle(
                       fontSize: 35,
                       fontWeight: FontWeight.bold,
@@ -43,7 +43,7 @@ class _HutLoginPageState extends State<HutLoginPage> {
                     ),
                   ),
                   Text(
-                    "使用工大平台账号继续",
+                    "使用智慧工大账号继续",
                     style: TextStyle(
                       // fontSize: 35,
                       fontWeight: FontWeight.bold,

@@ -1,7 +1,7 @@
 // token_display_page.dart
 import 'package:flutter/material.dart';
 
-import '../bridge/get_course_page.dart';
+import '../home/homeview/view.dart';
 import '../utils/token.dart';
 
 class TokenDisplayPage extends StatefulWidget {
@@ -23,8 +23,11 @@ class _TokenDisplayPageState extends State<TokenDisplayPage> {
       //  Navigator.pop(context,"200");
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (context) => Getcoursepage(renew: false)),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => const HomeviewPage(initialIndex: 0),
+          ),
+          (route) => false,
         );
       });
     }

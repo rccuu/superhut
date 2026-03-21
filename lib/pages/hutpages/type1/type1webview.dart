@@ -42,7 +42,7 @@ class _Type1WebviewState extends State<Type1Webview> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("工大平台")),
+      appBar: AppBar(title: Text("智慧工大")),
       body: EnhancedFutureBuilder(
         future: getDetail(),
         rememberFutureResult: true,
