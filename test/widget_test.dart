@@ -25,7 +25,7 @@ void main() {
             return <String, dynamic>{
               'appName': '工大盒子',
               'packageName': 'com.superhut.test',
-              'version': '1.3.0',
+              'version': '1.4.0',
               'buildNumber': '1',
               'buildSignature': '',
             };

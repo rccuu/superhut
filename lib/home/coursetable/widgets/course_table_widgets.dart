@@ -399,7 +399,7 @@ class CourseDetailSheet extends StatelessWidget {
         text: '复制课程信息为文本',
         onTap: () => copyValue(copyText, '已复制课程详情'),
       ),
-      if (course.isExp && onViewStudents != null)
+      if (course.isExp && course.pcid.isNotEmpty && onViewStudents != null)
         _CourseActionItem(
           icon: Ionicons.people_outline,
           text: '查看实验人员名单',

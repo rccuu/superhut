@@ -485,7 +485,7 @@ class _CourseTableViewState extends State<CourseTableView> {
             ),
             copyText: _buildCourseCopyText(placement),
             onViewStudents:
-                course.isExp
+                course.isExp && course.pcid.isNotEmpty
                     ? () {
                       Navigator.of(sheetContext).pop();
                       _showExpStudents(course.pcid);
@@ -1065,581 +1065,534 @@ class _CourseTableViewState extends State<CourseTableView> {
     final action = await showCupertinoModalBottomSheet<_ScheduleManagerAction>(
       context: context,
       expand: false,
-      builder:
-          (sheetContext) {
-            final theme = Theme.of(sheetContext);
-            final colorScheme = theme.colorScheme;
-            final sheetHeight = math.min(
-              MediaQuery.sizeOf(sheetContext).height * 0.82,
-              620.0,
-            );
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final colorScheme = theme.colorScheme;
+        final sheetHeight = math.min(
+          MediaQuery.sizeOf(sheetContext).height * 0.82,
+          620.0,
+        );
 
-            return Material(
-              color: Colors.transparent,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(34),
-                ),
-                child: AppGlassBackground(
-                  child: SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                      child: SizedBox(
-                        height: sheetHeight,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+        return Material(
+          color: Colors.transparent,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
+            child: AppGlassBackground(
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  child: SizedBox(
+                    height: sheetHeight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: colorScheme.outlineVariant,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
                           children: [
-                            Center(
-                              child: Container(
-                                width: 42,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.outlineVariant,
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                              ),
+                            GlassIconBadge(
+                              icon: Icons.layers_rounded,
+                              tint: colorScheme.primary,
+                              size: 46,
                             ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                GlassIconBadge(
-                                  icon: Icons.layers_rounded,
-                                  tint: colorScheme.primary,
-                                  size: 46,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '课表库',
-                                        style: theme.textTheme.titleLarge
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: -0.4,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '把自己的历史课表和朋友分享的课表都收进这里，切换、备份、分享都会更清楚。',
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 18),
+                            const SizedBox(width: 12),
                             Expanded(
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: FilledButton.icon(
-                                        style: FilledButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 18,
-                                            vertical: 16,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              18,
-                                            ),
-                                          ),
-                                        ),
-                                        onPressed:
-                                            () => Navigator.of(sheetContext).pop(
-                                              const _ScheduleManagerAction
-                                                  .syncMine(),
-                                            ),
-                                        icon: Icon(
-                                          _hasLinkedCampusAccount
-                                              ? Icons.cloud_download_rounded
-                                              : Icons.login_rounded,
-                                        ),
-                                        label: Text(
-                                          _hasLinkedCampusAccount
-                                              ? '从教务系统抓取课表'
-                                              : '登录后从教务系统抓取课表',
-                                        ),
-                                      ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '课表库',
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.4,
                                     ),
-                                    const SizedBox(height: 14),
-                                    _buildScheduleManagerSection(
-                                      sheetContext,
-                                      title: '导入到课表库',
-                                      description:
-                                          '把朋友分享的课表或你之前导出的课表保存下来，不登录也能用。',
-                                      icon: Icons.move_to_inbox_rounded,
-                                      accent: colorScheme.secondary,
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                        colors: [
-                                          Colors.white.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.14
-                                                    : 0.78,
-                                          ),
-                                          colorScheme.secondary.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.28
-                                                    : 0.20,
-                                          ),
-                                          colorScheme.tertiary.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.18
-                                                    : 0.16,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Wrap(
-                                        spacing: 10,
-                                        runSpacing: 10,
-                                        children: [
-                                          FilledButton.icon(
-                                            onPressed:
-                                                () => Navigator.of(
-                                                  sheetContext,
-                                                ).pop(
-                                                  const _ScheduleManagerAction
-                                                      .scanImport(),
-                                                ),
-                                            icon: const Icon(
-                                              Icons.qr_code_scanner_rounded,
-                                            ),
-                                            label: const Text('扫码导入'),
-                                          ),
-                                          FilledButton.icon(
-                                            onPressed:
-                                                () => Navigator.of(
-                                                  sheetContext,
-                                                ).pop(
-                                                  const _ScheduleManagerAction
-                                                      .clipboardImport(),
-                                                ),
-                                            icon: const Icon(
-                                              Icons.content_paste_rounded,
-                                            ),
-                                            label: const Text('从剪贴板导入'),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed:
-                                                () => Navigator.of(
-                                                  sheetContext,
-                                                ).pop(
-                                                  const _ScheduleManagerAction
-                                                      .fileImport(),
-                                                ),
-                                            icon: const Icon(
-                                              Icons.file_open_rounded,
-                                            ),
-                                            label: const Text('导入文件'),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed:
-                                                () => Navigator.of(
-                                                  sheetContext,
-                                                ).pop(
-                                                  const _ScheduleManagerAction
-                                                      .manualImport(),
-                                                ),
-                                            icon: const Icon(
-                                              Icons.edit_note_rounded,
-                                            ),
-                                            label: const Text('手动粘贴'),
-                                          ),
-                                        ],
-                                      ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '把自己的历史课表和朋友分享的课表都收进这里，切换、备份、分享都会更清楚。',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
                                     ),
-                                    const SizedBox(height: 14),
-                                    _buildScheduleManagerSection(
-                                      sheetContext,
-                                      title: '导出与分享当前课表',
-                                      description:
-                                          _activeSchedule == null
-                                              ? '当前还没有可导出的课表。'
-                                              : '把当前正在使用的课表复制、导出或分享给别人。',
-                                      icon: Icons.ios_share_rounded,
-                                      accent: colorScheme.primary,
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                        colors: [
-                                          Colors.white.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.13
-                                                    : 0.78,
-                                          ),
-                                          colorScheme.primary.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.30
-                                                    : 0.22,
-                                          ),
-                                          colorScheme.tertiary.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.16
-                                                    : 0.14,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Wrap(
-                                        spacing: 10,
-                                        runSpacing: 10,
-                                        children: [
-                                          OutlinedButton.icon(
-                                            onPressed:
-                                                _activeSchedule == null
-                                                    ? null
-                                                    : () => Navigator.of(
-                                                      sheetContext,
-                                                    ).pop(
-                                                      const _ScheduleManagerAction
-                                                          .copyShareCode(),
-                                                    ),
-                                            icon: const Icon(
-                                              Icons.copy_all_rounded,
-                                            ),
-                                            label: const Text('复制分享码'),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed:
-                                                _activeSchedule == null
-                                                    ? null
-                                                    : () => Navigator.of(
-                                                      sheetContext,
-                                                    ).pop(
-                                                      const _ScheduleManagerAction
-                                                          .showQrCode(),
-                                                    ),
-                                            icon: const Icon(
-                                              Icons.qr_code_2_rounded,
-                                            ),
-                                            label: const Text('显示二维码'),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed:
-                                                _activeSchedule == null
-                                                    ? null
-                                                    : () => Navigator.of(
-                                                      sheetContext,
-                                                    ).pop(
-                                                      const _ScheduleManagerAction
-                                                          .exportFile(),
-                                                    ),
-                                            icon: const Icon(
-                                              Icons.download_rounded,
-                                            ),
-                                            label: const Text('导出文件'),
-                                          ),
-                                          OutlinedButton.icon(
-                                            onPressed:
-                                                _activeSchedule == null
-                                                    ? null
-                                                    : () => Navigator.of(
-                                                      sheetContext,
-                                                    ).pop(
-                                                      const _ScheduleManagerAction
-                                                          .shareFile(),
-                                                    ),
-                                            icon: const Icon(
-                                              Icons.share_rounded,
-                                            ),
-                                            label: const Text('分享文件'),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _buildScheduleManagerSection(
-                                      sheetContext,
-                                      title: '已保存课表',
-                                      description:
-                                          _savedSchedules.isEmpty
-                                              ? '还没有保存的课表。你可以登录同步自己的课表，或者导入朋友分享的课表。'
-                                              : '点击课表可切换当前显示，右上角可重命名或删除。',
-                                      icon: Icons.bookmarks_rounded,
-                                      accent: colorScheme.tertiary,
-                                      gradient: LinearGradient(
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                        colors: [
-                                          Colors.white.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.12
-                                                    : 0.72,
-                                          ),
-                                          colorScheme.tertiary.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.26
-                                                    : 0.18,
-                                          ),
-                                          colorScheme.surface.withValues(
-                                            alpha:
-                                                theme.brightness ==
-                                                        Brightness.dark
-                                                    ? 0.10
-                                                    : 0.36,
-                                          ),
-                                        ],
-                                      ),
-                                      child:
-                                          _savedSchedules.isEmpty
-                                              ? null
-                                              : Column(
-                                                children:
-                                                    _savedSchedules
-                                                        .asMap()
-                                                        .entries
-                                                        .map((entry) {
-                                                          final schedule =
-                                                              entry.value;
-                                                          final isActive =
-                                                              schedule.id ==
-                                                              _activeSchedule
-                                                                  ?.id;
-                                                          final badges =
-                                                              _scheduleBadges(
-                                                                schedule,
-                                                                isActive:
-                                                                    isActive,
-                                                              );
-                                                          final tileAccent =
-                                                              isActive
-                                                                  ? colorScheme
-                                                                      .primary
-                                                                  : schedule
-                                                                          .isReadOnly
-                                                                      ? colorScheme
-                                                                          .secondary
-                                                                      : colorScheme
-                                                                          .tertiary;
-                                                          return Padding(
-                                                            padding:
-                                                                EdgeInsets.only(
-                                                                  bottom:
-                                                                      entry.key ==
-                                                                              _savedSchedules.length -
-                                                                                  1
-                                                                          ? 0
-                                                                          : 8,
-                                                                ),
-                                                            child: GlassPanel(
-                                                              blur: 18,
-                                                              borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    18,
-                                                                  ),
-                                                              padding:
-                                                                  EdgeInsets.zero,
-                                                              gradient: LinearGradient(
-                                                                begin:
-                                                                    Alignment
-                                                                        .topLeft,
-                                                                end:
-                                                                    Alignment
-                                                                        .bottomRight,
-                                                                colors: [
-                                                                  Colors.white
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            theme.brightness == Brightness.dark
-                                                                                ? 0.08
-                                                                                : 0.64,
-                                                                      ),
-                                                                  tileAccent
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            theme.brightness == Brightness.dark
-                                                                                ? 0.18
-                                                                                : 0.12,
-                                                                      ),
-                                                                  colorScheme
-                                                                      .surface
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            theme.brightness == Brightness.dark
-                                                                                ? 0.12
-                                                                                : 0.28,
-                                                                      ),
-                                                                ],
-                                                              ),
-                                                              borderColor:
-                                                                  tileAccent
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            theme.brightness == Brightness.dark
-                                                                                ? 0.22
-                                                                                : 0.20,
-                                                                      ),
-                                                              child: ListTile(
-                                                                shape: RoundedRectangleBorder(
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        18,
-                                                                      ),
-                                                                ),
-                                                                title: Row(
-                                                                  children: [
-                                                                    Expanded(
-                                                                      child: Text(
-                                                                        schedule
-                                                                            .name,
-                                                                        maxLines:
-                                                                            1,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis,
-                                                                      ),
-                                                                    ),
-                                                                    if (badges
-                                                                        .isNotEmpty) ...[
-                                                                      const SizedBox(
-                                                                        width:
-                                                                            8,
-                                                                      ),
-                                                                      Wrap(
-                                                                        spacing:
-                                                                            6,
-                                                                        runSpacing:
-                                                                            4,
-                                                                        children:
-                                                                            badges
-                                                                                .map(
-                                                                                  (
-                                                                                    badge,
-                                                                                  ) => _ScheduleBadge(
-                                                                                    label: badge,
-                                                                                  ),
-                                                                                )
-                                                                                .toList(),
-                                                                      ),
-                                                                    ],
-                                                                  ],
-                                                                ),
-                                                                subtitle: Text(
-                                                                  _buildScheduleListSubtitle(
-                                                                    schedule,
-                                                                  ),
-                                                                  maxLines: 2,
-                                                                  overflow:
-                                                                      TextOverflow
-                                                                          .ellipsis,
-                                                                ),
-                                                                leading: Icon(
-                                                                  isActive
-                                                                      ? Icons
-                                                                          .check_circle_rounded
-                                                                      : Icons
-                                                                          .calendar_month_rounded,
-                                                                  color:
-                                                                      tileAccent,
-                                                                ),
-                                                                trailing: PopupMenuButton<
-                                                                  String
-                                                                >(
-                                                                  tooltip:
-                                                                      '课表操作',
-                                                                  onSelected: (
-                                                                    value,
-                                                                  ) {
-                                                                    switch (
-                                                                      value
-                                                                    ) {
-                                                                      case 'rename':
-                                                                        Navigator.of(
-                                                                          sheetContext,
-                                                                        ).pop(
-                                                                          _ScheduleManagerAction.rename(
-                                                                            schedule,
-                                                                          ),
-                                                                        );
-                                                                        break;
-                                                                      case 'delete':
-                                                                        Navigator.of(
-                                                                          sheetContext,
-                                                                        ).pop(
-                                                                          _ScheduleManagerAction.delete(
-                                                                            schedule,
-                                                                          ),
-                                                                        );
-                                                                        break;
-                                                                    }
-                                                                  },
-                                                                  itemBuilder:
-                                                                      (
-                                                                        context,
-                                                                      ) => const [
-                                                                        PopupMenuItem(
-                                                                          value:
-                                                                              'rename',
-                                                                          child:
-                                                                              Text(
-                                                                                '重命名',
-                                                                              ),
-                                                                        ),
-                                                                        PopupMenuItem(
-                                                                          value:
-                                                                              'delete',
-                                                                          child:
-                                                                              Text(
-                                                                                '删除',
-                                                                              ),
-                                                                        ),
-                                                                      ],
-                                                                ),
-                                                                onTap:
-                                                                    () => Navigator.of(
-                                                                      sheetContext,
-                                                                    ).pop(
-                                                                      _ScheduleManagerAction.switchSchedule(
-                                                                        schedule,
-                                                                      ),
-                                                                    ),
-                                                              ),
-                                                            ),
-                                                          );
-                                                        })
-                                                        .toList(),
-                                              ),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 18),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 18,
+                                        vertical: 16,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                    ),
+                                    onPressed:
+                                        () => Navigator.of(sheetContext).pop(
+                                          const _ScheduleManagerAction.syncMine(),
+                                        ),
+                                    icon: Icon(
+                                      _hasLinkedCampusAccount
+                                          ? Icons.cloud_download_rounded
+                                          : Icons.login_rounded,
+                                    ),
+                                    label: Text(
+                                      _hasLinkedCampusAccount
+                                          ? '从教务系统抓取课表'
+                                          : '登录后从教务系统抓取课表',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _buildScheduleManagerSection(
+                                  sheetContext,
+                                  title: '导入到课表库',
+                                  description: '把朋友分享的课表或你之前导出的课表保存下来，不登录也能用。',
+                                  icon: Icons.move_to_inbox_rounded,
+                                  accent: colorScheme.secondary,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.14
+                                                : 0.78,
+                                      ),
+                                      colorScheme.secondary.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.28
+                                                : 0.20,
+                                      ),
+                                      colorScheme.tertiary.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.18
+                                                : 0.16,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Wrap(
+                                    spacing: 10,
+                                    runSpacing: 10,
+                                    children: [
+                                      FilledButton.icon(
+                                        onPressed:
+                                            () => Navigator.of(
+                                              sheetContext,
+                                            ).pop(
+                                              const _ScheduleManagerAction.scanImport(),
+                                            ),
+                                        icon: const Icon(
+                                          Icons.qr_code_scanner_rounded,
+                                        ),
+                                        label: const Text('扫码导入'),
+                                      ),
+                                      FilledButton.icon(
+                                        onPressed:
+                                            () => Navigator.of(
+                                              sheetContext,
+                                            ).pop(
+                                              const _ScheduleManagerAction.clipboardImport(),
+                                            ),
+                                        icon: const Icon(
+                                          Icons.content_paste_rounded,
+                                        ),
+                                        label: const Text('从剪贴板导入'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            () => Navigator.of(
+                                              sheetContext,
+                                            ).pop(
+                                              const _ScheduleManagerAction.fileImport(),
+                                            ),
+                                        icon: const Icon(
+                                          Icons.file_open_rounded,
+                                        ),
+                                        label: const Text('导入文件'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            () => Navigator.of(
+                                              sheetContext,
+                                            ).pop(
+                                              const _ScheduleManagerAction.manualImport(),
+                                            ),
+                                        icon: const Icon(
+                                          Icons.edit_note_rounded,
+                                        ),
+                                        label: const Text('手动粘贴'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _buildScheduleManagerSection(
+                                  sheetContext,
+                                  title: '导出与分享当前课表',
+                                  description:
+                                      _activeSchedule == null
+                                          ? '当前还没有可导出的课表。'
+                                          : '把当前正在使用的课表复制、导出或分享给别人。',
+                                  icon: Icons.ios_share_rounded,
+                                  accent: colorScheme.primary,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.13
+                                                : 0.78,
+                                      ),
+                                      colorScheme.primary.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.30
+                                                : 0.22,
+                                      ),
+                                      colorScheme.tertiary.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.16
+                                                : 0.14,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Wrap(
+                                    spacing: 10,
+                                    runSpacing: 10,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            _activeSchedule == null
+                                                ? null
+                                                : () => Navigator.of(
+                                                  sheetContext,
+                                                ).pop(
+                                                  const _ScheduleManagerAction.copyShareCode(),
+                                                ),
+                                        icon: const Icon(
+                                          Icons.copy_all_rounded,
+                                        ),
+                                        label: const Text('复制分享码'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            _activeSchedule == null
+                                                ? null
+                                                : () => Navigator.of(
+                                                  sheetContext,
+                                                ).pop(
+                                                  const _ScheduleManagerAction.showQrCode(),
+                                                ),
+                                        icon: const Icon(
+                                          Icons.qr_code_2_rounded,
+                                        ),
+                                        label: const Text('显示二维码'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            _activeSchedule == null
+                                                ? null
+                                                : () => Navigator.of(
+                                                  sheetContext,
+                                                ).pop(
+                                                  const _ScheduleManagerAction.exportFile(),
+                                                ),
+                                        icon: const Icon(
+                                          Icons.download_rounded,
+                                        ),
+                                        label: const Text('导出文件'),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed:
+                                            _activeSchedule == null
+                                                ? null
+                                                : () => Navigator.of(
+                                                  sheetContext,
+                                                ).pop(
+                                                  const _ScheduleManagerAction.shareFile(),
+                                                ),
+                                        icon: const Icon(Icons.share_rounded),
+                                        label: const Text('分享文件'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _buildScheduleManagerSection(
+                                  sheetContext,
+                                  title: '已保存课表',
+                                  description:
+                                      _savedSchedules.isEmpty
+                                          ? '还没有保存的课表。你可以登录同步自己的课表，或者导入朋友分享的课表。'
+                                          : '点击课表可切换当前显示，右上角可重命名或删除。',
+                                  icon: Icons.bookmarks_rounded,
+                                  accent: colorScheme.tertiary,
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.12
+                                                : 0.72,
+                                      ),
+                                      colorScheme.tertiary.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.26
+                                                : 0.18,
+                                      ),
+                                      colorScheme.surface.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.10
+                                                : 0.36,
+                                      ),
+                                    ],
+                                  ),
+                                  child:
+                                      _savedSchedules.isEmpty
+                                          ? null
+                                          : Column(
+                                            children:
+                                                _savedSchedules.asMap().entries.map((
+                                                  entry,
+                                                ) {
+                                                  final schedule = entry.value;
+                                                  final isActive =
+                                                      schedule.id ==
+                                                      _activeSchedule?.id;
+                                                  final badges =
+                                                      _scheduleBadges(
+                                                        schedule,
+                                                        isActive: isActive,
+                                                      );
+                                                  final tileAccent =
+                                                      isActive
+                                                          ? colorScheme.primary
+                                                          : schedule.isReadOnly
+                                                          ? colorScheme
+                                                              .secondary
+                                                          : colorScheme
+                                                              .tertiary;
+                                                  return Padding(
+                                                    padding: EdgeInsets.only(
+                                                      bottom:
+                                                          entry.key ==
+                                                                  _savedSchedules
+                                                                          .length -
+                                                                      1
+                                                              ? 0
+                                                              : 8,
+                                                    ),
+                                                    child: GlassPanel(
+                                                      blur: 18,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            18,
+                                                          ),
+                                                      padding: EdgeInsets.zero,
+                                                      gradient: LinearGradient(
+                                                        begin:
+                                                            Alignment.topLeft,
+                                                        end:
+                                                            Alignment
+                                                                .bottomRight,
+                                                        colors: [
+                                                          Colors.white.withValues(
+                                                            alpha:
+                                                                theme.brightness ==
+                                                                        Brightness
+                                                                            .dark
+                                                                    ? 0.08
+                                                                    : 0.64,
+                                                          ),
+                                                          tileAccent.withValues(
+                                                            alpha:
+                                                                theme.brightness ==
+                                                                        Brightness
+                                                                            .dark
+                                                                    ? 0.18
+                                                                    : 0.12,
+                                                          ),
+                                                          colorScheme.surface.withValues(
+                                                            alpha:
+                                                                theme.brightness ==
+                                                                        Brightness
+                                                                            .dark
+                                                                    ? 0.12
+                                                                    : 0.28,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      borderColor: tileAccent
+                                                          .withValues(
+                                                            alpha:
+                                                                theme.brightness ==
+                                                                        Brightness
+                                                                            .dark
+                                                                    ? 0.22
+                                                                    : 0.20,
+                                                          ),
+                                                      child: ListTile(
+                                                        shape: RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                18,
+                                                              ),
+                                                        ),
+                                                        title: Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child: Text(
+                                                                schedule.name,
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                              ),
+                                                            ),
+                                                            if (badges
+                                                                .isNotEmpty) ...[
+                                                              const SizedBox(
+                                                                width: 8,
+                                                              ),
+                                                              Wrap(
+                                                                spacing: 6,
+                                                                runSpacing: 4,
+                                                                children:
+                                                                    badges
+                                                                        .map(
+                                                                          (
+                                                                            badge,
+                                                                          ) => _ScheduleBadge(
+                                                                            label:
+                                                                                badge,
+                                                                          ),
+                                                                        )
+                                                                        .toList(),
+                                                              ),
+                                                            ],
+                                                          ],
+                                                        ),
+                                                        subtitle: Text(
+                                                          _buildScheduleListSubtitle(
+                                                            schedule,
+                                                          ),
+                                                          maxLines: 2,
+                                                          overflow:
+                                                              TextOverflow
+                                                                  .ellipsis,
+                                                        ),
+                                                        leading: Icon(
+                                                          isActive
+                                                              ? Icons
+                                                                  .check_circle_rounded
+                                                              : Icons
+                                                                  .calendar_month_rounded,
+                                                          color: tileAccent,
+                                                        ),
+                                                        trailing: PopupMenuButton<
+                                                          String
+                                                        >(
+                                                          tooltip: '课表操作',
+                                                          onSelected: (value) {
+                                                            switch (value) {
+                                                              case 'rename':
+                                                                Navigator.of(
+                                                                  sheetContext,
+                                                                ).pop(
+                                                                  _ScheduleManagerAction.rename(
+                                                                    schedule,
+                                                                  ),
+                                                                );
+                                                                break;
+                                                              case 'delete':
+                                                                Navigator.of(
+                                                                  sheetContext,
+                                                                ).pop(
+                                                                  _ScheduleManagerAction.delete(
+                                                                    schedule,
+                                                                  ),
+                                                                );
+                                                                break;
+                                                            }
+                                                          },
+                                                          itemBuilder:
+                                                              (
+                                                                context,
+                                                              ) => const [
+                                                                PopupMenuItem(
+                                                                  value:
+                                                                      'rename',
+                                                                  child: Text(
+                                                                    '重命名',
+                                                                  ),
+                                                                ),
+                                                                PopupMenuItem(
+                                                                  value:
+                                                                      'delete',
+                                                                  child: Text(
+                                                                    '删除',
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                        ),
+                                                        onTap:
+                                                            () => Navigator.of(
+                                                              sheetContext,
+                                                            ).pop(
+                                                              _ScheduleManagerAction.switchSchedule(
+                                                                schedule,
+                                                              ),
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                          ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-            );
-          },
+            ),
+          ),
+        );
+      },
     );
 
     if (action == null) {
@@ -1774,10 +1727,7 @@ class _CourseTableViewState extends State<CourseTableView> {
                 ),
               ],
             ),
-            if (child != null) ...[
-              const SizedBox(height: 14),
-              child,
-            ],
+            if (child != null) ...[const SizedBox(height: 14), child],
           ],
         ),
       ),
@@ -1795,8 +1745,7 @@ class _CourseTableViewState extends State<CourseTableView> {
         _hasLinkedCampusAccount
             ? '最推荐的方式是直接从教务系统抓取课表；也可以导入朋友分享的课表。'
             : '登录校园账号后可直接从教务系统抓取课表；不登录也能导入朋友分享的课表。';
-    final primaryLabel =
-        _hasLinkedCampusAccount ? '从教务系统抓取课表' : '登录后抓取课表';
+    final primaryLabel = _hasLinkedCampusAccount ? '从教务系统抓取课表' : '登录后抓取课表';
     const secondaryLabel = '从剪贴板导入';
 
     return Padding(
@@ -2698,8 +2647,7 @@ class _ScheduleCourseCard extends StatelessWidget {
         final compact = height < 44 || width < 38;
         final showLocation = course.location.trim().isNotEmpty;
         final showTeacher = course.teacherName.trim().isNotEmpty;
-        final detailLineCount =
-            (showLocation ? 1 : 0) + (showTeacher ? 1 : 0);
+        final detailLineCount = (showLocation ? 1 : 0) + (showTeacher ? 1 : 0);
         final titleBaseStyle =
             Theme.of(context).textTheme.bodySmall?.copyWith(
               color: palette.foreground.withValues(alpha: 0.88),
@@ -2716,7 +2664,8 @@ class _ScheduleCourseCard extends StatelessWidget {
         final horizontalPadding = compact ? 3.5 : 5.0;
         final topPadding = compact ? 3.5 : 5.0;
         final bottomPadding = compact ? 2.5 : 4.0;
-        final detailSpacing = detailLineCount == 0 ? 0.0 : (compact ? 1.0 : 2.0);
+        final detailSpacing =
+            detailLineCount == 0 ? 0.0 : (compact ? 1.0 : 2.0);
         final contentHeight = math.max(
           0.0,
           height - topPadding - bottomPadding,
@@ -2903,7 +2852,10 @@ class _AdaptiveCourseTitleText extends StatelessWidget {
         for (var index = 0; index < 9; index++) {
           final current = (low + high) / 2;
           final painter = TextPainter(
-            text: TextSpan(text: text, style: style.copyWith(fontSize: current)),
+            text: TextSpan(
+              text: text,
+              style: style.copyWith(fontSize: current),
+            ),
             textDirection: textDirection,
             maxLines: maxLines,
             ellipsis: '…',
@@ -3117,12 +3069,11 @@ class _ScheduleManagerAction {
   const _ScheduleManagerAction.syncMine()
     : this._(_ScheduleManagerActionType.syncMine);
 
-  factory _ScheduleManagerAction.switchSchedule(
-    SavedCourseSchedule schedule,
-  ) => _ScheduleManagerAction._(
-    _ScheduleManagerActionType.switchSchedule,
-    schedule: schedule,
-  );
+  factory _ScheduleManagerAction.switchSchedule(SavedCourseSchedule schedule) =>
+      _ScheduleManagerAction._(
+        _ScheduleManagerActionType.switchSchedule,
+        schedule: schedule,
+      );
 
   factory _ScheduleManagerAction.rename(SavedCourseSchedule schedule) =>
       _ScheduleManagerAction._(
