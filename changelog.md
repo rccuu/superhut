@@ -4,6 +4,7 @@
 - 每次代码提交后，都要同步补充本文件。
 - 每条记录至少包含：日期、提交哈希、提交标题、详细修改说明、关键文件、变更统计。
 - 记录口径以主线提交为准；如果一次提交覆盖多个模块，要按用户可感知的变化拆开写清楚，不只写一句标题。
+- 如果某条记录是在正式 `git commit` 之前先写入仓库，允许先把提交哈希记成 `待提交`；下一次维护本文件时，必须回填成真实哈希。
 
 统计范围
 - 起点提交（含）：`a123ed99fda436af7eef7f1ce7ca8f55750b60c5`
@@ -11,7 +12,17 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
-## 2026-03-22 · `待提交` · refactor(ui): polish floating tab bar and transparent bottom safe area
+## 2026-03-22 · `待提交` · chore(release): prepare v1.4.2
+- 作者：rccuu
+- 这是 `v1.4.2` 的发布准备提交，内容不是再去扩首页主结构，而是把这两天一直在反复打磨的底栏体验真正收口：一方面把版本号从 `1.4.0+1` 提升到 `1.4.2+1`，另一方面把底栏的点击热区、外圈阴影和视觉层次按最终确认的方向稳定下来。
+- 这次收尾的核心不是“再加一层更重的卡片效果”，而是明确把阴影限制在底栏边框外面。普通 `boxShadow` 对半透明玻璃胶囊会把中间也一起压暗，看起来像阴影跑进了选项框内部；为了解决这个问题，`lib/home/homeview/view.dart` 新增了 `_OuterOnlyShadowPainter` 和 `_OuterShadowLayer`，改成先画黑色模糊阴影，再把胶囊本体区域挖空，最后只留下外圈那一层更像真实投影的 halo。
+- 为了让这种“只保留外圈阴影”的做法能精确落到底栏，而不影响其他玻璃卡片，`lib/core/ui/apple_glass.dart` 里的 `GlassPanel` 新增了可选 `boxShadow` 参数。首页底栏实例显式传入 `boxShadow: const []`，关闭组件默认阴影，让真正的阴影只来自外面那层自定义 painter；其他继续复用 `GlassPanel` 的页面则保持原先默认行为，不会被这次一起改坏。
+- 底栏交互本身这次也一起定稿。`lib/home/homeview/view.dart` 保留 `GNav/GButton` 的视觉内容，但在其上覆盖三等分的透明点击层，每一段都能直接切到对应 tab，不再要求用户必须精确点中图标或文字。与此同时，热区相关的 widget 测试也同步更新成点击 `home-hit-zone-*`，并额外验证“点左侧热区能切回课表页”，保证后续不会回退成只能点中图标的小热区。
+- 这轮阴影参数最后又收了两次，目标是让底部投影更像正前方打光下沿着胶囊边缘落下的一圈黑色阴影，而不是在底部散成一大片脏灰。最终保留的是更贴边、扩散更小、下沉更浅的双层外圈阴影。
+- 关键文件：`pubspec.yaml`、`lib/core/ui/apple_glass.dart`、`lib/home/homeview/view.dart`、`test/widget_test.dart`
+- 代码统计（当前工作区，含版本与测试更新，不含本次提交哈希回填）：5 files changed, 235 insertions(+), 50 deletions(-)
+
+## 2026-03-22 · `a82bed5` · refactor(ui): polish floating tab bar and transparent bottom safe area
 - 作者：rccuu
 - 这次提交继续收尾首页底栏体验，重点不是再加一层“尾巴”，而是把底栏下方的安全区透明区真正打通，同时把底栏样式换成更简洁、更稳的胶囊导航实现。
 - `lib/home/homeview/view.dart` 里原先自绘的 `Ionicons` 底栏被替换成 `_ClassicTabBar + GNav/GButton`。底栏仍然保留悬浮胶囊形态，但交互改成更窄、更扁的主题色图标和文字切换；同时 `Scaffold.bottomNavigationBar` 改成 `Stack + Positioned(bottom: dockBottom)` 精确贴底布局，修正之前容易漂到中间、点按区域异常的布局问题。

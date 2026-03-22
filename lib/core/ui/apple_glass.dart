@@ -115,6 +115,7 @@ class GlassPanel extends StatelessWidget {
     this.tintColor,
     this.gradient,
     this.borderColor,
+    this.boxShadow,
     this.onTap,
     this.useBackdropFilter = true,
   });
@@ -127,6 +128,7 @@ class GlassPanel extends StatelessWidget {
   final Color? tintColor;
   final Gradient? gradient;
   final Color? borderColor;
+  final List<BoxShadow>? boxShadow;
   final VoidCallback? onTap;
   final bool useBackdropFilter;
 
@@ -162,13 +164,15 @@ class GlassPanel extends StatelessWidget {
         color:
             borderColor ?? Colors.white.withValues(alpha: isDark ? 0.14 : 0.62),
       ),
-      boxShadow: [
-        BoxShadow(
-          color: colorScheme.shadow.withValues(alpha: isDark ? 0.22 : 0.08),
-          blurRadius: effectiveShadowBlur,
-          offset: effectiveShadowOffset,
-        ),
-      ],
+      boxShadow:
+          boxShadow ??
+          [
+            BoxShadow(
+              color: colorScheme.shadow.withValues(alpha: isDark ? 0.22 : 0.08),
+              blurRadius: effectiveShadowBlur,
+              offset: effectiveShadowOffset,
+            ),
+          ],
     );
 
     final content =

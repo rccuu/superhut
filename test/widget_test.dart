@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:superhut/home/coursetable/view.dart';
 import 'package:superhut/home/homeview/view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/home/Functionpage/view.dart';
@@ -32,7 +33,7 @@ void main() {
             return <String, dynamic>{
               'appName': '工大盒子',
               'packageName': 'com.superhut.test',
-              'version': '1.4.0',
+              'version': '1.4.2',
               'buildNumber': '1',
               'buildSignature': '',
             };
@@ -67,7 +68,7 @@ void main() {
     expect(find.text('功能'), findsOneWidget);
     expect(find.byType(FunctionPage), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('home-tab-我的')));
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
     await tester.pumpAndSettle();
 
     expect(find.byType(UserPage), findsOneWidget);
@@ -89,7 +90,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('home-bottom-nav')), findsOneWidget);
-    expect(find.byKey(const ValueKey('home-tab-我的')), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-hit-zone-我的')), findsOneWidget);
 
     final navRect = tester.getRect(
       find.byKey(const ValueKey('home-bottom-nav')),
@@ -97,7 +98,22 @@ void main() {
     expect(navRect.center.dy, greaterThan(740));
     expect(navRect.bottom, lessThanOrEqualTo(844));
 
-    await tester.tap(find.byKey(const ValueKey('home-tab-我的')));
+    final leftHitZone = find.byKey(const ValueKey('home-hit-zone-课表'));
+    expect(leftHitZone, findsOneWidget);
+    final leftHitZoneRect = tester.getRect(leftHitZone);
+    expect(leftHitZoneRect.width, greaterThan(90));
+
+    await tester.tapAt(
+      Offset(
+        leftHitZoneRect.left + leftHitZoneRect.width * 0.18,
+        leftHitZoneRect.center.dy,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CourseTableView), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
     await tester.pumpAndSettle();
 
     expect(find.byType(UserPage), findsOneWidget);
