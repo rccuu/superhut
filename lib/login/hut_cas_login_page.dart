@@ -136,6 +136,8 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('统一认证登录'), leading: SizedBox()),
@@ -159,7 +161,7 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              Icon(Icons.error_outline, color: colorScheme.error, size: 48),
               const SizedBox(height: 16),
               Text(_errorMessage!, textAlign: TextAlign.center),
               const SizedBox(height: 24),
@@ -185,7 +187,10 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
       onError: (errorMessage) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: colorScheme.errorContainer,
+            ),
           );
         }
       },

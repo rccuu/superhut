@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/ui/color_scheme_ext.dart';
+
 class DrinkLoginShell extends StatelessWidget {
   const DrinkLoginShell({
     super.key,
@@ -15,6 +17,7 @@ class DrinkLoginShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final bool isDark = colorScheme.isDarkMode;
     final bool canPop = Navigator.of(context).canPop();
 
     return Scaffold(
@@ -26,11 +29,15 @@ class DrinkLoginShell extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              colorScheme.primary,
-              colorScheme.primary.withValues(alpha: 0.84),
+              isDark
+                  ? colorScheme.primaryContainer.withValues(alpha: 0.96)
+                  : colorScheme.primary,
+              isDark
+                  ? colorScheme.primary.withValues(alpha: 0.82)
+                  : colorScheme.primary.withValues(alpha: 0.84),
               colorScheme.surface,
             ],
-            stops: const [0.0, 0.22, 0.22],
+            stops: const [0.0, 0.20, 1.0],
           ),
         ),
         child: SafeArea(
@@ -47,15 +54,21 @@ class DrinkLoginShell extends StatelessWidget {
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
+                          color:
+                              isDark
+                                  ? colorScheme.onPrimary.withValues(
+                                    alpha: 0.12,
+                                  )
+                                  : Colors.white.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: IconButton(
                           tooltip: '返回',
                           onPressed: () => Navigator.maybePop(context),
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.arrow_back_rounded,
-                            color: Colors.white,
+                            color:
+                                isDark ? colorScheme.onPrimary : Colors.white,
                             size: 20,
                           ),
                         ),
@@ -67,12 +80,18 @@ class DrinkLoginShell extends StatelessWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.18),
+                            color:
+                                isDark
+                                    ? colorScheme.onPrimary.withValues(
+                                      alpha: 0.12,
+                                    )
+                                    : Colors.white.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.water_drop_rounded,
-                            color: Colors.white,
+                            color:
+                                isDark ? colorScheme.onPrimary : Colors.white,
                             size: 24,
                           ),
                         ),
@@ -83,10 +102,13 @@ class DrinkLoginShell extends StatelessWidget {
                             children: [
                               Text(
                                 headerTitle,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.white,
+                                  color:
+                                      isDark
+                                          ? colorScheme.onPrimary
+                                          : Colors.white,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -95,7 +117,12 @@ class DrinkLoginShell extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 13,
                                   height: 1.35,
-                                  color: Colors.white.withValues(alpha: 0.9),
+                                  color:
+                                      isDark
+                                          ? colorScheme.onPrimary.withValues(
+                                            alpha: 0.82,
+                                          )
+                                          : Colors.white.withValues(alpha: 0.9),
                                 ),
                               ),
                             ],
@@ -110,7 +137,10 @@ class DrinkLoginShell extends StatelessWidget {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: colorScheme.surface,
+                    color:
+                        isDark
+                            ? colorScheme.surfaceContainerLow
+                            : colorScheme.surface,
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(24),
                       topRight: Radius.circular(24),

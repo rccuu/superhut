@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../../core/ui/color_scheme_ext.dart';
+
 class WaterBackground extends StatelessWidget {
   const WaterBackground({super.key, required this.waterStatus});
 
@@ -11,18 +13,22 @@ class WaterBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final Color accent = colorScheme.warning;
+    final Color warmSurface = colorScheme.warningContainerSoft;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 800),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
           colors: [
-            Colors.orange.withAlpha(60),
-            Colors.orange.withAlpha(70),
-            Colors.transparent,
+            accent.withValues(alpha: waterStatus ? 0.18 : 0.12),
+            warmSurface.withValues(alpha: waterStatus ? 0.34 : 0.18),
+            colorScheme.surface,
           ],
-          stops: waterStatus ? [0.0, 0.8, 1.0] : [0.0, 0.2, 1.0],
+          stops: waterStatus ? const [0.0, 0.42, 1.0] : const [0.0, 0.18, 1.0],
         ),
       ),
     );
@@ -36,12 +42,96 @@ class HotWaterStatusHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final bool isDark = colorScheme.isDarkMode;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
-      child: Text(
-        waterStatus ? '正在使用热水' : '未开启热水',
-        style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold),
+      margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors:
+              waterStatus
+                  ? [colorScheme.warning, colorScheme.error]
+                  : [
+                    colorScheme.surfaceContainerHigh.withValues(
+                      alpha: isDark ? 0.96 : 1,
+                    ),
+                    colorScheme.warningContainerSoft.withValues(
+                      alpha: isDark ? 0.72 : 1,
+                    ),
+                  ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color:
+              waterStatus
+                  ? colorScheme.onError.withValues(alpha: 0.12)
+                  : colorScheme.warning.withValues(alpha: isDark ? 0.26 : 0.14),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color:
+                waterStatus
+                    ? colorScheme.warning.withValues(alpha: 0.20)
+                    : colorScheme.warning.withValues(alpha: 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color:
+                  waterStatus
+                      ? colorScheme.onError.withValues(alpha: 0.14)
+                      : colorScheme.warning.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              waterStatus ? Ionicons.flame : Ionicons.water_outline,
+              color: waterStatus ? colorScheme.onError : colorScheme.warning,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  waterStatus ? '正在使用热水' : '准备洗澡',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color:
+                        waterStatus
+                            ? colorScheme.onError
+                            : colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  waterStatus ? '热水已开启，结束后记得及时关闭。' : '先确认设备状态，再开始本次热水使用。',
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color:
+                        waterStatus
+                            ? colorScheme.onError.withValues(alpha: 0.84)
+                            : colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -59,30 +149,97 @@ class HotWaterCurrentDeviceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final bool isDark = colorScheme.isDarkMode;
+    final borderRadius = BorderRadius.circular(22);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-      child: GestureDetector(
-        onTap: onTap,
-        child: SizedBox(
-          width: double.infinity,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('当前设备'),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    deviceName ?? '未选择设备',
-                    style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Icon(Icons.arrow_forward_ios, color: Colors.grey),
-                ],
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colorScheme.surfaceContainerHigh.withValues(
+                alpha: isDark ? 0.94 : 1,
+              ),
+              colorScheme.warningContainerSoft.withValues(
+                alpha: isDark ? 0.64 : 1,
               ),
             ],
+          ),
+          borderRadius: borderRadius,
+          border: Border.all(
+            color: colorScheme.warning.withValues(alpha: isDark ? 0.24 : 0.12),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.warning.withValues(
+                alpha: isDark ? 0.14 : 0.08,
+              ),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: borderRadius,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: borderRadius,
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '当前设备',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: colorScheme.warning.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            Ionicons.sparkles_outline,
+                            color: colorScheme.warning,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Text(
+                            deviceName ?? '未选择设备',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 18,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -106,13 +263,30 @@ class HotWaterControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     final isDisabled = isLoading || !deviceCheckComplete;
+    final Color startColor =
+        isDisabled
+            ? colorScheme.surfaceContainerHighest
+            : waterStatus
+            ? colorScheme.warning
+            : colorScheme.warning;
+    final Color endColor =
+        isDisabled
+            ? colorScheme.surfaceContainerHigh
+            : waterStatus
+            ? colorScheme.error
+            : colorScheme.tertiary;
+    final Color foreground =
+        isDisabled
+            ? colorScheme.onSurfaceVariant
+            : ThemeData.estimateBrightnessForColor(endColor) == Brightness.dark
+            ? Colors.white
+            : const Color(0xFF2D1B00);
     final shadowColor =
         isDisabled
-            ? Colors.grey.withAlpha(102)
-            : waterStatus
-            ? Colors.red.withAlpha(153)
-            : Colors.orange.withAlpha(102);
+            ? colorScheme.shadow.withValues(alpha: 0.18)
+            : endColor.withValues(alpha: 0.28);
 
     return GestureDetector(
       onTap: onTap,
@@ -125,31 +299,33 @@ class HotWaterControlButton extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors:
-                isDisabled
-                    ? [Colors.grey.shade300, Colors.grey.shade400]
-                    : waterStatus
-                    ? [Colors.orange.shade300, Colors.red.shade400]
-                    : [Colors.orange.shade200, Colors.orange.shade400],
+            colors: [startColor, endColor],
           ),
           boxShadow: [
             BoxShadow(color: shadowColor, blurRadius: 15, spreadRadius: 5),
           ],
+          border: Border.all(
+            color:
+                isDisabled
+                    ? colorScheme.outlineVariant.withValues(alpha: 0.72)
+                    : foreground.withValues(alpha: 0.12),
+          ),
         ),
         child: Center(
           child:
               isLoading
                   ? _ProgressIndicator(
                     icon: waterStatus ? Icons.stop : Icons.play_arrow,
+                    color: foreground,
                   )
                   : !deviceCheckComplete
-                  ? const _ProgressIndicator(icon: Icons.search)
+                  ? _ProgressIndicator(icon: Icons.search, color: foreground)
                   : Text(
                     waterStatus ? '关闭' : '开启',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: foreground,
                     ),
                   ),
         ),
@@ -159,9 +335,10 @@ class HotWaterControlButton extends StatelessWidget {
 }
 
 class _ProgressIndicator extends StatelessWidget {
-  const _ProgressIndicator({required this.icon});
+  const _ProgressIndicator({required this.icon, required this.color});
 
   final IconData icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -171,12 +348,9 @@ class _ProgressIndicator extends StatelessWidget {
         const SizedBox(
           width: 60,
           height: 60,
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            strokeWidth: 4,
-          ),
+          child: CircularProgressIndicator(strokeWidth: 4),
         ),
-        Icon(icon, color: Colors.white, size: 30),
+        Icon(icon, color: color, size: 30),
       ],
     );
   }
@@ -194,6 +368,8 @@ class HotWaterBalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       elevation: 0,
       color: Colors.transparent,
@@ -203,31 +379,33 @@ class HotWaterBalanceCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: Colors.white.withAlpha(20),
+          color: colorScheme.floatingSurface,
+          border: Border.all(color: colorScheme.subtleBorder),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.account_balance_wallet,
-                  color: Colors.orange,
+                  color: colorScheme.warning,
                   size: 28,
                 ),
                 const SizedBox(width: 12),
                 Text(
                   '校园卡余额: ¥$balance',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
                   ),
                 ),
               ],
             ),
             IconButton(
               icon: const Icon(Icons.arrow_forward_ios, size: 16),
-              color: Colors.grey,
+              color: colorScheme.onSurfaceVariant,
               onPressed: () {
                 onTap();
               },
@@ -255,6 +433,8 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return WaterBottomSheetScaffold(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -265,16 +445,20 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   '选择设备',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: onManageDevices,
-                  icon: const Icon(Icons.settings, color: Colors.orange),
-                  label: const Text(
+                  icon: Icon(Icons.settings, color: colorScheme.warning),
+                  label: Text(
                     '管理设备',
-                    style: TextStyle(color: Colors.orange),
+                    style: TextStyle(color: colorScheme.warning),
                   ),
                 ),
               ],
@@ -298,16 +482,27 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
                   final Map<String, dynamic> device = Map<String, dynamic>.from(
                     devices[index] as Map,
                   );
+                  final bool isSelected = selectedIndex == index;
                   return ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    tileColor:
+                        isSelected
+                            ? colorScheme.warningContainerSoft
+                            : colorScheme.surfaceContainer,
                     title: Text(
                       device['posname']?.toString() ?? '未知设备',
-                      style: const TextStyle(fontSize: 20),
+                      style: TextStyle(
+                        fontSize: 20,
+                        color: colorScheme.onSurface,
+                      ),
                     ),
                     trailing:
-                        selectedIndex == index
-                            ? const Icon(
+                        isSelected
+                            ? Icon(
                               Ionicons.checkmark_circle,
-                              color: Colors.orange,
+                              color: colorScheme.warning,
                             )
                             : null,
                     onTap: () => onSelectDevice(index),
@@ -335,6 +530,8 @@ class WaterDeviceManagementSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return WaterBottomSheetScaffold(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -345,19 +542,23 @@ class WaterDeviceManagementSheet extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   '设备管理',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
                 TextButton.icon(
                   onPressed: onAddDevice,
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.add_circle_outline,
-                    color: Colors.orange,
+                    color: colorScheme.warning,
                   ),
-                  label: const Text(
+                  label: Text(
                     '添加设备',
-                    style: TextStyle(color: Colors.orange),
+                    style: TextStyle(color: colorScheme.warning),
                   ),
                 ),
               ],
@@ -368,9 +569,13 @@ class WaterDeviceManagementSheet extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   '我的设备',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 if (devices.isEmpty)
@@ -394,12 +599,24 @@ class WaterDeviceManagementSheet extends StatelessWidget {
                         final deviceCode =
                             device['poscode']?.toString() ?? '未知设备号';
                         return ListTile(
-                          title: Text(deviceName),
-                          subtitle: Text('设备号: $deviceCode'),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          tileColor: colorScheme.surfaceContainer,
+                          title: Text(
+                            deviceName,
+                            style: TextStyle(color: colorScheme.onSurface),
+                          ),
+                          subtitle: Text(
+                            '设备号: $deviceCode',
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                           trailing: IconButton(
-                            icon: const Icon(
+                            icon: Icon(
                               Icons.delete_outline,
-                              color: Colors.red,
+                              color: colorScheme.error,
                             ),
                             onPressed: () => onDeleteDevice(index),
                           ),
@@ -463,6 +680,8 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return WaterBottomSheetScaffold(
       child: Padding(
         padding: EdgeInsets.only(
@@ -477,11 +696,12 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       '添加新设备',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                     IconButton(
@@ -491,9 +711,12 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
                   ],
                 ),
                 const SizedBox(height: 5),
-                const Text(
+                Text(
                   '请输入6位设备号码',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -502,31 +725,38 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
                     hintText: '输入6位设备号',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
                     ),
                     filled: true,
-                    fillColor: Colors.white.withAlpha(26),
+                    fillColor: colorScheme.surfaceContainer,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
-                    prefixIcon: const Icon(
+                    prefixIcon: Icon(
                       Icons.confirmation_number_outlined,
-                      color: Colors.orange,
+                      color: colorScheme.warning,
                     ),
                   ),
                   keyboardType: TextInputType.number,
                   maxLength: 6,
-                  style: const TextStyle(fontSize: 18),
+                  style: TextStyle(fontSize: 18, color: colorScheme.onSurface),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   height: 50,
-                  child: ElevatedButton(
+                  child: FilledButton(
                     onPressed: _handleSubmit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colorScheme.warning,
+                      foregroundColor:
+                          ThemeData.estimateBrightnessForColor(
+                                    colorScheme.warning,
+                                  ) ==
+                                  Brightness.dark
+                              ? Colors.white
+                              : const Color(0xFF2D1B00),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -536,12 +766,7 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
                             ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                             : const Text(
                               '添加设备',
@@ -556,29 +781,51 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(26),
+                      color: colorScheme.warningContainerSoft,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: colorScheme.warning.withValues(alpha: 0.16),
+                      ),
                     ),
-                    child: const Column(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.info_outline, color: Colors.orange),
-                            SizedBox(width: 8),
+                            Icon(
+                              Icons.info_outline,
+                              color: colorScheme.warning,
+                            ),
+                            const SizedBox(width: 8),
                             Text(
                               '温馨提示',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
+                                color: colorScheme.onWarningContainerSoft,
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: 8),
-                        Text('1. 设备号通常位于设备正门的显示屏中'),
-                        Text('2. 设备号为6位数字'),
-                        Text('3. 如无法添加，请联系学校管理员'),
+                        const SizedBox(height: 8),
+                        Text(
+                          '1. 设备号通常位于设备正门的显示屏中',
+                          style: TextStyle(
+                            color: colorScheme.onWarningContainerSoft,
+                          ),
+                        ),
+                        Text(
+                          '2. 设备号为6位数字',
+                          style: TextStyle(
+                            color: colorScheme.onWarningContainerSoft,
+                          ),
+                        ),
+                        Text(
+                          '3. 如无法添加，请联系学校管理员',
+                          style: TextStyle(
+                            color: colorScheme.onWarningContainerSoft,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -602,6 +849,7 @@ class WaterBottomSheetScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Theme.of(context).colorScheme.surface,
+      clipBehavior: Clip.antiAlias,
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(15),
         topRight: Radius.circular(15),
@@ -620,6 +868,10 @@ class WaterSheetHandle extends StatelessWidget {
       width: 40,
       height: 4,
       margin: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.outlineVariant,
+        borderRadius: BorderRadius.circular(2),
+      ),
     );
   }
 }
@@ -631,12 +883,14 @@ class _EmptyDeviceState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Center(
       child: Column(
         children: [
-          const Icon(Icons.hot_tub, size: 48, color: Colors.grey),
+          Icon(Icons.hot_tub, size: 48, color: colorScheme.onSurfaceVariant),
           const SizedBox(height: 10),
-          Text(message),
+          Text(message, style: TextStyle(color: colorScheme.onSurfaceVariant)),
         ],
       ),
     );

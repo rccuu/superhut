@@ -2,6 +2,7 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 
+import '../../core/ui/color_scheme_ext.dart';
 import 'commentary_api.dart';
 import 'commentary_question_page.dart';
 
@@ -29,8 +30,10 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('学生教评'),
         elevation: 0,
@@ -81,7 +84,7 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
                     }
                   },
                   child: Card.filled(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    color: colorScheme.surfaceContainer,
                     child: Padding(
                       padding: const EdgeInsets.all(10),
                       child: Flex(
@@ -98,8 +101,7 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
+                                    color: colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 5),
@@ -108,8 +110,7 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
                                   style: TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.normal,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
+                                    color: colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 10),
@@ -118,21 +119,28 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.normal,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
+                                    color: colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 5),
                                 Chip(
                                   label: Text(
                                     isSubmitted ? '已评教' : '未评教',
-                                    style: const TextStyle(color: Colors.white),
+                                    style: TextStyle(
+                                      color:
+                                          isSubmitted
+                                              ? colorScheme
+                                                  .onSuccessContainerSoft
+                                              : colorScheme.onErrorContainer,
+                                    ),
                                   ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(50),
                                   ),
                                   backgroundColor:
-                                      isSubmitted ? Colors.green : Colors.red,
+                                      isSubmitted
+                                          ? colorScheme.successContainerSoft
+                                          : colorScheme.errorContainer,
                                 ),
                               ],
                             ),
@@ -148,7 +156,7 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
         },
         whenNotDone: Center(
           child: LoadingAnimationWidget.inkDrop(
-            color: Theme.of(context).primaryColor,
+            color: colorScheme.primary,
             size: 40,
           ),
         ),

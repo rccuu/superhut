@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/login/hut/view.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
+import '../../core/ui/color_scheme_ext.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 import 'state.dart';
@@ -61,6 +62,36 @@ class FunctionHotWaterLogic extends GetxController {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  void _showStatusSnackBar(
+    String title,
+    String message, {
+    bool isError = false,
+    bool isWarning = false,
+  }) {
+    final context = Get.context;
+    final colorScheme = context != null ? Theme.of(context).colorScheme : null;
+    final backgroundColor =
+        isError
+            ? colorScheme?.errorContainer
+            : isWarning
+            ? colorScheme?.warningContainerSoft
+            : colorScheme?.successContainerSoft;
+    final textColor =
+        isError
+            ? colorScheme?.onErrorContainer
+            : isWarning
+            ? colorScheme?.onWarningContainerSoft
+            : colorScheme?.onSuccessContainerSoft;
+
+    Get.snackbar(
+      title,
+      message,
+      backgroundColor: backgroundColor,
+      colorText: textColor,
+      margin: const EdgeInsets.only(top: 30, left: 50, right: 50),
+    );
   }
 
   @override
@@ -174,13 +205,7 @@ class FunctionHotWaterLogic extends GetxController {
             state.choiceDevice.value = state.deviceList.indexWhere(
               (element) => element["poscode"] == value.first,
             );
-            Get.snackbar(
-              '设备状态提醒',
-              '检测到有设备尚未关闭',
-              backgroundColor:
-                  Theme.of(Get.context!).colorScheme.primaryContainer,
-              margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-            );
+            _showStatusSnackBar('设备状态提醒', '检测到有设备尚未关闭', isWarning: true);
             update();
           }
 
@@ -213,35 +238,21 @@ class FunctionHotWaterLogic extends GetxController {
         .then((value) {
           state.isLoading.value = false;
           if (value['success'] && value['result'] == "000000") {
-            Get.snackbar(
-              '操作成功',
-              '设备已开启',
-              backgroundColor:
-                  Theme.of(Get.context!).colorScheme.primaryContainer,
-              margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-            );
+            _showStatusSnackBar('操作成功', '设备已开启');
             state.waterStatus.value = true;
             update();
           } else {
-            Get.snackbar(
+            _showStatusSnackBar(
               '操作失败',
               '设备开启失败：${value['message']}',
-              backgroundColor:
-                  Theme.of(Get.context!).colorScheme.primaryContainer,
-              margin: EdgeInsets.only(top: 30, left: 50, right: 50),
+              isError: true,
             );
           }
           update();
         })
         .catchError((error) {
           state.isLoading.value = false;
-          Get.snackbar(
-            '操作失败',
-            '操作失败，请稍后重试',
-            backgroundColor:
-                Theme.of(Get.context!).colorScheme.primaryContainer,
-            margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-          );
+          _showStatusSnackBar('操作失败', '操作失败，请稍后重试', isError: true);
           update();
         });
   }
@@ -258,35 +269,17 @@ class FunctionHotWaterLogic extends GetxController {
         .then((value) {
           state.isLoading.value = false;
           if (value) {
-            Get.snackbar(
-              '操作成功',
-              '设备已关闭',
-              backgroundColor:
-                  Theme.of(Get.context!).colorScheme.primaryContainer,
-              margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-            );
+            _showStatusSnackBar('操作成功', '设备已关闭');
             state.waterStatus.value = false;
             update();
           } else {
-            Get.snackbar(
-              '操作失败',
-              '设备关闭失败，请稍后重试',
-              backgroundColor:
-                  Theme.of(Get.context!).colorScheme.primaryContainer,
-              margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-            );
+            _showStatusSnackBar('操作失败', '设备关闭失败，请稍后重试', isError: true);
           }
           update();
         })
         .catchError((error) {
           state.isLoading.value = false;
-          Get.snackbar(
-            '操作失败',
-            '操作失败，请稍后重试',
-            backgroundColor:
-                Theme.of(Get.context!).colorScheme.primaryContainer,
-            margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-          );
+          _showStatusSnackBar('操作失败', '操作失败，请稍后重试', isError: true);
           update();
         });
   }
@@ -295,32 +288,17 @@ class FunctionHotWaterLogic extends GetxController {
   /// [deviceCode] 6位设备号
   Future<bool> addDevice(String deviceCode) async {
     if (deviceCode.length != 6 || int.tryParse(deviceCode) == null) {
-      Get.snackbar(
-        '输入有误',
-        '设备号需为 6 位数字',
-        backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
-        margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-      );
+      _showStatusSnackBar('输入有误', '设备号需为 6 位数字', isWarning: true);
       return false;
     }
 
     return await hutUserApi.addWaterDevice(deviceCode).then((value) {
       if (value['result']) {
-        Get.snackbar(
-          '操作成功',
-          '设备添加成功',
-          backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
-          margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-        );
+        _showStatusSnackBar('操作成功', '设备添加成功');
         getDeviceList(); // 刷新设备列表
         return true;
       } else {
-        Get.snackbar(
-          '操作失败',
-          '添加设备失败：${value['msg']}',
-          backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
-          margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-        );
+        _showStatusSnackBar('操作失败', '添加设备失败：${value['msg']}', isError: true);
         return false;
       }
     });
@@ -331,24 +309,12 @@ class FunctionHotWaterLogic extends GetxController {
   Future<bool> deleteDevice(String deviceCode) async {
     return await hutUserApi.delWaterDevice(deviceCode).then((value) {
       if (value['result']) {
-        //      print(value);
-        //   print("DEEEEEEEEEEEEE");
-        Get.snackbar(
-          '操作成功',
-          '设备删除成功',
-          backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
-          margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-        );
+        _showStatusSnackBar('操作成功', '设备删除成功');
         getDeviceList();
 
         return true;
       } else {
-        Get.snackbar(
-          '操作失败',
-          '删除设备失败：${value['msg']}',
-          backgroundColor: Theme.of(Get.context!).colorScheme.primaryContainer,
-          margin: EdgeInsets.only(top: 30, left: 50, right: 50),
-        );
+        _showStatusSnackBar('操作失败', '删除设备失败：${value['msg']}', isError: true);
         return false;
       }
     });

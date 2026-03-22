@@ -20,8 +20,10 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('学生教评'),
         elevation: 0,
@@ -53,7 +55,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
                     );
                   },
                   child: Card.filled(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    color: colorScheme.surfaceContainer,
                     child: Padding(
                       padding: const EdgeInsets.all(10),
                       child: Flex(
@@ -70,8 +72,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
+                                    color: colorScheme.onSurface,
                                   ),
                                 ),
                                 const SizedBox(height: 5),
@@ -80,9 +81,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
                                     Icon(
                                       Ionicons.location,
                                       size: 20,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withAlpha(100),
+                                      color: colorScheme.onSurfaceVariant,
                                     ),
                                     const SizedBox(width: 5),
                                     Text(
@@ -90,10 +89,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.normal,
-                                        color:
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
+                                        color: colorScheme.onSurface,
                                       ),
                                     ),
                                   ],
@@ -104,9 +100,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
                                     Icon(
                                       Ionicons.calendar,
                                       size: 20,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withAlpha(100),
+                                      color: colorScheme.onSurfaceVariant,
                                     ),
                                     const SizedBox(width: 5),
                                     Text(
@@ -114,10 +108,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.normal,
-                                        color:
-                                            Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
+                                        color: colorScheme.onSurface,
                                       ),
                                     ),
                                   ],
@@ -146,7 +137,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
         },
         whenNotDone: Center(
           child: LoadingAnimationWidget.inkDrop(
-            color: Theme.of(context).primaryColor,
+            color: colorScheme.primary,
             size: 40,
           ),
         ),

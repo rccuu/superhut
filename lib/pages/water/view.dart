@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/ui/color_scheme_ext.dart';
 import 'logic.dart';
 import 'widgets/water_page_widgets.dart';
 
@@ -107,9 +108,11 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
                   ),
                   TextButton(
                     onPressed: () => Navigator.of(dialogContext).pop(true),
-                    child: const Text(
+                    child: Text(
                       '确定',
-                      style: TextStyle(color: Colors.red),
+                      style: TextStyle(
+                        color: Theme.of(dialogContext).colorScheme.error,
+                      ),
                     ),
                   ),
                 ],
@@ -294,7 +297,7 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
               builder: (logic) {
                 return BubbleAnimation(
                   isActive: logic.state.waterStatus.value,
-                  color: Colors.orange,
+                  color: Theme.of(context).colorScheme.warning,
                 );
               },
             ),

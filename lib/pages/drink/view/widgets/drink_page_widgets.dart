@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
+import '../../../../core/ui/color_scheme_ext.dart';
+
 class DrinkBackground extends StatelessWidget {
   const DrinkBackground({super.key, required this.drinkStatus});
 
@@ -81,11 +83,19 @@ class DrinkStatusHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    const Color restingCardTop = Color(0xFFFFFFFF);
-    const Color restingCardBottom = Color(0xFFF2F8FF);
-    const Color restingText = Color(0xFF14324D);
-    const Color restingSubtleText = Color(0xFF5E748A);
-    final Color emphasisColor = drinkStatus ? Colors.white : restingText;
+    final bool isDark = colorScheme.isDarkMode;
+    final Color restingCardTop =
+        isDark
+            ? colorScheme.surfaceContainerHigh.withValues(alpha: 0.96)
+            : const Color(0xFFFFFFFF);
+    final Color restingCardBottom =
+        isDark
+            ? colorScheme.primaryContainer.withValues(alpha: 0.52)
+            : const Color(0xFFF2F8FF);
+    final Color restingText = colorScheme.onSurface;
+    final Color restingSubtleText = colorScheme.onSurfaceVariant;
+    final Color emphasisColor =
+        drinkStatus ? colorScheme.onPrimary : restingText;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 260),
@@ -95,11 +105,8 @@ class DrinkStatusHeader extends StatelessWidget {
         gradient: LinearGradient(
           colors:
               drinkStatus
-                  ? [
-                    colorScheme.primary,
-                    colorScheme.primary.withValues(alpha: 0.82),
-                  ]
-                  : const [restingCardTop, restingCardBottom],
+                  ? [colorScheme.primary, colorScheme.primaryContainer]
+                  : [restingCardTop, restingCardBottom],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -107,8 +114,8 @@ class DrinkStatusHeader extends StatelessWidget {
         border: Border.all(
           color:
               drinkStatus
-                  ? Colors.white.withValues(alpha: 0.18)
-                  : colorScheme.primary.withValues(alpha: 0.16),
+                  ? colorScheme.onPrimary.withValues(alpha: 0.14)
+                  : colorScheme.primary.withValues(alpha: isDark ? 0.28 : 0.16),
         ),
         boxShadow: [
           BoxShadow(
@@ -132,13 +139,14 @@ class DrinkStatusHeader extends StatelessWidget {
                 decoration: BoxDecoration(
                   color:
                       drinkStatus
-                          ? Colors.white.withValues(alpha: 0.18)
+                          ? colorScheme.onPrimary.withValues(alpha: 0.14)
                           : colorScheme.primary.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   drinkStatus ? Ionicons.water : Ionicons.water_outline,
-                  color: drinkStatus ? Colors.white : colorScheme.primary,
+                  color:
+                      drinkStatus ? colorScheme.onPrimary : colorScheme.primary,
                   size: 24,
                 ),
               ),
@@ -167,7 +175,7 @@ class DrinkStatusHeader extends StatelessWidget {
               height: 1.4,
               color:
                   drinkStatus
-                      ? Colors.white.withValues(alpha: 0.84)
+                      ? colorScheme.onPrimary.withValues(alpha: 0.84)
                       : restingSubtleText,
             ),
           ),
@@ -180,7 +188,7 @@ class DrinkStatusHeader extends StatelessWidget {
                   size: 16,
                   color:
                       drinkStatus
-                          ? Colors.white.withValues(alpha: 0.82)
+                          ? colorScheme.onPrimary.withValues(alpha: 0.82)
                           : restingSubtleText,
                 ),
                 const SizedBox(width: 6),
@@ -190,7 +198,7 @@ class DrinkStatusHeader extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: drinkStatus ? Colors.white : restingText,
+                      color: drinkStatus ? colorScheme.onPrimary : restingText,
                     ),
                   ),
                 ),
@@ -203,8 +211,10 @@ class DrinkStatusHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(99),
               child: LinearProgressIndicator(
                 minHeight: 6,
-                backgroundColor: Colors.white.withValues(alpha: 0.22),
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.22),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  colorScheme.onPrimary,
+                ),
               ),
             ),
           ],
@@ -229,109 +239,119 @@ class DrinkCurrentDeviceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    const Color cardTop = Color(0xFFFFFFFF);
-    const Color cardBottom = Color(0xFFF3F9FF);
-    const Color cardText = Color(0xFF14324D);
-    const Color cardSubtleText = Color(0xFF5E748A);
+    final bool isDark = colorScheme.isDarkMode;
+    final borderRadius = BorderRadius.circular(22);
+    final Color cardTop =
+        isDark
+            ? colorScheme.surfaceContainerHigh.withValues(alpha: 0.96)
+            : const Color(0xFFFFFFFF);
+    final Color cardBottom =
+        isDark
+            ? colorScheme.primaryContainer.withValues(alpha: 0.44)
+            : const Color(0xFFF3F9FF);
+    final Color cardText = colorScheme.onSurface;
+    final Color cardSubtleText = colorScheme.onSurfaceVariant;
 
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [cardTop, cardBottom],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: colorScheme.primary.withValues(alpha: 0.14),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: colorScheme.primary.withValues(alpha: 0.08),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
-              ),
-            ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [cardTop, cardBottom],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: borderRadius,
+        border: Border.all(
+          color: colorScheme.primary.withValues(alpha: isDark ? 0.26 : 0.14),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.primary.withValues(alpha: isDark ? 0.14 : 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      '当前设备',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: cardText,
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: borderRadius,
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        '当前设备',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: cardText,
+                        ),
                       ),
-                    ),
-                    const Spacer(),
-                    _DrinkInfoBadge(
-                      icon: Ionicons.layers_outline,
-                      label: '$deviceCount 台已收藏',
-                      highlight: false,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(12),
+                      const Spacer(),
+                      _DrinkInfoBadge(
+                        icon: Ionicons.layers_outline,
+                        label: '$deviceCount 台已收藏',
+                        highlight: false,
                       ),
-                      child: Icon(
-                        Ionicons.water_outline,
-                        color: colorScheme.primary,
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Ionicons.water_outline,
+                          color: colorScheme.primary,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            deviceName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: cardText,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              deviceName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: cardText,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            '点击切换设备或查看全部收藏设备',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: cardSubtleText,
+                            const SizedBox(height: 4),
+                            Text(
+                              '点击切换设备或查看全部收藏设备',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: cardSubtleText,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      size: 18,
-                      color: cardSubtleText,
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 18,
+                        color: cardSubtleText,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -446,7 +466,7 @@ class DrinkQuickActions extends StatelessWidget {
             label: const Text('添加设备'),
             style: FilledButton.styleFrom(
               backgroundColor: addBackground,
-              foregroundColor: Colors.white,
+              foregroundColor: colorScheme.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
@@ -479,7 +499,7 @@ class _DrinkInfoBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color:
             highlight
-                ? Colors.white.withValues(alpha: 0.16)
+                ? colorScheme.onPrimary.withValues(alpha: 0.16)
                 : colorScheme.primary.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(999),
       ),
@@ -489,7 +509,7 @@ class _DrinkInfoBadge extends StatelessWidget {
           Icon(
             icon,
             size: 14,
-            color: highlight ? Colors.white : colorScheme.primary,
+            color: highlight ? colorScheme.onPrimary : colorScheme.primary,
           ),
           const SizedBox(width: 6),
           Text(
@@ -497,7 +517,7 @@ class _DrinkInfoBadge extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: highlight ? Colors.white : colorScheme.primary,
+              color: highlight ? colorScheme.onPrimary : colorScheme.primary,
             ),
           ),
         ],
@@ -531,7 +551,7 @@ class DrinkActionButton extends StatelessWidget {
         ),
         style: FilledButton.styleFrom(
           backgroundColor: colorScheme.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: colorScheme.onPrimary,
           disabledBackgroundColor: colorScheme.surfaceContainerHighest,
           disabledForegroundColor: colorScheme.onSurfaceVariant,
           padding: const EdgeInsets.symmetric(vertical: 16),
@@ -557,6 +577,7 @@ class DrinkBottomSheetScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Theme.of(context).colorScheme.surface,
+      clipBehavior: Clip.antiAlias,
       borderRadius: const BorderRadius.only(
         topLeft: Radius.circular(15),
         topRight: Radius.circular(15),
@@ -731,6 +752,7 @@ class _DrinkSheetDeviceCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
       child: Material(
+        clipBehavior: Clip.antiAlias,
         color:
             selected
                 ? colorScheme.primary.withValues(alpha: 0.10)
@@ -950,9 +972,9 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
                           subtitle: 'ID: ${device['id']?.toString() ?? ''}',
                           trailing: IconButton(
                             tooltip: '删除设备',
-                            icon: const Icon(
+                            icon: Icon(
                               Ionicons.trash_outline,
-                              color: Colors.red,
+                              color: Theme.of(context).colorScheme.error,
                             ),
                             onPressed: () => onDeleteDevice(index),
                           ),
@@ -1038,7 +1060,7 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
               borderLength: 32,
               borderWidth: 4,
               cutOutSize: cutOutSize,
-              overlayColor: const Color.fromRGBO(0, 0, 0, 0.7),
+              overlayColor: colorScheme.overlayScrimStrong,
             ),
           ),
           SafeArea(
@@ -1078,10 +1100,7 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.82),
-                  ],
+                  colors: [Colors.transparent, colorScheme.overlayScrimStrong],
                 ),
               ),
               child: SafeArea(
@@ -1289,9 +1308,14 @@ class _DrinkScannerLinePainter extends CustomPainter {
 }
 
 class DrinkBubbleAnimation extends StatefulWidget {
-  const DrinkBubbleAnimation({super.key, required this.isActive});
+  const DrinkBubbleAnimation({
+    super.key,
+    required this.isActive,
+    required this.color,
+  });
 
   final bool isActive;
+  final Color color;
 
   @override
   State<DrinkBubbleAnimation> createState() => _DrinkBubbleAnimationState();
@@ -1383,6 +1407,7 @@ class _DrinkBubbleAnimationState extends State<DrinkBubbleAnimation> {
             _AnimatedDrinkBubble(
               key: ValueKey(bubble.id),
               bubble: bubble,
+              color: widget.color,
               onComplete: () => _markCompleted(bubble),
             ),
         ],
@@ -1412,10 +1437,12 @@ class _AnimatedDrinkBubble extends StatefulWidget {
   const _AnimatedDrinkBubble({
     super.key,
     required this.bubble,
+    required this.color,
     required this.onComplete,
   });
 
   final _DrinkBubbleData bubble;
+  final Color color;
   final VoidCallback onComplete;
 
   @override
@@ -1477,11 +1504,11 @@ class _AnimatedDrinkBubbleState extends State<_AnimatedDrinkBubble>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.blue.withAlpha(60),
-                    Colors.blue.withAlpha(120),
+                    widget.color.withAlpha(60),
+                    widget.color.withAlpha(120),
                   ],
                 ),
-                border: Border.all(color: Colors.blue.withAlpha(80), width: 1),
+                border: Border.all(color: widget.color.withAlpha(80), width: 1),
               ),
             ),
           ),

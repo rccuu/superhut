@@ -12,6 +12,26 @@ class FunctionDrinkLogic extends GetxController {
   final FunctionDrinkState state = FunctionDrinkState();
   final DrinkApi drinkApi = DrinkApi();
 
+  void _showErrorSnackBar(String title, String message) {
+    final context = Get.context;
+    final colorScheme = context != null ? Theme.of(context).colorScheme : null;
+
+    Get.snackbar(
+      title,
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: colorScheme?.errorContainer,
+      colorText: colorScheme?.onErrorContainer,
+      duration: const Duration(seconds: 3),
+      margin: const EdgeInsets.all(10),
+      borderRadius: 10,
+      icon: Icon(
+        Icons.error,
+        color: colorScheme?.onErrorContainer ?? Colors.white,
+      ),
+    );
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -95,17 +115,7 @@ class FunctionDrinkLogic extends GetxController {
         setChoiceDevice(0);
       }
     } catch (error) {
-      Get.snackbar(
-        '加载失败',
-        '设备列表获取失败，请稍后重试',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 3),
-        margin: const EdgeInsets.all(10),
-        borderRadius: 10,
-        icon: const Icon(Icons.error, color: Colors.white),
-      );
+      _showErrorSnackBar('加载失败', '设备列表获取失败，请稍后重试');
     } finally {
       state.isLoading.value = false;
       state.isRefreshing.value = false;
@@ -155,17 +165,7 @@ class FunctionDrinkLogic extends GetxController {
         }
       });
     } else {
-      Get.snackbar(
-        '操作失败',
-        '设备启动失败，请稍后重试',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        duration: Duration(seconds: 3),
-        margin: EdgeInsets.all(10),
-        borderRadius: 10,
-        icon: Icon(Icons.error, color: Colors.white),
-      );
+      _showErrorSnackBar('操作失败', '设备启动失败，请稍后重试');
     }
     update();
   }
@@ -179,17 +179,7 @@ class FunctionDrinkLogic extends GetxController {
       state.deviceStatusTimer?.cancel();
       state.drinkStatus.value = false;
     } else {
-      Get.snackbar(
-        '操作失败',
-        '结算失败，请稍后重试',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        duration: Duration(seconds: 3),
-        margin: EdgeInsets.all(10),
-        borderRadius: 10,
-        icon: Icon(Icons.error, color: Colors.white),
-      );
+      _showErrorSnackBar('操作失败', '结算失败，请稍后重试');
     }
     update();
   }

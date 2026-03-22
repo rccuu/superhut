@@ -99,11 +99,14 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
 
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.maybeOf(context);
+    final colorScheme = Theme.of(context).colorScheme;
     navigator.pop(false);
     messenger?.showSnackBar(
       SnackBar(
         content: Text('登录失败：$message'),
-        backgroundColor: Colors.red,
+        backgroundColor: colorScheme.errorContainer,
+        behavior: SnackBarBehavior.floating,
+        showCloseIcon: true,
         duration: const Duration(seconds: 3),
       ),
     );
