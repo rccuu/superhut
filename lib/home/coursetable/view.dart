@@ -2391,6 +2391,9 @@ class _CourseTableViewState extends State<CourseTableView> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        bottomHighlightOpacity: 0,
+        lightBottomColor: const Color(0xFFEAF0FA),
+        darkBottomColor: const Color(0xFF101826),
         child: SafeArea(
           bottom: false,
           child: EnhancedFutureBuilder(

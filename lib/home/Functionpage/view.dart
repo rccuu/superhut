@@ -168,7 +168,11 @@ class _FunctionPageState extends State<FunctionPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        bottomHighlightOpacity: 0,
+        lightBottomColor: const Color(0xFFEAF0FA),
+        darkBottomColor: const Color(0xFF101826),
         child: SafeArea(
+          bottom: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final double width = constraints.maxWidth;
@@ -182,7 +186,7 @@ class _FunctionPageState extends State<FunctionPage> {
                       : 1.04;
 
               return GridView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 88),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   mainAxisSpacing: 14,

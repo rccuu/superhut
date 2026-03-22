@@ -4,9 +4,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class AppGlassBackground extends StatelessWidget {
-  const AppGlassBackground({super.key, required this.child});
+  const AppGlassBackground({
+    super.key,
+    required this.child,
+    this.bottomHighlightOpacity = 1,
+    this.lightBottomColor,
+    this.darkBottomColor,
+  });
 
   final Widget child;
+  final double bottomHighlightOpacity;
+  final Color? lightBottomColor;
+  final Color? darkBottomColor;
 
   @override
   Widget build(BuildContext context) {
@@ -24,15 +33,15 @@ class AppGlassBackground extends StatelessWidget {
           end: Alignment.bottomCenter,
           colors:
               isDark
-                  ? const [
-                    Color(0xFF0A0F17),
-                    Color(0xFF101826),
-                    Color(0xFF0C111A),
+                  ? [
+                    const Color(0xFF0A0F17),
+                    const Color(0xFF101826),
+                    darkBottomColor ?? const Color(0xFF0C111A),
                   ]
-                  : const [
+                  : [
                     Color(0xFFF4F7FC),
                     Color(0xFFEAF0FA),
-                    Color(0xFFF8FAFD),
+                    lightBottomColor ?? const Color(0xFFF8FAFD),
                   ],
         ),
       ),
@@ -78,7 +87,11 @@ class AppGlassBackground extends StatelessWidget {
                   colors: [
                     Colors.white.withValues(alpha: isDark ? 0.03 : 0.14),
                     Colors.transparent,
-                    Colors.white.withValues(alpha: isDark ? 0.02 : 0.08),
+                    Colors.white.withValues(
+                      alpha:
+                          (isDark ? 0.02 : 0.08) *
+                          bottomHighlightOpacity.clamp(0.0, 1.0),
+                    ),
                   ],
                 ),
               ),
