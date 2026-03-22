@@ -1,5 +1,6 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:ionicons/ionicons.dart';
+import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/home/Functionpage/view.dart';
@@ -24,6 +25,11 @@ class HomeviewPage extends StatefulWidget {
 
 class _HomeviewPageState extends State<HomeviewPage> {
   static const _pages = [CourseTableView(), FunctionPage(), UserPage()];
+  static const _dockItems = [
+    _DockItemData(icon: CupertinoIcons.calendar, label: '课表'),
+    _DockItemData(icon: CupertinoIcons.square_grid_2x2, label: '功能'),
+    _DockItemData(icon: CupertinoIcons.person, label: '我的'),
+  ];
   String _currentVersion = '0.0.1'; // 默认版本号
   late int _selectedIndex;
   late final List<bool> _loadedPages;
@@ -190,49 +196,42 @@ class _HomeviewPageState extends State<HomeviewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final dockBottom = bottomInset > 12 ? bottomInset.toDouble() : 12.0;
+
     return Scaffold(
+      backgroundColor: Colors.transparent,
       extendBody: true,
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: List.generate(_pages.length, _buildPageSlot),
-      ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-        child: GlassPanel(
-          blur: 24,
-          borderRadius: BorderRadius.circular(32),
-          padding: const EdgeInsets.all(10),
-          child: Row(
-            children: [
-              Expanded(
-                child: _NavItem(
-                  icon: Ionicons.calendar_outline,
-                  label: '课表',
-                  isSelected: _selectedIndex == 0,
-                  onTap: () => _onTabChange(0),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _NavItem(
-                  icon: Ionicons.apps_outline,
-                  label: '功能',
-                  isSelected: _selectedIndex == 1,
-                  onTap: () => _onTabChange(1),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _NavItem(
-                  icon: Ionicons.person_outline,
-                  label: '我的',
-                  isSelected: _selectedIndex == 2,
-                  onTap: () => _onTabChange(2),
-                ),
-              ),
-            ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          IndexedStack(
+            sizing: StackFit.expand,
+            index: _selectedIndex,
+            children: List.generate(_pages.length, _buildPageSlot),
           ),
-        ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: dockBottom,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              heightFactor: 1,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 390),
+                  child: _ClassicTabBar(
+                    key: const ValueKey<String>('home-bottom-nav'),
+                    items: _dockItems,
+                    selectedIndex: _selectedIndex,
+                    onSelected: _onTabChange,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -265,6 +264,13 @@ class _HomeviewPageState extends State<HomeviewPage> {
       _tabAnimationSeed++;
     });
   }
+}
+
+class _DockItemData {
+  const _DockItemData({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
 }
 
 class _AnimatedTabPage extends StatefulWidget {
@@ -325,119 +331,77 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
   }
 }
 
-class _NavItem extends StatelessWidget {
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
+class _ClassicTabBar extends StatelessWidget {
+  const _ClassicTabBar({
+    super.key,
+    required this.items,
+    required this.selectedIndex,
+    required this.onSelected,
   });
 
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
+  final List<_DockItemData> items;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final panelGradient = LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: [
+        Colors.white.withValues(alpha: isDark ? 0.16 : 0.28),
+        colorScheme.surface.withValues(alpha: isDark ? 0.14 : 0.22),
+        Colors.white.withValues(alpha: isDark ? 0.16 : 0.28),
+      ],
+      stops: const [0, 0.5, 1],
+    );
+    final activeBackground = colorScheme.primary.withValues(
+      alpha: isDark ? 0.22 : 0.12,
+    );
+    final panelBorder = Colors.white.withValues(alpha: isDark ? 0.10 : 0.24);
 
-    return AnimatedScale(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      scale: isSelected ? 1 : 0.985,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutCubic,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient:
-              isSelected
-                  ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(alpha: 0.72),
-                      colorScheme.primary.withValues(alpha: 0.30),
-                    ],
-                  )
-                  : null,
-          color:
-              isSelected
-                  ? null
-                  : Colors.white.withValues(
-                    alpha: theme.brightness == Brightness.dark ? 0.04 : 0.12,
-                  ),
-          border: Border.all(
-            color:
-                isSelected
-                    ? Colors.white.withValues(alpha: 0.72)
-                    : Colors.white.withValues(alpha: 0.18),
+    return RepaintBoundary(
+      child: GlassPanel(
+        blur: isDark ? 18 : 24,
+        borderRadius: BorderRadius.circular(28),
+        gradient: panelGradient,
+        borderColor: panelBorder,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: GNav(
+          selectedIndex: selectedIndex,
+          onTabChange: onSelected,
+          gap: 8,
+          rippleColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+          haptic: true,
+          backgroundColor: Colors.transparent,
+          color: colorScheme.onSurfaceVariant.withValues(
+            alpha: isDark ? 0.86 : 0.78,
           ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(24),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedScale(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOutCubic,
-                    scale: isSelected ? 1 : 0.94,
-                    child: Icon(
-                      icon,
-                      size: 20,
-                      color:
-                          isSelected
-                              ? colorScheme.primary
-                              : colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOutCubic,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
-                      switchInCurve: Curves.easeOutCubic,
-                      switchOutCurve: Curves.easeInCubic,
-                      transitionBuilder: (child, animation) {
-                        final offsetAnimation = Tween<Offset>(
-                          begin: const Offset(0.08, 0),
-                          end: Offset.zero,
-                        ).animate(animation);
-                        return FadeTransition(
-                          opacity: animation,
-                          child: SlideTransition(
-                            position: offsetAnimation,
-                            child: child,
-                          ),
-                        );
-                      },
-                      child:
-                          isSelected
-                              ? Padding(
-                                key: ValueKey(label),
-                                padding: const EdgeInsets.only(left: 8),
-                                child: Text(
-                                  label,
-                                  style: theme.textTheme.labelLarge?.copyWith(
-                                    color: colorScheme.primary,
-                                  ),
-                                ),
-                              )
-                              : const SizedBox.shrink(key: ValueKey('empty')),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          activeColor: colorScheme.primary,
+          tabBackgroundColor: activeBackground,
+          tabBorderRadius: 18,
+          iconSize: 20,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          textStyle: theme.textTheme.labelMedium?.copyWith(
+            color: colorScheme.primary,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
           ),
+          tabs: items
+              .map(
+                (item) => GButton(
+                  key: ValueKey<String>('home-tab-${item.label}'),
+                  icon: item.icon,
+                  text: item.label,
+                ),
+              )
+              .toList(growable: false),
         ),
       ),
     );
