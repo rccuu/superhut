@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/ui/color_scheme_ext.dart';
 import 'logic.dart';
 import 'widgets/water_page_widgets.dart';
 
@@ -15,6 +14,7 @@ class FunctionHotWaterPage extends StatefulWidget {
 }
 
 class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
+  static const Radius _hotWaterSheetTopRadius = Radius.circular(28);
   final FunctionHotWaterLogic logic = Get.put(FunctionHotWaterLogic());
   final Uri _url = Uri.parse(
     'alipays://platformapi/startapp?appId=2019030163398604&page=pages/index/index',
@@ -34,6 +34,22 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Color _hotWaterSheetBackgroundColor() {
+    return HotWaterPalette.mistSurface(context);
+  }
+
+  BoxShadow _hotWaterSheetShadow() {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color accent = HotWaterPalette.accentStrong(context);
+
+    return BoxShadow(
+      color: accent.withValues(alpha: isDark ? 0.18 : 0.08),
+      blurRadius: 24,
+      spreadRadius: 1,
+      offset: const Offset(0, -3),
+    );
   }
 
   void _handleWaterToggle() {
@@ -63,7 +79,9 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     showCupertinoModalBottomSheet(
       context: context,
       expand: false,
-      backgroundColor: Colors.transparent,
+      backgroundColor: _hotWaterSheetBackgroundColor(),
+      topRadius: _hotWaterSheetTopRadius,
+      shadow: _hotWaterSheetShadow(),
       builder:
           (sheetContext) => GetBuilder<FunctionHotWaterLogic>(
             builder: (logic) {
@@ -139,7 +157,9 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     showCupertinoModalBottomSheet(
       context: context,
       expand: false,
-      backgroundColor: Colors.transparent,
+      backgroundColor: _hotWaterSheetBackgroundColor(),
+      topRadius: _hotWaterSheetTopRadius,
+      shadow: _hotWaterSheetShadow(),
       builder:
           (sheetContext) => GetBuilder<FunctionHotWaterLogic>(
             builder: (logic) {
@@ -169,7 +189,9 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     showCupertinoModalBottomSheet(
       context: context,
       expand: false,
-      backgroundColor: Colors.transparent,
+      backgroundColor: _hotWaterSheetBackgroundColor(),
+      topRadius: _hotWaterSheetTopRadius,
+      shadow: _hotWaterSheetShadow(),
       builder:
           (sheetContext) => AddWaterDeviceSheet(
             onClose: () => Navigator.of(sheetContext).pop(),
@@ -204,105 +226,101 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        title: const Text('宿舍热水'),
+        automaticallyImplyLeading: false,
+        leadingWidth: 72,
+        toolbarHeight: 68,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+          child: HotWaterBackButton(onTap: () => Navigator.of(context).pop()),
+        ),
+        title: Text(
+          '宿舍热水',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w800,
+            color: HotWaterPalette.foreground(context),
+          ),
+        ),
         elevation: 0,
         backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
       ),
       extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: GetBuilder<FunctionHotWaterLogic>(
-              builder: (logic) {
-                return WaterBackground(
-                  waterStatus: logic.state.waterStatus.value,
-                );
-              },
-            ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                GetBuilder<FunctionHotWaterLogic>(
-                  builder: (logic) {
-                    return HotWaterStatusHeader(
-                      waterStatus: logic.state.waterStatus.value,
-                    );
-                  },
-                ),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: GetBuilder<FunctionHotWaterLogic>(
-                      builder: (logic) {
-                        final String? deviceName =
-                            logic.state.deviceList.isEmpty ||
-                                    logic.state.choiceDevice.value == -1
-                                ? null
-                                : logic
-                                    .state
-                                    .deviceList[logic
-                                        .state
-                                        .choiceDevice
-                                        .value]['posname']
-                                    ?.toString();
-                        return HotWaterCurrentDeviceCard(
-                          deviceName: deviceName,
-                          onTap: _showDeviceSelectionDialog,
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.center,
-                    child: GetBuilder<FunctionHotWaterLogic>(
-                      builder: (logic) {
-                        return HotWaterControlButton(
-                          isLoading: logic.state.isLoading.value,
-                          deviceCheckComplete:
-                              logic.state.deviceCheckComplete.value,
-                          waterStatus: logic.state.waterStatus.value,
-                          onTap: _handleWaterToggle,
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 30,
-                    left: 20,
-                    right: 20,
-                  ),
-                  child: GetBuilder<FunctionHotWaterLogic>(
-                    builder: (logic) {
-                      if (logic.state.balance.value == 'null') {
-                        return const SizedBox.shrink();
-                      }
+      body: GetBuilder<FunctionHotWaterLogic>(
+        builder: (logic) {
+          final state = logic.state;
+          final bool hasSelectedDevice =
+              state.deviceList.isNotEmpty && state.choiceDevice.value >= 0;
+          final String? deviceName =
+              hasSelectedDevice
+                  ? state.deviceList[state.choiceDevice.value]['posname']
+                      ?.toString()
+                  : null;
 
-                      return HotWaterBalanceCard(
-                        balance: logic.state.balance.value,
-                        onTap: _launchUrl,
-                      );
-                    },
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: WaterBackground(waterStatus: state.waterStatus.value),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      HotWaterStatusHeader(
+                        waterStatus: state.waterStatus.value,
+                        hasSelectedDevice: hasSelectedDevice,
+                      ),
+                      const SizedBox(height: 16),
+                      HotWaterCurrentDeviceCard(
+                        deviceName: deviceName,
+                        hasSelectedDevice: hasSelectedDevice,
+                        onTap: _showDeviceSelectionDialog,
+                      ),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            HotWaterControlButton(
+                              isLoading: state.isLoading.value,
+                              deviceCheckComplete:
+                                  state.deviceCheckComplete.value,
+                              waterStatus: state.waterStatus.value,
+                              hasSelectedDevice: hasSelectedDevice,
+                              onTap: _handleWaterToggle,
+                            ),
+                            HotWaterActionHint(
+                              isLoading: state.isLoading.value,
+                              deviceCheckComplete:
+                                  state.deviceCheckComplete.value,
+                              hasSelectedDevice: hasSelectedDevice,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (state.balance.value != 'null')
+                        HotWaterBalanceCard(
+                          balance: state.balance.value,
+                          onTap: _launchUrl,
+                        ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-          Positioned.fill(
-            child: GetBuilder<FunctionHotWaterLogic>(
-              builder: (logic) {
-                return BubbleAnimation(
-                  isActive: logic.state.waterStatus.value,
-                  color: Theme.of(context).colorScheme.warning,
-                );
-              },
-            ),
-          ),
-        ],
+              ),
+              Positioned.fill(
+                child: BubbleAnimation(
+                  isActive: state.waterStatus.value,
+                  color: HotWaterPalette.accentStrong(
+                    context,
+                    active: state.waterStatus.value,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
