@@ -4,6 +4,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
+import '../../../core/ui/color_scheme_ext.dart';
 import '../../../core/services/app_logger.dart';
 
 class Type1Webview extends StatefulWidget {
@@ -47,6 +48,7 @@ class _Type1WebviewState extends State<Type1Webview> {
         future: getDetail(),
         rememberFutureResult: true,
         whenDone: (v) {
+          final colorScheme = Theme.of(context).colorScheme;
           return Stack(
             children: [
               InAppWebView(
@@ -92,25 +94,36 @@ class _Type1WebviewState extends State<Type1Webview> {
               if (_isPageLoading)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.black.withValues(alpha: 0.3),
+                    color: colorScheme.overlayScrim,
                     child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          LoadingAnimationWidget.inkDrop(
-                            color: Theme.of(context).primaryColor,
-                            size: 40,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            '页面加载中...',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 20,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.floatingSurfaceStrong,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: colorScheme.subtleBorder),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            LoadingAnimationWidget.inkDrop(
+                              color: colorScheme.primary,
+                              size: 40,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 16),
+                            Text(
+                              '页面加载中...',
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -118,7 +131,11 @@ class _Type1WebviewState extends State<Type1Webview> {
             ],
           );
         },
-        whenNotDone: Center(child: CircularProgressIndicator()),
+        whenNotDone: Center(
+          child: CircularProgressIndicator(
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
       ),
     );
   }

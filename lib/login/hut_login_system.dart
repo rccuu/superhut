@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
+import '../core/ui/color_scheme_ext.dart';
 import '../core/services/app_logger.dart';
 
 bool _isUsableJwxtTokenCandidate(
@@ -202,6 +203,8 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('统一认证登录'),
@@ -294,8 +297,10 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
           ),
           if (_isLoading)
             Container(
-              color: Colors.white.withAlpha(179),
-              child: const Center(child: CircularProgressIndicator()),
+              color: colorScheme.floatingSurface.withValues(alpha: 0.92),
+              child: Center(
+                child: CircularProgressIndicator(color: colorScheme.primary),
+              ),
             ),
         ],
       ),

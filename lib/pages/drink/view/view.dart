@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../core/ui/color_scheme_ext.dart';
 import 'logic.dart';
 import 'widgets/drink_page_widgets.dart';
 
@@ -31,18 +32,25 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     required String successMessage,
     required String failureMessage,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
     Get.snackbar(
       success ? '操作成功' : '操作失败',
       success ? successMessage : failureMessage,
       snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: success ? Colors.green : Colors.red,
-      colorText: Colors.white,
+      backgroundColor:
+          success
+              ? colorScheme.successContainerSoft
+              : colorScheme.errorContainer,
+      colorText:
+          success
+              ? colorScheme.onSuccessContainerSoft
+              : colorScheme.onErrorContainer,
       duration: const Duration(seconds: 3),
       margin: const EdgeInsets.all(10),
       borderRadius: 10,
       icon: Icon(
         success ? Icons.check_circle : Icons.error,
-        color: Colors.white,
+        color: success ? colorScheme.success : colorScheme.onErrorContainer,
       ),
     );
   }
@@ -102,7 +110,10 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
                   ),
                   TextButton(
                     onPressed: () => Navigator.of(dialogContext).pop(true),
-                    style: TextButton.styleFrom(foregroundColor: Colors.red),
+                    style: TextButton.styleFrom(
+                      foregroundColor:
+                          Theme.of(dialogContext).colorScheme.error,
+                    ),
                     child: const Text('删除'),
                   ),
                 ],
@@ -390,6 +401,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
               builder: (logic) {
                 return DrinkBubbleAnimation(
                   isActive: logic.state.drinkStatus.value,
+                  color: Theme.of(context).colorScheme.primary,
                 );
               },
             ),

@@ -77,6 +77,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     // Add a listener to the route to detect when this page is navigated to
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Unfocus when the build is complete (which happens when returning to the page)
@@ -97,8 +98,11 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                 padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainer,
+                    color: colorScheme.surfaceContainer,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.8),
+                    ),
                   ),
                   child: TextField(
                     autofocus: false,
@@ -173,14 +177,14 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                               Icon(
                                 Icons.search_off,
                                 size: 64,
-                                color: Colors.grey,
+                                color: colorScheme.onSurfaceVariant,
                               ),
                               SizedBox(height: 16),
                               Text(
                                 '未找到与"$_searchText"相关的功能',
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: Colors.grey,
+                                  color: colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
@@ -215,7 +219,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
-                                        color: Colors.grey,
+                                        color: colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                   ),
@@ -350,6 +354,11 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainer,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.72),
+          ),
         ),
         child: Padding(
           padding: EdgeInsets.all(16),

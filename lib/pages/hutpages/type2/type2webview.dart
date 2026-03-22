@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/ui/color_scheme_ext.dart';
 import '../../../core/services/app_logger.dart';
 
 class Type2Webview extends StatefulWidget {
@@ -358,6 +359,8 @@ class _Type2WebviewState extends State<Type2Webview> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return PopScope(
       canPop: !_canGoBack,
       onPopInvokedWithResult: (didPop, result) async {
@@ -453,7 +456,7 @@ class _Type2WebviewState extends State<Type2Webview> {
                   },
                   whenNotDone: Center(
                     child: LoadingAnimationWidget.inkDrop(
-                      color: Theme.of(context).primaryColor,
+                      color: colorScheme.primary,
                       size: 40,
                     ),
                   ),
@@ -466,13 +469,14 @@ class _Type2WebviewState extends State<Type2Webview> {
                 left: 8,
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.2),
+                    color: colorScheme.floatingSurfaceStrong,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: colorScheme.subtleBorder),
                   ),
                   child: IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Ionicons.arrow_back_circle_outline,
-                      color: Colors.white,
+                      color: colorScheme.onSurface,
                       size: 28,
                     ),
                     onPressed: () async {
@@ -493,25 +497,36 @@ class _Type2WebviewState extends State<Type2Webview> {
               if (_isPageLoading)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.black.withValues(alpha: 0.3),
+                    color: colorScheme.overlayScrim,
                     child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          LoadingAnimationWidget.inkDrop(
-                            color: Theme.of(context).primaryColor,
-                            size: 40,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            '加载中...',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 20,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.floatingSurfaceStrong,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: colorScheme.subtleBorder),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            LoadingAnimationWidget.inkDrop(
+                              color: colorScheme.primary,
+                              size: 40,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 16),
+                            Text(
+                              '加载中...',
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -520,26 +535,35 @@ class _Type2WebviewState extends State<Type2Webview> {
               if (_isRequestingPermission)
                 Positioned.fill(
                   child: Container(
-                    color: Colors.black.withValues(alpha: 0.3),
+                    color: colorScheme.overlayScrim,
                     child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 20,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.floatingSurfaceStrong,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: colorScheme.subtleBorder),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(
+                              color: colorScheme.primary,
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            '请求位置权限...',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                            const SizedBox(height: 16),
+                            Text(
+                              '请求位置权限...',
+                              style: TextStyle(
+                                color: colorScheme.onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),

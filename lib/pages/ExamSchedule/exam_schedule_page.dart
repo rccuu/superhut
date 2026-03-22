@@ -4,6 +4,8 @@ import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/pages/ExamSchedule/exam_schedule_bridge.dart';
 
+import '../../core/ui/color_scheme_ext.dart';
+
 class ExamSchedulePage extends StatefulWidget {
   const ExamSchedulePage({super.key});
 
@@ -49,12 +51,14 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return EnhancedFutureBuilder(
       future: getExamSchedule(),
       rememberFutureResult: true,
       whenDone: (da) {
         return Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.surface,
+          backgroundColor: colorScheme.surface,
           appBar: AppBar(title: Text("考试安排")),
           body: Container(
             margin: EdgeInsets.only(left: 10, right: 10),
@@ -69,7 +73,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                       itemCount: examSchedules.length,
                       itemBuilder: (context, index) {
                         var ins = index;
-                  // 更健壮的日期规范化函数
+                        // 更健壮的日期规范化函数
                         DateTime? parseExamDate(String input) {
                           try {
                             if (input.length < 10) {
@@ -95,27 +99,31 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                           examSchedules[ins]['time']?.toString() ?? '',
                         );
 
-                  // 计算距离考试的天数
-                  String daysLeftText = "日期未知";
-                  if (examDate != null) {
-                    // 获取当前日期（去掉时间部分）
-                    DateTime now = DateTime.now();
-                    DateTime today = DateTime(now.year, now.month, now.day);
+                        // 计算距离考试的天数
+                        String daysLeftText = "日期未知";
+                        if (examDate != null) {
+                          // 获取当前日期（去掉时间部分）
+                          DateTime now = DateTime.now();
+                          DateTime today = DateTime(
+                            now.year,
+                            now.month,
+                            now.day,
+                          );
 
-                    // 计算天数差
-                    int daysLeft = examDate.difference(today).inDays;
+                          // 计算天数差
+                          int daysLeft = examDate.difference(today).inDays;
 
-                    // 根据天数差生成文本
-                    if (daysLeft == 0) {
-                      daysLeftText = "今天考试";
-                    } else if (daysLeft > 0) {
-                      daysLeftText = "还有$daysLeft天";
-                    } else {
-                      daysLeftText = "已结束${-daysLeft}天";
-                    }
-                  }
+                          // 根据天数差生成文本
+                          if (daysLeft == 0) {
+                            daysLeftText = "今天考试";
+                          } else if (daysLeft > 0) {
+                            daysLeftText = "还有$daysLeft天";
+                          } else {
+                            daysLeftText = "已结束${-daysLeft}天";
+                          }
+                        }
                         return Card.filled(
-                          color: Theme.of(context).colorScheme.surfaceContainer,
+                          color: colorScheme.surfaceContainer,
                           child: Padding(
                             padding: EdgeInsets.all(10),
                             child: Flex(
@@ -125,7 +133,8 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                                 Expanded(
                                   flex: 10,
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         examSchedules[ins]['courseName']
@@ -134,10 +143,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                                         style: TextStyle(
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,
-                                          color:
-                                              Theme.of(
-                                                context,
-                                              ).colorScheme.onSurface,
+                                          color: colorScheme.onSurface,
                                         ),
                                       ),
                                       SizedBox(height: 5),
@@ -146,10 +152,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                                           Icon(
                                             Ionicons.location,
                                             size: 20,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withAlpha(100),
+                                            color: colorScheme.onSurfaceVariant,
                                           ),
                                           SizedBox(width: 5),
                                           Text(
@@ -159,10 +162,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                                             style: TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.normal,
-                                              color:
-                                                  Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
+                                              color: colorScheme.onSurface,
                                             ),
                                           ),
                                         ],
@@ -173,10 +173,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                                           Icon(
                                             Ionicons.calendar,
                                             size: 20,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withAlpha(100),
+                                            color: colorScheme.onSurfaceVariant,
                                           ),
                                           SizedBox(width: 5),
                                           Text(
@@ -186,10 +183,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                                             style: TextStyle(
                                               fontSize: 14,
                                               fontWeight: FontWeight.normal,
-                                              color:
-                                                  Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
+                                              color: colorScheme.onSurface,
                                             ),
                                           ),
                                         ],
@@ -200,10 +194,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                                           Icon(
                                             Ionicons.timer,
                                             size: 20,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withAlpha(100),
+                                            color: colorScheme.onSurfaceVariant,
                                           ),
                                           SizedBox(width: 5),
                                           Text(
@@ -233,10 +224,10 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                                             style: TextStyle(
                                               fontSize: 8,
                                               fontWeight: FontWeight.normal,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface
-                                                  .withAlpha(100),
+                                              color:
+                                                  Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
                                             ),
                                             textAlign: TextAlign.end,
                                           ),
@@ -258,7 +249,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
         appBar: AppBar(title: Text("考试安排")),
         body: Center(
           child: LoadingAnimationWidget.inkDrop(
-            color: Theme.of(context).primaryColor,
+            color: colorScheme.primary,
             size: 40,
           ),
         ),
@@ -267,19 +258,20 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
   }
 
   Color _getDaysLeftColor(String text, BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (text.contains("今天")) {
-      return Colors.red; // 今天考试用红色
+      return colorScheme.error;
     } else if (text.contains("还有")) {
-      // 提取天数
       int days = int.tryParse(text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 
       if (days <= 3) {
-        return Colors.orange; // 3天内用橙色
+        return colorScheme.warning;
       } else {
-        return Theme.of(context).colorScheme.onSurface; // 其他用默认颜色
+        return colorScheme.onSurface;
       }
     } else {
-      return Colors.grey; // 已结束用灰色
+      return colorScheme.onSurfaceVariant;
     }
   }
 }
