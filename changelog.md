@@ -12,7 +12,16 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
-## 2026-03-23 · `待提交` · feat(android): prefer high refresh rate on supported devices
+## 2026-03-23 · `待提交` · chore(release): prepare v1.4.5
+- 作者：Codex
+- 这次发版准备把应用版本从 `1.4.2+1` 提升到 `1.4.5+1`，并把 `v1.4.2` 之后已经进入主线的 UI 与 Android 高刷改动整理成一份可直接用于发布说明的摘要。
+- 需要特别说明的是：仓库里当前没有可验证的 `v1.4.3` Git tag，本次发布摘要因此按最后一个可验证正式基线 `v1.4.2` 到当前主线 `b6c9f2b` 的实际提交来整理，不把不存在的 tag 当作差异基线。
+- 从代码层面看，`357f96d` 先补了一轮全局深色模式细节修正，覆盖登录、评教、考试安排、慧生活 798、宿舍热水和 HUT WebView 等页面；`b7dd274` 继续重做成绩查询、空教室查询和宿舍热水三条高频路径，重点是压缩留白、提高信息密度、统一玻璃材质与深浅色表现；`b6c9f2b` 则把 Android 高刷新率适配落到了原生入口，策略是优先 120Hz，没有 120Hz 就回退到设备支持的最高高刷档。
+- 这次提交本身只负责发版元数据和说明整理，不引入新的功能逻辑；真正进入安装包的功能改动以上述三次主线提交为准。
+- 关键文件：`pubspec.yaml`、`changelog.md`
+- 代码统计（待提交时回填）：2 files changed, version bump + release notes update
+
+## 2026-03-23 · `b6c9f2b` · feat(android): prefer high refresh rate on supported devices
 - 作者：rccuu
 - 这次提交只做一件事：把 Android 端的高刷新率请求补到原生入口里，目标不是激进追 144/165Hz，而是按照前面确认的策略，优先请求 120Hz；如果设备没有 120Hz，再回退到设备支持的最高高刷档。这样既贴近用户实际感知，也避免为了少数面板规格把逻辑写得过于激进。
 - `android/app/src/main/kotlin/com/tune/superhut/MainActivity.kt` 不再是空的 `FlutterActivity()` 壳，而是开始在 `onCreate` 和 `onResume` 两个时机都执行高刷偏好设置。这样做的原因是 Android 上窗口属性在前后台切换、系统回收恢复、厂商 ROM 介入时都有可能被重置，只在创建时设一次不够稳。
