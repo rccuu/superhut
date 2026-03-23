@@ -12,7 +12,32 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
-## 2026-03-22 · `待提交` · chore(release): prepare v1.4.2
+## 2026-03-23 · `待提交` · feat(android): prefer high refresh rate on supported devices
+- 作者：rccuu
+- 这次提交只做一件事：把 Android 端的高刷新率请求补到原生入口里，目标不是激进追 144/165Hz，而是按照前面确认的策略，优先请求 120Hz；如果设备没有 120Hz，再回退到设备支持的最高高刷档。这样既贴近用户实际感知，也避免为了少数面板规格把逻辑写得过于激进。
+- `android/app/src/main/kotlin/com/tune/superhut/MainActivity.kt` 不再是空的 `FlutterActivity()` 壳，而是开始在 `onCreate` 和 `onResume` 两个时机都执行高刷偏好设置。这样做的原因是 Android 上窗口属性在前后台切换、系统回收恢复、厂商 ROM 介入时都有可能被重置，只在创建时设一次不够稳。
+- 这轮实现不只是简单写一个 `preferredRefreshRate = 120f`。Android 23+ 设备上，代码会先读取当前显示模式和 `supportedModes`，优先从“和当前分辨率一致”的模式里挑选最合适的高刷档，再把 `preferredDisplayModeId` 和 `preferredRefreshRate` 一起写回窗口属性。这样可以减少系统为了追高刷顺手切分辨率的概率，也更接近社区里 `flutter_displaymode` 这类成熟方案的实现思路。
+- 具体策略上，代码会先找 `>60Hz 且 <=120Hz` 的最高刷新率；如果设备没有这一档，比如只给 90Hz，那就落 90Hz；如果设备是更少见的 144Hz/165Hz 且没有 120Hz，同分辨率模式选择会回退到设备可用的最高高刷档。对不支持高刷的设备，逻辑会直接 no-op，不会影响现有行为。
+- 兼容性方面也做了分层处理。Android 30+ 直接用 `display`，老版本则回退到 `windowManager.defaultDisplay`；Android 23 以下没有 `supportedModes`，只保留对 `display.refreshRate` 的安全判断。也就是说，这次改动不会强行把旧版本设备拖进一套它根本不支持的 API。
+- 需要明确的是，这次实现的是“向系统表达高刷偏好”，不是“强制锁定 120Hz”。最终实际刷新率仍然可能被系统的省电策略、发热控制、厂商游戏模式/省电模式、用户手动的刷新率设置覆盖。这一点符合 Android 官方文档对 `preferredRefreshRate` / 显示模式偏好的定义。
+- 这次提交前还专门做了构建级验证：`flutter analyze lib` 已通过，`flutter build apk --debug --target-platform android-arm64` 也成功出包，说明 Kotlin 改动至少在当前 Flutter/Gradle 构建链路下是成立的。
+- 关键文件：`android/app/src/main/kotlin/com/tune/superhut/MainActivity.kt`
+- 代码统计（不含 `changelog.md`）：1 file changed, 108 insertions(+), 1 deletion(-)
+
+## 2026-03-22 · `b7dd274` · feat(ui): refine score, free room and hot water experience
+- 作者：rccuu
+- 这次提交是一轮覆盖“空教室查询”“成绩查询”“宿舍热水”三条高频路径的集中 UI 收口，不是简单换色，而是把前面多轮反复确认过的布局压缩、深浅色修正、交互取舍和视觉统一一次性落进仓库。整体方向很明确：减少无效留白、提高信息获取效率、让新旧页面的主题语言真正统一。
+- 空教室部分重点改的是“空间浪费”和“列表节奏”。`lib/pages/freeroom/building.dart` 重新整理了校区与教学楼之间的距离、顶部标题区与分组区的关系、教学楼名和状态胶囊的字号与对齐标准，最终收成“最长教学楼名称也能稳定一行”的统一字号，并把 `xx间`、`空闲xx间` 做成更圆润的小胶囊，避免信息既散又丑。`lib/pages/freeroom/room.dart` 则继续压缩楼内页顶部和列表空白，把卡片收得更紧，尽量在一屏展示更多教室，同时顺手修掉多处 `BOTTOM OVERFLOWED BY 6.0 PIXELS`。
+- 这次空教室还一起重做了时间筛选表达。原来按小节显示的信息被改成更符合校内使用习惯的“大节”表达，一天只保留 5 大节，并尽量按当前日期和当前上课时段帮助用户默认落到更实用的查询结果；顶部筛选区里一些本来用户自己已经明确选过的信息也被移除，避免再重复占空间。
+- 成绩查询部分核心是把“花里胡哨”收回到“快速看清楚”。`lib/pages/score/scorepage.dart` 和 `lib/pages/score/jump_to_score_page.dart` 把成绩卡片默认展示的信息压到最关键的三项：课程类型、绩点、学分；详细内容改成点开后再看，默认态不再塞过多说明。顶部摘要区也删掉了“已汇总全部历史成绩”“展示的学期”“已修总学分”“总学分绩点”等会分散视线的内容，只保留更有判断价值的平均绩点。
+- 成绩页这轮还继续处理了信息密度和主题一致性。课程卡片的高度被进一步压缩，课程名称字号放大，让用户扫一眼就能快速定位课程；右上角学期选择入口保留原有交互位置，但外观被收成和主界面一致的主题样式，不再像独立拼进去的旧控件。
+- 宿舍热水部分是一次比较完整的视觉重做。`lib/pages/water/view.dart` 与 `lib/pages/water/widgets/water_page_widgets.dart` 基于“Golden Powder Family”那套偏金粉、暖粉、少女粉的色相，把页面背景、顶部状态卡、当前设备卡、开始按钮、返回按钮、底部弹层统一进同一套粉色玻璃语言。重点不是堆更重的装饰，而是让每一块都更暖、更软、更精致，同时不牺牲可读性。
+- 开始按钮这次被收成单层外圆的“果冻感”主按钮，去掉了多余的播放图标和内部多层圆环，文案也回到更兼容多设备的系统字体系，并把颜色收成更稳的深玫瑰棕，避免白字在粉底上发灰、发飘。准备态/进行态顶部卡片与“当前设备”卡片则补了更明确的边框、高光和轻阴影，让它们从背景里浮出来，但又不会厚重得像另一套风格。
+- 热水页这轮还修了几个明显穿帮点。`当前设备` 卡片去掉了偏黑的底色，改成更纯的粉白到浅粉渐变；设备选择、设备管理和新增设备三个底部弹层统一成 28 圆角，并把 `modal_bottom_sheet` 默认黑色阴影替换成粉调阴影，解决了“选择设备”边缘露黑的问题。这样热水页里从主界面到弹层，终于不再有那种半旧半新的割裂感。
+- 关键文件：`lib/pages/freeroom/building.dart`、`lib/pages/freeroom/room.dart`、`lib/pages/score/scorepage.dart`、`lib/pages/score/jump_to_score_page.dart`、`lib/pages/water/view.dart`、`lib/pages/water/widgets/water_page_widgets.dart`
+- 代码统计（不含 `changelog.md`）：6 files changed, 4938 insertions(+), 1127 deletions(-)
+
+## 2026-03-22 · `919f042` · chore(release): prepare v1.4.2
 - 作者：rccuu
 - 这是 `v1.4.2` 的发布准备提交，内容不是再去扩首页主结构，而是把这两天一直在反复打磨的底栏体验真正收口：一方面把版本号从 `1.4.0+1` 提升到 `1.4.2+1`，另一方面把底栏的点击热区、外圈阴影和视觉层次按最终确认的方向稳定下来。
 - 这次收尾的核心不是“再加一层更重的卡片效果”，而是明确把阴影限制在底栏边框外面。普通 `boxShadow` 对半透明玻璃胶囊会把中间也一起压暗，看起来像阴影跑进了选项框内部；为了解决这个问题，`lib/home/homeview/view.dart` 新增了 `_OuterOnlyShadowPainter` 和 `_OuterShadowLayer`，改成先画黑色模糊阴影，再把胶囊本体区域挖空，最后只留下外圈那一层更像真实投影的 halo。
