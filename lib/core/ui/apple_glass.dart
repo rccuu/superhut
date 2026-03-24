@@ -3,6 +3,10 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+enum AppGlassBackgroundStyle { rich, soft, flat }
+
+enum GlassPanelStyle { hero, floating, card, list, solid }
+
 class AppGlassBackground extends StatelessWidget {
   const AppGlassBackground({
     super.key,
@@ -10,12 +14,14 @@ class AppGlassBackground extends StatelessWidget {
     this.bottomHighlightOpacity = 1,
     this.lightBottomColor,
     this.darkBottomColor,
+    this.style = AppGlassBackgroundStyle.rich,
   });
 
   final Widget child;
   final double bottomHighlightOpacity;
   final Color? lightBottomColor;
   final Color? darkBottomColor;
+  final AppGlassBackgroundStyle style;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +30,30 @@ class AppGlassBackground extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final useLiteEffects =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-    final orbBlurSigma = useLiteEffects ? 34.0 : 56.0;
+    final effectiveStyle =
+        useLiteEffects && style == AppGlassBackgroundStyle.rich
+            ? AppGlassBackgroundStyle.soft
+            : style;
+    final orbBlurSigma = switch (effectiveStyle) {
+      AppGlassBackgroundStyle.rich => useLiteEffects ? 34.0 : 56.0,
+      AppGlassBackgroundStyle.soft => useLiteEffects ? 20.0 : 34.0,
+      AppGlassBackgroundStyle.flat => 0.0,
+    };
+    final orbScale = switch (effectiveStyle) {
+      AppGlassBackgroundStyle.rich => 1.0,
+      AppGlassBackgroundStyle.soft => 0.78,
+      AppGlassBackgroundStyle.flat => 0.0,
+    };
+    final orbOpacity = switch (effectiveStyle) {
+      AppGlassBackgroundStyle.rich => 1.0,
+      AppGlassBackgroundStyle.soft => 0.58,
+      AppGlassBackgroundStyle.flat => 0.0,
+    };
+    final highlightStrength = switch (effectiveStyle) {
+      AppGlassBackgroundStyle.rich => 1.0,
+      AppGlassBackgroundStyle.soft => 0.62,
+      AppGlassBackgroundStyle.flat => 0.22,
+    };
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -48,36 +77,45 @@ class AppGlassBackground extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _AmbientOrb(
-            alignment: const Alignment(-1.15, -0.92),
-            width: 280,
-            height: 280,
-            blurSigma: orbBlurSigma,
-            colors: [
-              colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.18),
-              colorScheme.primary.withValues(alpha: 0),
-            ],
-          ),
-          _AmbientOrb(
-            alignment: const Alignment(1.08, -0.78),
-            width: 250,
-            height: 250,
-            blurSigma: orbBlurSigma,
-            colors: [
-              colorScheme.secondary.withValues(alpha: isDark ? 0.14 : 0.14),
-              colorScheme.secondary.withValues(alpha: 0),
-            ],
-          ),
-          _AmbientOrb(
-            alignment: const Alignment(0.9, 0.78),
-            width: 340,
-            height: 340,
-            blurSigma: orbBlurSigma,
-            colors: [
-              colorScheme.tertiary.withValues(alpha: isDark ? 0.11 : 0.10),
-              colorScheme.tertiary.withValues(alpha: 0),
-            ],
-          ),
+          if (orbOpacity > 0)
+            _AmbientOrb(
+              alignment: const Alignment(-1.15, -0.92),
+              width: 280 * orbScale,
+              height: 280 * orbScale,
+              blurSigma: orbBlurSigma,
+              colors: [
+                colorScheme.primary.withValues(
+                  alpha: (isDark ? 0.18 : 0.18) * orbOpacity,
+                ),
+                colorScheme.primary.withValues(alpha: 0),
+              ],
+            ),
+          if (effectiveStyle == AppGlassBackgroundStyle.rich)
+            _AmbientOrb(
+              alignment: const Alignment(1.08, -0.78),
+              width: 250 * orbScale,
+              height: 250 * orbScale,
+              blurSigma: orbBlurSigma,
+              colors: [
+                colorScheme.secondary.withValues(
+                  alpha: (isDark ? 0.14 : 0.14) * orbOpacity,
+                ),
+                colorScheme.secondary.withValues(alpha: 0),
+              ],
+            ),
+          if (orbOpacity > 0)
+            _AmbientOrb(
+              alignment: const Alignment(0.9, 0.78),
+              width: 340 * orbScale,
+              height: 340 * orbScale,
+              blurSigma: orbBlurSigma,
+              colors: [
+                colorScheme.tertiary.withValues(
+                  alpha: (isDark ? 0.11 : 0.10) * orbOpacity,
+                ),
+                colorScheme.tertiary.withValues(alpha: 0),
+              ],
+            ),
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -85,11 +123,14 @@ class AppGlassBackground extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.white.withValues(alpha: isDark ? 0.03 : 0.14),
+                    Colors.white.withValues(
+                      alpha: (isDark ? 0.03 : 0.14) * highlightStrength,
+                    ),
                     Colors.transparent,
                     Colors.white.withValues(
                       alpha:
                           (isDark ? 0.02 : 0.08) *
+                          highlightStrength *
                           bottomHighlightOpacity.clamp(0.0, 1.0),
                     ),
                   ],
@@ -118,6 +159,7 @@ class GlassPanel extends StatelessWidget {
     this.boxShadow,
     this.onTap,
     this.useBackdropFilter = true,
+    this.style = GlassPanelStyle.card,
   });
 
   final Widget child;
@@ -131,6 +173,7 @@ class GlassPanel extends StatelessWidget {
   final List<BoxShadow>? boxShadow;
   final VoidCallback? onTap;
   final bool useBackdropFilter;
+  final GlassPanelStyle style;
 
   @override
   Widget build(BuildContext context) {
@@ -139,40 +182,111 @@ class GlassPanel extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final useLiteEffects =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-    final effectiveBlur = useLiteEffects ? blur.clamp(0.0, 12.0) : blur;
-    final effectiveShadowBlur = useLiteEffects ? 22.0 : 32.0;
-    final effectiveShadowOffset =
-        useLiteEffects ? const Offset(0, 12) : const Offset(0, 18);
+    final canUseBackdrop = switch (style) {
+      GlassPanelStyle.hero => !useLiteEffects,
+      GlassPanelStyle.floating => !useLiteEffects,
+      GlassPanelStyle.card => !useLiteEffects && blur >= 16,
+      GlassPanelStyle.list => false,
+      GlassPanelStyle.solid => false,
+    };
+    final effectiveBlur =
+        useBackdropFilter && canUseBackdrop && blur > 0.01
+            ? (useLiteEffects ? blur.clamp(0.0, 12.0) : blur)
+            : 0.0;
+    final effectiveShadowBlur = switch (style) {
+      GlassPanelStyle.hero => useLiteEffects ? 20.0 : 30.0,
+      GlassPanelStyle.floating => useLiteEffects ? 18.0 : 24.0,
+      GlassPanelStyle.card => useLiteEffects ? 14.0 : 18.0,
+      GlassPanelStyle.list => useLiteEffects ? 8.0 : 12.0,
+      GlassPanelStyle.solid => 0.0,
+    };
+    final effectiveShadowOffset = switch (style) {
+      GlassPanelStyle.hero =>
+        useLiteEffects ? const Offset(0, 10) : const Offset(0, 16),
+      GlassPanelStyle.floating =>
+        useLiteEffects ? const Offset(0, 9) : const Offset(0, 12),
+      GlassPanelStyle.card =>
+        useLiteEffects ? const Offset(0, 7) : const Offset(0, 10),
+      GlassPanelStyle.list =>
+        useLiteEffects ? const Offset(0, 4) : const Offset(0, 6),
+      GlassPanelStyle.solid => Offset.zero,
+    };
+    final effectiveSurfaceOpacity = switch (style) {
+      GlassPanelStyle.hero => isDark ? 0.18 : 0.54,
+      GlassPanelStyle.floating => isDark ? 0.20 : 0.60,
+      GlassPanelStyle.card => isDark ? 0.22 : 0.68,
+      GlassPanelStyle.list => isDark ? 0.26 : 0.78,
+      GlassPanelStyle.solid => isDark ? 0.34 : 0.92,
+    };
+    final effectiveBorderAlpha = switch (style) {
+      GlassPanelStyle.hero => isDark ? 0.14 : 0.62,
+      GlassPanelStyle.floating => isDark ? 0.13 : 0.52,
+      GlassPanelStyle.card => isDark ? 0.12 : 0.34,
+      GlassPanelStyle.list => isDark ? 0.10 : 0.24,
+      GlassPanelStyle.solid => isDark ? 0.08 : 0.16,
+    };
+    final effectiveShadowAlpha = switch (style) {
+      GlassPanelStyle.hero => isDark ? 0.24 : 0.08,
+      GlassPanelStyle.floating => isDark ? 0.20 : 0.07,
+      GlassPanelStyle.card => isDark ? 0.16 : 0.06,
+      GlassPanelStyle.list => isDark ? 0.10 : 0.04,
+      GlassPanelStyle.solid => 0.0,
+    };
+    final defaultGradientColors = switch (style) {
+      GlassPanelStyle.hero => [
+        Colors.white.withValues(alpha: isDark ? 0.16 : 0.70),
+        colorScheme.surface.withValues(alpha: isDark ? 0.10 : 0.34),
+      ],
+      GlassPanelStyle.floating => [
+        Colors.white.withValues(alpha: isDark ? 0.14 : 0.74),
+        colorScheme.surface.withValues(alpha: isDark ? 0.12 : 0.38),
+      ],
+      GlassPanelStyle.card => [
+        Colors.white.withValues(alpha: isDark ? 0.12 : 0.80),
+        colorScheme.surface.withValues(alpha: isDark ? 0.14 : 0.44),
+      ],
+      GlassPanelStyle.list => [
+        Colors.white.withValues(alpha: isDark ? 0.08 : 0.88),
+        colorScheme.surface.withValues(alpha: isDark ? 0.18 : 0.56),
+      ],
+      GlassPanelStyle.solid => [
+        Colors.white.withValues(alpha: isDark ? 0.04 : 0.94),
+        colorScheme.surface.withValues(alpha: isDark ? 0.24 : 0.74),
+      ],
+    };
     final decoration = BoxDecoration(
       color:
           gradient == null
               ? (tintColor ??
-                  colorScheme.surface.withValues(alpha: isDark ? 0.20 : 0.58))
+                  colorScheme.surface.withValues(
+                    alpha: effectiveSurfaceOpacity,
+                  ))
               : null,
       gradient:
           gradient ??
           LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.white.withValues(alpha: isDark ? 0.16 : 0.70),
-              colorScheme.surface.withValues(alpha: isDark ? 0.10 : 0.34),
-            ],
+            colors: defaultGradientColors,
           ),
       borderRadius: borderRadius,
       border: Border.all(
         color:
-            borderColor ?? Colors.white.withValues(alpha: isDark ? 0.14 : 0.62),
+            borderColor ?? Colors.white.withValues(alpha: effectiveBorderAlpha),
       ),
       boxShadow:
           boxShadow ??
-          [
-            BoxShadow(
-              color: colorScheme.shadow.withValues(alpha: isDark ? 0.22 : 0.08),
-              blurRadius: effectiveShadowBlur,
-              offset: effectiveShadowOffset,
-            ),
-          ],
+          (effectiveShadowBlur <= 0
+              ? const []
+              : [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(
+                    alpha: effectiveShadowAlpha,
+                  ),
+                  blurRadius: effectiveShadowBlur,
+                  offset: effectiveShadowOffset,
+                ),
+              ]),
     );
 
     final content =
@@ -189,22 +303,21 @@ class GlassPanel extends StatelessWidget {
 
     final panelBody = DecoratedBox(decoration: decoration, child: content);
 
-    return Container(
-      margin: margin,
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child:
-            useBackdropFilter && effectiveBlur > 0.01
-                ? BackdropFilter(
-                  filter: ImageFilter.blur(
-                    sigmaX: effectiveBlur,
-                    sigmaY: effectiveBlur,
-                  ),
-                  child: panelBody,
-                )
-                : panelBody,
-      ),
-    );
+    final decoratedBody =
+        effectiveBlur > 0.01
+            ? ClipRRect(
+              borderRadius: borderRadius,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: effectiveBlur,
+                  sigmaY: effectiveBlur,
+                ),
+                child: panelBody,
+              ),
+            )
+            : panelBody;
+
+    return Container(margin: margin, child: decoratedBody);
   }
 }
 

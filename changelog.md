@@ -12,6 +12,16 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
+## 2026-03-24 · `待提交` · chore(release): prepare v1.4.6
+- 作者：Codex
+- 这次发版整理不是继续扩需求，而是把当前工作区里已经确认保留的一轮 UI 减重与交互收口正式整理成 `1.4.6`。总体方向很明确：尽量保留现有玻璃主题的质感，但降低 blur、阴影和过度透明带来的性能与廉价感问题，重点覆盖空教室、课表、成绩页和几个高频入口页。
+- `lib/core/ui/apple_glass.dart` 新增 `AppGlassBackgroundStyle` / `GlassPanelStyle` 两套分层枚举，把背景拆成 `rich / soft / flat`，把面板拆成 `hero / floating / card / list / solid`。这样一来，不同页面和不同密度的组件都可以按场景选更轻的材质，而不是继续让整页所有卡片都走同一种重玻璃参数。
+- 课表和空教室是这轮最核心的用户路径。`lib/home/coursetable/view.dart`、`lib/home/coursetable/widgets/course_table_widgets.dart` 统一了底部弹层的 route background / barrier 策略，课程详情与实验名单弹层改成更稳定的分段式卡片结构，顺手修掉点击课程后详情层后方背景缺失的问题；`lib/pages/freeroom/room.dart` 则保留性能向优化，用 `SliverChildBuilderDelegate` 和预计算 `_RoomGridItem` 降低网格滚动开销，同时把具体教室空闲状态弹层改成更实的双卡片结构，提升可读性但不再让外层托举区域变成生硬的纯白块。
+- 其余页面这次主要做统一收口而不是再发散新样式。`lib/pages/freeroom/building.dart`、`lib/pages/score/scorepage.dart`、`lib/pages/score/jump_to_score_page.dart`，以及首页 / 功能页 / 关于页 / 个人页 / 统一登录页，都切到更轻的 `soft` 背景和明确的卡片层级，顺手削弱了一批过重阴影，让整体主题仍保持同一套玻璃语言，但滚动和阅读都更干净。
+- 这次提交同时把版本号提升到 `1.4.6+1`，并把这一轮确认保留的 UI 减重与交互收口整理成可发布的正式变更说明。
+- 关键文件：`lib/core/ui/apple_glass.dart`、`lib/home/coursetable/view.dart`、`lib/home/coursetable/widgets/course_table_widgets.dart`、`lib/pages/freeroom/room.dart`、`lib/pages/score/scorepage.dart`、`pubspec.yaml`、`changelog.md`
+- 代码统计：14 files changed, 809 insertions(+), 422 deletions(-)
+
 ## 2026-03-23 · `待提交` · chore(release): prepare v1.4.5
 - 作者：Codex
 - 这次发版准备把应用版本从 `1.4.2+1` 提升到 `1.4.5+1`，并把 `v1.4.2` 之后已经进入主线的 UI 与 Android 高刷改动整理成一份可直接用于发布说明的摘要。

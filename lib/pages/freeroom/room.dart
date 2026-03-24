@@ -198,6 +198,21 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
     return '${start.toStringAsFixed(0).padLeft(2, '0')}${end.toStringAsFixed(0).padLeft(2, '0')}';
   }
 
+  Color _sheetRouteBackground(BuildContext context) {
+    return Colors.transparent;
+  }
+
+  Color _sheetBarrierColor(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return colorScheme.overlayScrim.withValues(
+      alpha: colorScheme.isDarkMode ? 0.18 : 0.10,
+    );
+  }
+
+  Color _sheetTransitionBackground(BuildContext context) {
+    return Colors.transparent;
+  }
+
   int _busySlotCount(Room room) {
     return List<int>.generate(
       _lessonCount,
@@ -274,7 +289,9 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
     showCupertinoModalBottomSheet<void>(
       context: context,
       expand: false,
-      backgroundColor: Colors.transparent,
+      backgroundColor: _sheetRouteBackground(context),
+      barrierColor: _sheetBarrierColor(context),
+      transitionBackgroundColor: _sheetTransitionBackground(context),
       builder: (context) {
         return _RoomDetailSheet(
           room: room,
@@ -362,6 +379,7 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         lightBottomColor: const Color(0xFFF0F5FF),
         darkBottomColor: const Color(0xFF0F1826),
         child: EnhancedFutureBuilder(
@@ -377,6 +395,7 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
   Widget _buildLoadingState(BuildContext context) {
     return Center(
       child: GlassPanel(
+        style: GlassPanelStyle.hero,
         borderRadius: BorderRadius.circular(28),
         padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 24),
         gradient: LinearGradient(
@@ -412,6 +431,20 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
   }
 
   Widget _buildContent(BuildContext context, List<Room> data) {
+    final roomItems = data
+        .map(
+          (room) => _RoomGridItem(
+            room: room,
+            compactRoomName: _compactRoomName(room.name),
+            seatLabel:
+                room.seatNumber.trim().isEmpty
+                    ? '座位未知'
+                    : '${room.seatNumber} 座',
+            busySlotCount: _busySlotCount(room),
+          ),
+        )
+        .toList(growable: false);
+
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
         parent: AlwaysScrollableScrollPhysics(),
@@ -473,24 +506,29 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
                         ? 1.00
                         : 1.18;
 
-                return SliverGrid.builder(
-                  itemCount: data.length,
+                return SliverGrid(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
                     mainAxisSpacing: 6,
                     crossAxisSpacing: 6,
                     childAspectRatio: childAspectRatio,
                   ),
-                  itemBuilder: (context, index) {
-                    final room = data[index];
-                    return _RoomCard(
-                      roomName: _compactRoomName(room.name),
-                      seatNumber: room.seatNumber,
-                      busySlotCount: _busySlotCount(room),
-                      accent: _emptyRoomAccent,
-                      onTap: () => _showRoomDetail(room),
-                    );
-                  },
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = roomItems[index];
+                      return _RoomCard(
+                        roomName: item.compactRoomName,
+                        seatLabel: item.seatLabel,
+                        busySlotCount: item.busySlotCount,
+                        accent: _emptyRoomAccent,
+                        onTap: () => _showRoomDetail(item.room),
+                      );
+                    },
+                    childCount: roomItems.length,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: true,
+                    addSemanticIndexes: false,
+                  ),
                 );
               },
             ),
@@ -664,14 +702,14 @@ class _SelectorTile extends StatelessWidget {
 class _RoomCard extends StatelessWidget {
   const _RoomCard({
     required this.roomName,
-    required this.seatNumber,
+    required this.seatLabel,
     required this.busySlotCount,
     required this.accent,
     required this.onTap,
   });
 
   final String roomName;
-  final String seatNumber;
+  final String seatLabel;
   final int busySlotCount;
   final Color accent;
   final VoidCallback onTap;
@@ -681,26 +719,22 @@ class _RoomCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.solid,
       borderRadius: BorderRadius.circular(24),
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      borderColor: accent.withValues(alpha: 0.16),
+      borderColor: accent.withValues(
+        alpha: colorScheme.isDarkMode ? 0.18 : 0.14,
+      ),
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          colorScheme.surface.withValues(
-            alpha: colorScheme.isDarkMode ? 0.94 : 0.92,
+          colorScheme.surfaceContainerHighest.withValues(
+            alpha: colorScheme.isDarkMode ? 0.92 : 0.98,
           ),
-          accent.withValues(alpha: colorScheme.isDarkMode ? 0.16 : 0.08),
+          accent.withValues(alpha: colorScheme.isDarkMode ? 0.18 : 0.10),
         ],
       ),
-      boxShadow: [
-        BoxShadow(
-          color: accent.withValues(alpha: colorScheme.isDarkMode ? 0.14 : 0.08),
-          blurRadius: 22,
-          offset: const Offset(0, 12),
-        ),
-      ],
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -740,10 +774,7 @@ class _RoomCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _CompactRoomPill(
-                label: seatNumber.trim().isEmpty ? '座位未知' : '$seatNumber 座',
-                accent: accent,
-              ),
+              _CompactRoomPill(label: seatLabel, accent: accent),
               const SizedBox(height: 4),
               _CompactRoomPill(label: '忙碌 $busySlotCount 节', accent: accent),
             ],
@@ -785,136 +816,145 @@ class _RoomDetailSheet extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: GlassPanel(
-            borderRadius: BorderRadius.circular(32),
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                colorScheme.floatingSurfaceStrong,
-                accent.withValues(alpha: colorScheme.isDarkMode ? 0.12 : 0.06),
-              ],
-            ),
-            borderColor: accent.withValues(alpha: 0.16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 46,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.88),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _RoomSheetCard(
+                accent: accent,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    GlassIconBadge(
-                      icon: Ionicons.business_outline,
-                      tint: accent,
-                      size: 52,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            compactRoomName,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
-                            ),
+                    Center(
+                      child: Container(
+                        width: 46,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: colorScheme.outlineVariant.withValues(
+                            alpha: 0.88,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            room.name,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        GlassIconBadge(
+                          icon: Ionicons.business_outline,
+                          tint: accent,
+                          size: 52,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                compactRoomName,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                room.name,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        _MiniPill(
+                          label:
+                              room.seatNumber.trim().isEmpty
+                                  ? '座位未知'
+                                  : '${room.seatNumber} 座',
+                          accent: accent,
+                        ),
+                        _MiniPill(label: '空闲 $freeCount 节', accent: accent),
+                        _MiniPill(label: '占用 $busyCount 节', accent: accent),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
+              ),
+              const SizedBox(height: 12),
+              _RoomSheetCard(
+                accent: accent,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _MiniPill(
-                      label:
-                          room.seatNumber.trim().isEmpty
-                              ? '座位未知'
-                              : '${room.seatNumber} 座',
-                      accent: accent,
-                    ),
-                    _MiniPill(label: '空闲 $freeCount 节', accent: accent),
-                    _MiniPill(label: '占用 $busyCount 节', accent: accent),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  '全天节次状态',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '深色和浅色下都使用独立圆角卡片显示，避免边角露底。',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: slotCount,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 1.55,
-                  ),
-                  itemBuilder: (context, index) {
-                    final lesson = index + 1;
-                    final busy = isSlotBusy(lesson);
-                    return _LessonSlotCard(
-                      lesson: lesson,
-                      busy: busy,
-                      accent: accent,
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    _LegendDot(
-                      color: accent.withValues(
-                        alpha: colorScheme.isDarkMode ? 0.70 : 0.86,
+                    Text(
+                      '全天节次状态',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
-                      label: '占用',
                     ),
-                    const SizedBox(width: 14),
-                    _LegendDot(
-                      color: Colors.white.withValues(
-                        alpha: colorScheme.isDarkMode ? 0.12 : 0.70,
+                    const SizedBox(height: 6),
+                    Text(
+                      '单独查看全天每一节的占用情况，减少翻页判断成本。',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
                       ),
-                      label: '空闲',
+                    ),
+                    const SizedBox(height: 14),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: slotCount,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 1.55,
+                          ),
+                      itemBuilder: (context, index) {
+                        final lesson = index + 1;
+                        final busy = isSlotBusy(lesson);
+                        return _LessonSlotCard(
+                          lesson: lesson,
+                          busy: busy,
+                          accent: accent,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        _LegendDot(
+                          color: accent.withValues(
+                            alpha: colorScheme.isDarkMode ? 0.70 : 0.86,
+                          ),
+                          label: '占用',
+                        ),
+                        const SizedBox(width: 14),
+                        _LegendDot(
+                          color: Colors.white.withValues(
+                            alpha: colorScheme.isDarkMode ? 0.12 : 0.70,
+                          ),
+                          label: '空闲',
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1441,6 +1481,44 @@ class _BigLessonOptionCard extends StatelessWidget {
   }
 }
 
+class _RoomSheetCard extends StatelessWidget {
+  const _RoomSheetCard({required this.accent, required this.child});
+
+  final Color accent;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final sheetBase = colorScheme.surfaceContainerHighest;
+    final sheetRaised = colorScheme.surfaceContainerHigh;
+
+    return GlassPanel(
+      style: GlassPanelStyle.solid,
+      useBackdropFilter: false,
+      blur: 0,
+      borderRadius: BorderRadius.circular(32),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          sheetBase.withValues(alpha: colorScheme.isDarkMode ? 0.90 : 0.92),
+          Color.alphaBlend(
+            accent.withValues(alpha: colorScheme.isDarkMode ? 0.10 : 0.05),
+            sheetRaised.withValues(alpha: colorScheme.isDarkMode ? 0.86 : 0.88),
+          ),
+          accent.withValues(alpha: colorScheme.isDarkMode ? 0.06 : 0.02),
+        ],
+      ),
+      borderColor: accent.withValues(
+        alpha: colorScheme.isDarkMode ? 0.14 : 0.08,
+      ),
+      child: child,
+    );
+  }
+}
+
 class _LessonSlotCard extends StatelessWidget {
   const _LessonSlotCard({
     required this.lesson,
@@ -1460,16 +1538,25 @@ class _LessonSlotCard extends StatelessWidget {
       decoration: BoxDecoration(
         color:
             busy
-                ? accent.withValues(alpha: colorScheme.isDarkMode ? 0.24 : 0.16)
-                : Colors.white.withValues(
-                  alpha: colorScheme.isDarkMode ? 0.08 : 0.70,
+                ? Color.alphaBlend(
+                  accent.withValues(
+                    alpha: colorScheme.isDarkMode ? 0.24 : 0.16,
+                  ),
+                  colorScheme.surfaceContainerHighest.withValues(
+                    alpha: colorScheme.isDarkMode ? 0.92 : 0.96,
+                  ),
+                )
+                : colorScheme.surfaceContainerHighest.withValues(
+                  alpha: colorScheme.isDarkMode ? 0.82 : 0.94,
                 ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color:
               busy
-                  ? accent.withValues(alpha: 0.24)
-                  : colorScheme.outlineVariant.withValues(alpha: 0.64),
+                  ? accent.withValues(
+                    alpha: colorScheme.isDarkMode ? 0.28 : 0.22,
+                  )
+                  : colorScheme.outlineVariant.withValues(alpha: 0.74),
         ),
       ),
       child: Center(
@@ -1525,6 +1612,20 @@ class _BigLessonBlock {
   }
 }
 
+class _RoomGridItem {
+  const _RoomGridItem({
+    required this.room,
+    required this.compactRoomName,
+    required this.seatLabel,
+    required this.busySlotCount,
+  });
+
+  final Room room;
+  final String compactRoomName;
+  final String seatLabel;
+  final int busySlotCount;
+}
+
 class _LegendDot extends StatelessWidget {
   const _LegendDot({required this.color, required this.label});
 
@@ -1572,11 +1673,13 @@ class _MiniPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(
-          alpha: colorScheme.isDarkMode ? 0.10 : 0.56,
+        color: colorScheme.surfaceContainerHighest.withValues(
+          alpha: colorScheme.isDarkMode ? 0.82 : 0.90,
         ),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accent.withValues(alpha: 0.12)),
+        border: Border.all(
+          color: accent.withValues(alpha: colorScheme.isDarkMode ? 0.18 : 0.12),
+        ),
       ),
       child: Text(
         label,
@@ -1636,6 +1739,7 @@ class _FeatureEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       gradient: LinearGradient(
@@ -1686,6 +1790,7 @@ class _FeatureBackButton extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.floating,
       blur: 18,
       borderRadius: BorderRadius.circular(18),
       padding: EdgeInsets.zero,
@@ -1736,6 +1841,7 @@ class _HeaderCountPill extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.floating,
       blur: 18,
       borderRadius: BorderRadius.circular(16),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),

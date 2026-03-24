@@ -254,6 +254,7 @@ class _UserPageState extends State<UserPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         bottomHighlightOpacity: 0,
         lightBottomColor: const Color(0xFFEAF0FA),
         darkBottomColor: const Color(0xFF101826),
@@ -340,6 +341,7 @@ class _UserPageState extends State<UserPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       blur: 22,
       borderRadius: BorderRadius.circular(32),
       padding: const EdgeInsets.all(24),
@@ -383,6 +385,7 @@ class _UserPageState extends State<UserPage> {
     final theme = Theme.of(context);
 
     return GlassPanel(
+      style: GlassPanelStyle.card,
       blur: 18,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.all(18),
@@ -421,6 +424,7 @@ class _UserPageState extends State<UserPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       blur: 22,
       borderRadius: BorderRadius.circular(32),
       padding: const EdgeInsets.all(24),
@@ -514,6 +518,7 @@ class _UserPageState extends State<UserPage> {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
+      style: GlassPanelStyle.card,
       blur: 22,
       borderRadius: BorderRadius.circular(32),
       padding: const EdgeInsets.all(24),
@@ -594,6 +599,7 @@ class _UserPageState extends State<UserPage> {
 
   Widget _buildActionPanel({required List<Widget> children}) {
     return GlassPanel(
+      style: GlassPanelStyle.list,
       blur: 18,
       borderRadius: BorderRadius.circular(28),
       padding: EdgeInsets.zero,
@@ -629,6 +635,7 @@ class _UserPageState extends State<UserPage> {
 
   Widget _buildDangerTile() {
     return GlassPanel(
+      style: GlassPanelStyle.card,
       blur: 18,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.all(18),

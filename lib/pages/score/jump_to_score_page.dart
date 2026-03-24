@@ -71,6 +71,7 @@ class _JumpToScorePageState extends State<JumpToScorePage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         child: Stack(
           children: [
             Center(
@@ -113,6 +114,7 @@ class _LoadingPanel extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       borderRadius: BorderRadius.circular(30),
       padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
       gradient: LinearGradient(
@@ -219,6 +221,7 @@ class _ErrorPanel extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       borderRadius: BorderRadius.circular(30),
       padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
       gradient: LinearGradient(
@@ -284,6 +287,7 @@ class _FeatureBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
+      style: GlassPanelStyle.floating,
       blur: 16,
       borderRadius: BorderRadius.circular(20),
       padding: EdgeInsets.zero,

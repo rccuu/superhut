@@ -168,6 +168,7 @@ class _FunctionPageState extends State<FunctionPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         bottomHighlightOpacity: 0,
         lightBottomColor: const Color(0xFFEAF0FA),
         darkBottomColor: const Color(0xFF101826),
@@ -219,6 +220,7 @@ class _FunctionPageState extends State<FunctionPage> {
       child: Material(
         color: Colors.transparent,
         child: GlassPanel(
+          style: GlassPanelStyle.card,
           blur: useLiteCards ? 0 : 18,
           useBackdropFilter: !useLiteCards,
           borderRadius: BorderRadius.circular(26),

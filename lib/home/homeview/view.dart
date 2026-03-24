@@ -396,6 +396,7 @@ class _ClassicTabBar extends StatelessWidget {
             ),
           ),
           GlassPanel(
+            style: GlassPanelStyle.floating,
             blur: isDark ? 18 : 24,
             borderRadius: panelRadius,
             gradient: panelGradient,

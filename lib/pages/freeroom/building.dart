@@ -86,6 +86,7 @@ class _BuildingPageState extends State<BuildingPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         lightBottomColor: const Color(0xFFF0F5FF),
         darkBottomColor: const Color(0xFF0F1826),
         child: EnhancedFutureBuilder(
@@ -152,6 +153,7 @@ class _BuildingPageState extends State<BuildingPage> {
   Widget _buildLoadingState(BuildContext context) {
     return Center(
       child: GlassPanel(
+        style: GlassPanelStyle.hero,
         borderRadius: BorderRadius.circular(28),
         padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 24),
         gradient: LinearGradient(
@@ -271,6 +273,7 @@ class _CampusHeroCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       borderRadius: BorderRadius.circular(24),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       gradient: LinearGradient(
@@ -344,6 +347,7 @@ class _CampusSection extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.card,
       borderRadius: BorderRadius.circular(30),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       gradient: LinearGradient(
@@ -535,10 +539,10 @@ class _BuildingCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: accent.withValues(
-              alpha: colorScheme.isDarkMode ? 0.14 : 0.08,
+              alpha: colorScheme.isDarkMode ? 0.10 : 0.05,
             ),
-            blurRadius: 20,
-            offset: const Offset(0, 12),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -705,6 +709,7 @@ class _FeatureEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       gradient: LinearGradient(
@@ -753,6 +758,7 @@ class _FeatureBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
+      style: GlassPanelStyle.floating,
       blur: 16,
       borderRadius: BorderRadius.circular(20),
       padding: EdgeInsets.zero,

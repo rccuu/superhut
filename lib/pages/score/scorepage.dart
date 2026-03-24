@@ -311,10 +311,12 @@ class _ScorePageState extends State<ScorePage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         child: Stack(
           children: [
             Center(
               child: GlassPanel(
+                style: GlassPanelStyle.hero,
                 borderRadius: BorderRadius.circular(28),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 26,
@@ -372,6 +374,7 @@ class _ScorePageState extends State<ScorePage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         child: Stack(
           children: [
             ListView(
@@ -470,6 +473,7 @@ class _ScoreOverviewCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       borderRadius: BorderRadius.circular(26),
       padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
       gradient: LinearGradient(
@@ -566,6 +570,7 @@ class _SemesterSelectorButton extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.floating,
       blur: 16,
       borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -643,6 +648,7 @@ class _SemesterPickerSheet extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         child: GlassPanel(
+          style: GlassPanelStyle.floating,
           borderRadius: BorderRadius.circular(30),
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
           gradient: LinearGradient(
@@ -748,6 +754,7 @@ class _SemesterOptionTile extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.list,
       borderRadius: BorderRadius.circular(20),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       borderColor:
@@ -863,6 +870,7 @@ class _ScoreCourseCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.list,
       borderRadius: BorderRadius.circular(24),
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
       tintColor: colorScheme.surface.withValues(
@@ -872,10 +880,10 @@ class _ScoreCourseCard extends StatelessWidget {
       boxShadow: [
         BoxShadow(
           color: palette.accent.withValues(
-            alpha: colorScheme.isDarkMode ? 0.10 : 0.06,
+            alpha: colorScheme.isDarkMode ? 0.08 : 0.04,
           ),
-          blurRadius: 18,
-          offset: const Offset(0, 10),
+          blurRadius: 12,
+          offset: const Offset(0, 6),
         ),
       ],
       onTap: onTap,
@@ -1071,6 +1079,7 @@ class _ScoreDetailSheet extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           child: GlassPanel(
+            style: GlassPanelStyle.floating,
             borderRadius: BorderRadius.circular(30),
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             gradient: LinearGradient(
@@ -1326,6 +1335,7 @@ class _FeatureEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       borderRadius: BorderRadius.circular(28),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       gradient: LinearGradient(
@@ -1374,6 +1384,7 @@ class _FeatureBackButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassPanel(
+      style: GlassPanelStyle.floating,
       blur: 16,
       borderRadius: BorderRadius.circular(20),
       padding: EdgeInsets.zero,

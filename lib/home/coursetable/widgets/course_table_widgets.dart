@@ -1,9 +1,11 @@
-import 'package:flutter/foundation.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
 import '../../../core/ui/apple_glass.dart';
+import '../../../core/ui/color_scheme_ext.dart';
 import '../../../utils/course/coursemain.dart';
 
 class CourseTableToolbar extends StatelessWidget {
@@ -34,6 +36,7 @@ class CourseTableToolbar extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return GlassPanel(
+      style: GlassPanelStyle.floating,
       blur: 18,
       borderRadius: BorderRadius.circular(22),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -361,7 +364,7 @@ class CourseDetailSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
+    final colorScheme = theme.colorScheme;
 
     Future<void> copyValue(String text, String message) async {
       await Clipboard.setData(ClipboardData(text: text));
@@ -408,100 +411,100 @@ class CourseDetailSheet extends StatelessWidget {
         ),
     ];
 
-    return Material(
-      color: Colors.transparent,
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.84,
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(100),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  course.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: colorScheme.onSurface,
-                    letterSpacing: -0.45,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Text(
-                      '详情',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '长按下方信息可复制',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant.withValues(
-                          alpha: 0.78,
+    return _CourseSheetShell(
+      maxHeightFactor: 0.84,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CourseSheetCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.92,
                         ),
-                        fontWeight: FontWeight.w600,
+                        borderRadius: BorderRadius.circular(100),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _CourseDetailGroup(
-                  children:
-                      detailItems
-                          .map(
-                            (item) => _CourseDetailRow(
-                              icon: item.icon,
-                              text: item.text,
-                              onLongPress:
-                                  () => copyValue(item.text, '已复制${item.text}'),
-                            ),
-                          )
-                          .toList(),
-                ),
-                const SizedBox(height: 16),
-                _CourseDetailGroup(
-                  children:
-                      actionItems
-                          .map(
-                            (item) => _CourseDetailRow(
-                              icon: item.icon,
-                              text: item.text,
-                              accentColor: colorScheme.primary,
-                              trailing: Icon(
-                                Ionicons.chevron_forward_outline,
-                                size: 18,
-                                color: colorScheme.onSurfaceVariant.withValues(
-                                  alpha: 0.72,
-                                ),
-                              ),
-                              onTap: item.onTap,
-                            ),
-                          )
-                          .toList(),
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    course.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: colorScheme.onSurface,
+                      letterSpacing: -0.45,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Text(
+                        '详情',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '长按下方信息可复制',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant.withValues(
+                            alpha: 0.78,
+                          ),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
+            const SizedBox(height: 12),
+            _CourseDetailGroup(
+              children:
+                  detailItems
+                      .map(
+                        (item) => _CourseDetailRow(
+                          icon: item.icon,
+                          text: item.text,
+                          onLongPress:
+                              () => copyValue(item.text, '已复制${item.text}'),
+                        ),
+                      )
+                      .toList(),
+            ),
+            const SizedBox(height: 12),
+            _CourseDetailGroup(
+              children:
+                  actionItems
+                      .map(
+                        (item) => _CourseDetailRow(
+                          icon: item.icon,
+                          text: item.text,
+                          accentColor: colorScheme.primary,
+                          trailing: Icon(
+                            Ionicons.chevron_forward_outline,
+                            size: 18,
+                            color: colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.72,
+                            ),
+                          ),
+                          onTap: item.onTap,
+                        ),
+                      )
+                      .toList(),
+            ),
+          ],
         ),
       ),
     );
@@ -521,87 +524,188 @@ class ExperimentStudentsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final useLitePanels =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final sheetHeight = math.min(
+      MediaQuery.sizeOf(context).height * 0.72,
+      520.0,
+    );
+
+    return _CourseSheetShell(
+      maxHeightFactor: 0.82,
+      panelPadding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+      child: SizedBox(
+        height: sheetHeight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CourseSheetCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.92,
+                        ),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    '${baseData['kcmc']?.toString() ?? ''} - ${baseData['pcname']?.toString() ?? ''}',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '学期: ${baseData['xnxqmc']?.toString() ?? ''}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.separated(
+                itemCount: students.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final student = students[index];
+                  return GlassPanel(
+                    style: GlassPanelStyle.list,
+                    blur: 0,
+                    useBackdropFilter: false,
+                    borderRadius: BorderRadius.circular(22),
+                    padding: EdgeInsets.zero,
+                    borderColor: colorScheme.outlineVariant.withValues(
+                      alpha: colorScheme.isDarkMode ? 0.20 : 0.24,
+                    ),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        colorScheme.surfaceContainerHighest.withValues(
+                          alpha: colorScheme.isDarkMode ? 0.88 : 0.90,
+                        ),
+                        Color.alphaBlend(
+                          colorScheme.primary.withValues(
+                            alpha: colorScheme.isDarkMode ? 0.08 : 0.04,
+                          ),
+                          colorScheme.surfaceContainerHigh.withValues(
+                            alpha: colorScheme.isDarkMode ? 0.82 : 0.86,
+                          ),
+                        ),
+                      ],
+                    ),
+                    child: ListTile(
+                      leading: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Ionicons.person_outline,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                      title: Text(student['xm']?.toString() ?? ''),
+                      subtitle: Text(
+                        '学号 ${student['xh']?.toString() ?? ''}  ·  ${student['bj']?.toString() ?? ''}',
+                      ),
+                      trailing: Text(student['xbmc']?.toString() ?? ''),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CourseSheetShell extends StatelessWidget {
+  const _CourseSheetShell({
+    required this.child,
+    this.maxHeightFactor,
+    this.panelPadding = const EdgeInsets.fromLTRB(20, 14, 20, 20),
+  });
+
+  final Widget child;
+  final double? maxHeightFactor;
+  final EdgeInsetsGeometry panelPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget content = child;
+    if (maxHeightFactor != null) {
+      content = ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * maxHeightFactor!,
+        ),
+        child: child,
+      );
+    }
 
     return Material(
       color: Colors.transparent,
-      child: SizedBox(
-        height: 520,
+      child: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: colorScheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                '${baseData['kcmc']?.toString() ?? ''} - ${baseData['pcname']?.toString() ?? ''}',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '学期: ${baseData['xnxqmc']?.toString() ?? ''}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: students.length,
-                  separatorBuilder:
-                      (context, index) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final student = students[index];
-                    return Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: GlassPanel(
-                        blur: useLitePanels ? 0 : 12,
-                        useBackdropFilter: !useLitePanels,
-                        borderRadius: BorderRadius.circular(22),
-                        padding: EdgeInsets.zero,
-                        child: ListTile(
-                          leading: Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: colorScheme.primary.withValues(
-                                alpha: 0.12,
-                              ),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              Ionicons.person_outline,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                          title: Text(student['xm']?.toString() ?? ''),
-                          subtitle: Text(
-                            '学号 ${student['xh']?.toString() ?? ''}  ·  ${student['bj']?.toString() ?? ''}',
-                          ),
-                          trailing: Text(student['xbmc']?.toString() ?? ''),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: Padding(padding: panelPadding, child: content),
         ),
       ),
+    );
+  }
+}
+
+class _CourseSheetCard extends StatelessWidget {
+  const _CourseSheetCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return GlassPanel(
+      style: GlassPanelStyle.solid,
+      useBackdropFilter: false,
+      blur: 0,
+      borderRadius: BorderRadius.circular(32),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
+      borderColor: colorScheme.primary.withValues(
+        alpha: colorScheme.isDarkMode ? 0.14 : 0.08,
+      ),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          colorScheme.surfaceContainerHighest.withValues(
+            alpha: colorScheme.isDarkMode ? 0.90 : 0.92,
+          ),
+          Color.alphaBlend(
+            colorScheme.primary.withValues(
+              alpha: colorScheme.isDarkMode ? 0.10 : 0.05,
+            ),
+            colorScheme.surfaceContainerHigh.withValues(
+              alpha: colorScheme.isDarkMode ? 0.86 : 0.88,
+            ),
+          ),
+          colorScheme.primary.withValues(
+            alpha: colorScheme.isDarkMode ? 0.05 : 0.02,
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }
@@ -632,13 +736,33 @@ class _CourseDetailGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final useLitePanels =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
-      blur: useLitePanels ? 0 : 12,
-      useBackdropFilter: !useLitePanels,
+      style: GlassPanelStyle.list,
+      blur: 0,
+      useBackdropFilter: false,
       borderRadius: BorderRadius.circular(24),
+      borderColor: colorScheme.outlineVariant.withValues(
+        alpha: colorScheme.isDarkMode ? 0.20 : 0.24,
+      ),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          colorScheme.surfaceContainerHighest.withValues(
+            alpha: colorScheme.isDarkMode ? 0.88 : 0.90,
+          ),
+          Color.alphaBlend(
+            colorScheme.primary.withValues(
+              alpha: colorScheme.isDarkMode ? 0.08 : 0.04,
+            ),
+            colorScheme.surfaceContainerHigh.withValues(
+              alpha: colorScheme.isDarkMode ? 0.82 : 0.86,
+            ),
+          ),
+        ],
+      ),
       padding: EdgeInsets.zero,
       child: Column(
         mainAxisSize: MainAxisSize.min,
