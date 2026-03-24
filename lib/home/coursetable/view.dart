@@ -21,6 +21,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../bridge/get_course_page.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/ui/apple_glass.dart';
+import '../../core/ui/color_scheme_ext.dart';
 import '../../login/unified_login_page.dart';
 import '../../utils/course/get_course.dart';
 import '../../utils/course/coursemain.dart';
@@ -441,6 +442,21 @@ class _CourseTableViewState extends State<CourseTableView> {
   bool get _useLiteAndroidEffects =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+  Color _sheetRouteBackground(BuildContext context) {
+    return Colors.transparent;
+  }
+
+  Color _sheetBarrierColor(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return colorScheme.overlayScrim.withValues(
+      alpha: colorScheme.isDarkMode ? 0.20 : 0.10,
+    );
+  }
+
+  Color _sheetTransitionBackground(BuildContext context) {
+    return Colors.transparent;
+  }
+
   Future<T?> _showAdaptiveBottomSheet<T>({
     required WidgetBuilder builder,
     bool expand = false,
@@ -450,6 +466,7 @@ class _CourseTableViewState extends State<CourseTableView> {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
+        barrierColor: _sheetBarrierColor(context),
         builder: builder,
       );
     }
@@ -457,6 +474,9 @@ class _CourseTableViewState extends State<CourseTableView> {
     return showCupertinoModalBottomSheet<T>(
       context: context,
       expand: expand,
+      backgroundColor: _sheetRouteBackground(context),
+      barrierColor: _sheetBarrierColor(context),
+      transitionBackgroundColor: _sheetTransitionBackground(context),
       builder: builder,
     );
   }
@@ -1423,7 +1443,10 @@ class _CourseTableViewState extends State<CourseTableView> {
     required Widget child,
   }) {
     if (!_useLiteAndroidEffects) {
-      return AppGlassBackground(child: child);
+      return AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
+        child: child,
+      );
     }
 
     final theme = Theme.of(context);
@@ -1720,6 +1743,7 @@ class _CourseTableViewState extends State<CourseTableView> {
                               entry.key == _savedSchedules.length - 1 ? 0 : 8,
                         ),
                         child: GlassPanel(
+                          style: GlassPanelStyle.list,
                           blur: useLitePanels ? 0 : 18,
                           useBackdropFilter: !useLitePanels,
                           borderRadius: BorderRadius.circular(18),
@@ -2019,6 +2043,7 @@ class _CourseTableViewState extends State<CourseTableView> {
         ),
       ),
       child: GlassPanel(
+        style: GlassPanelStyle.card,
         blur: useLitePanels ? 0 : 22,
         useBackdropFilter: !useLitePanels,
         borderRadius: BorderRadius.circular(28),
@@ -2081,6 +2106,7 @@ class _CourseTableViewState extends State<CourseTableView> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: GlassPanel(
+            style: GlassPanelStyle.hero,
             blur: 26,
             borderRadius: BorderRadius.circular(34),
             padding: const EdgeInsets.all(24),
@@ -2391,6 +2417,7 @@ class _CourseTableViewState extends State<CourseTableView> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         bottomHighlightOpacity: 0,
         lightBottomColor: const Color(0xFFEAF0FA),
         darkBottomColor: const Color(0xFF101826),

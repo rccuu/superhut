@@ -204,6 +204,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
       body: AppGlassBackground(
+        style: AppGlassBackgroundStyle.soft,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -242,6 +243,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                     const SizedBox(height: 20),
                     RepaintBoundary(
                       child: GlassPanel(
+                        style: GlassPanelStyle.hero,
                         blur: useLiteLayout ? 0 : 24,
                         useBackdropFilter: !useLiteLayout,
                         borderRadius: BorderRadius.circular(34),

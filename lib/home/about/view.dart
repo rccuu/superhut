@@ -186,7 +186,6 @@ class _AboutPageState extends State<AboutPage> {
       backgroundColor: Colors.transparent,
       body: _buildPageBackground(
         context,
-        useLiteLayout: useLiteLayout,
         child: Stack(
           children: [
             ListView(
@@ -267,38 +266,9 @@ class _AboutPageState extends State<AboutPage> {
     );
   }
 
-  Widget _buildPageBackground(
-    BuildContext context, {
-    required bool useLiteLayout,
-    required Widget child,
-  }) {
-    if (!useLiteLayout) {
-      return AppGlassBackground(child: child);
-    }
-
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomCenter,
-          colors:
-              isDark
-                  ? const [
-                    Color(0xFF0F1722),
-                    Color(0xFF101827),
-                    Color(0xFF0B111A),
-                  ]
-                  : [
-                    colorScheme.surfaceContainerLowest,
-                    colorScheme.surface,
-                    colorScheme.surfaceContainerLow,
-                  ],
-        ),
-      ),
+  Widget _buildPageBackground(BuildContext context, {required Widget child}) {
+    return AppGlassBackground(
+      style: AppGlassBackgroundStyle.soft,
       child: child,
     );
   }
@@ -324,6 +294,7 @@ class _AboutHeroCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
+      style: GlassPanelStyle.hero,
       blur: useLiteEffects ? 0 : 24,
       useBackdropFilter: !useLiteEffects,
       borderRadius: BorderRadius.circular(34),
@@ -407,6 +378,7 @@ class _AboutSectionPanel extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
+      style: GlassPanelStyle.card,
       blur: useLiteEffects ? 0 : 22,
       useBackdropFilter: !useLiteEffects,
       borderRadius: BorderRadius.circular(30),
@@ -459,6 +431,7 @@ class _AboutBackButton extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
+      style: GlassPanelStyle.floating,
       blur: useLiteEffects ? 0 : 18,
       useBackdropFilter: !useLiteEffects,
       borderRadius: BorderRadius.circular(18),
@@ -550,6 +523,7 @@ class _RepoTile extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return GlassPanel(
+      style: GlassPanelStyle.list,
       blur: useLiteEffects ? 0 : 18,
       useBackdropFilter: !useLiteEffects,
       borderRadius: BorderRadius.circular(22),
