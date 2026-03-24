@@ -30,7 +30,10 @@ import '../../widget_refresh_service.dart';
 import 'widgets/course_table_widgets.dart';
 
 class CourseTableView extends StatefulWidget {
-  const CourseTableView({super.key});
+  const CourseTableView({super.key, this.debugScheduleOverride});
+
+  @visibleForTesting
+  final SavedCourseSchedule? debugScheduleOverride;
 
   @override
   State<CourseTableView> createState() => _CourseTableViewState();
@@ -69,6 +72,7 @@ class _CourseTableViewState extends State<CourseTableView> {
   static const double _headerGap = 8;
   static const double _cardInnerGap = 2;
   late final Future<void> _initialLoadFuture;
+  late final PageController _weekPageController;
   bool _hasLinkedCampusAccount = false;
   bool _isPrimaryActionLoading = false;
   bool _isCurrentTermSchedule = true;
@@ -108,7 +112,14 @@ class _CourseTableViewState extends State<CourseTableView> {
   @override
   void initState() {
     super.initState();
+    _weekPageController = PageController();
     _initialLoadFuture = _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _weekPageController.dispose();
+    super.dispose();
   }
 
   // 综合计算周数的完整函数
@@ -263,8 +274,12 @@ class _CourseTableViewState extends State<CourseTableView> {
         prefs.getBool(_showExperimentCoursesKey) ?? true;
     final hasLinkedCampusAccount =
         await AppAuthStorage.instance.hasLinkedCampusAccount();
-    final savedSchedules = await loadSavedCourseSchedules();
-    final activeSchedule = await loadActiveCourseSchedule();
+    final overrideSchedule = widget.debugScheduleOverride;
+    final savedSchedules =
+        overrideSchedule == null
+            ? await loadSavedCourseSchedules()
+            : <SavedCourseSchedule>[overrideSchedule];
+    final activeSchedule = overrideSchedule ?? await loadActiveCourseSchedule();
     final courseData =
         activeSchedule?.courseData ?? const <String, List<Course>>{};
     final isCurrentTermSchedule = _isScheduleCurrentTerm(activeSchedule);
@@ -296,6 +311,7 @@ class _CourseTableViewState extends State<CourseTableView> {
       _hasLinkedCampusAccount = hasLinkedCampusAccount;
       _isCurrentTermSchedule = isCurrentTermSchedule;
     });
+    _syncWeekPageToCurrentWeek();
   }
 
   Future<void> _loadInitialData() async {
@@ -322,54 +338,103 @@ class _CourseTableViewState extends State<CourseTableView> {
     return date.subtract(Duration(days: date.weekday - 1));
   }
 
+  List<DateTime> _buildWeekDays(DateTime anchorDate) {
+    final weekStart = _getStartOfWeek(anchorDate);
+    return List.generate(7, (i) => weekStart.add(Duration(days: i)));
+  }
+
+  int _normalizeWeek(int weekNumber) {
+    return weekNumber.clamp(1, _allWeek).toInt();
+  }
+
+  DateTime _dateForWeek(int weekNumber) {
+    final normalizedWeek = _normalizeWeek(weekNumber);
+    final schedule = _activeSchedule;
+    final firstDay = schedule == null ? null : _tryParseDate(schedule.firstDay);
+    if (firstDay != null) {
+      final firstMonday = _startOfMonday(firstDay);
+      return firstMonday.add(Duration(days: (normalizedWeek - 1) * 7));
+    }
+
+    return _currentDate.add(
+      Duration(days: (normalizedWeek - _currentWeek) * 7),
+    );
+  }
+
+  List<DateTime> _buildWeekDaysForWeek(int weekNumber) {
+    return _buildWeekDays(_dateForWeek(weekNumber));
+  }
+
+  void _applyDisplayedWeek(int targetWeek) {
+    final normalizedWeek = _normalizeWeek(targetWeek);
+    final targetDate = _dateForWeek(normalizedWeek);
+    if (normalizedWeek == _currentWeek &&
+        _isSameDay(targetDate, _currentDate)) {
+      return;
+    }
+    setState(() {
+      _currentWeek = normalizedWeek;
+      _currentDate = targetDate;
+    });
+  }
+
+  void _moveWeekPagerTo(int targetWeek, {bool animated = false}) {
+    final targetPage = _normalizeWeek(targetWeek) - 1;
+
+    void move() {
+      if (!mounted || !_weekPageController.hasClients) {
+        return;
+      }
+      final currentPage =
+          _weekPageController.page ??
+          _weekPageController.initialPage.toDouble();
+      if ((currentPage - targetPage).abs() < 0.01) {
+        return;
+      }
+      if (animated) {
+        unawaited(
+          _weekPageController.animateToPage(
+            targetPage,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+        return;
+      }
+      _weekPageController.jumpToPage(targetPage);
+    }
+
+    if (_weekPageController.hasClients) {
+      move();
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      move();
+    });
+  }
+
+  void _syncWeekPageToCurrentWeek({bool animated = false}) {
+    _moveWeekPagerTo(_currentWeek, animated: animated);
+  }
+
+  void _handleWeekPageChanged(int pageIndex) {
+    _applyDisplayedWeek(pageIndex + 1);
+  }
+
+  void _goToWeek(int targetWeek, {bool animated = true}) {
+    final normalizedWeek = _normalizeWeek(targetWeek);
+    if (!animated) {
+      _applyDisplayedWeek(normalizedWeek);
+    }
+    _moveWeekPagerTo(normalizedWeek, animated: animated);
+  }
+
   void _backToRealWeek() {
     if (_currentWeek == _currentRealWeek) {
       return;
     }
-    setState(() {
-      _currentDate = DateTime(
-        _currentDate.year,
-        _currentDate.month,
-        _currentDate.day - 7 * (_currentWeek - _currentRealWeek),
-      );
-      _currentWeek = _currentRealWeek;
-    });
-  }
-
-  /*
-   * 切换到上个月视图
-   * 更新_currentDate为上月第一天
-   */
-  void _previousWeek() {
-    if (_currentWeek <= 1) {
-      return;
-    }
-    setState(() {
-      _currentDate = DateTime(
-        _currentDate.year,
-        _currentDate.month,
-        _currentDate.day - 7,
-      );
-      _currentWeek = _currentWeek - 1;
-    });
-  }
-
-  /*
-   * 切换到下个月视图
-   * 更新_currentDate为下月第一天
-   */
-  void _nextWeek() {
-    if (_currentWeek >= _allWeek) {
-      return;
-    }
-    setState(() {
-      _currentDate = DateTime(
-        _currentDate.year,
-        _currentDate.month,
-        _currentDate.day + 7,
-      );
-      _currentWeek = _currentWeek + 1;
-    });
+    _goToWeek(_currentRealWeek, animated: false);
   }
 
   /*
@@ -2320,6 +2385,170 @@ class _CourseTableViewState extends State<CourseTableView> {
     return placements;
   }
 
+  Widget _buildWeekPage({
+    required BuildContext context,
+    required List<DateTime> weekDays,
+    required _WeekGridMetrics metrics,
+  }) {
+    final placedCourses = _buildPlacedCourses(weekDays, metrics);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return KeyedSubtree(
+      key: ValueKey<String>(_dateKey(weekDays.first)),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: _headerHeight,
+              width: metrics.totalWidth,
+              child: _WeekHeaderStrip(
+                weekDays: weekDays,
+                weekdayMap: _weekdayMap,
+                metrics: metrics,
+              ),
+            ),
+            const SizedBox(height: _headerGap),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(22),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: isDark ? 0.10 : 0.52),
+                      colorScheme.surface.withValues(
+                        alpha: isDark ? 0.08 : 0.30,
+                      ),
+                    ],
+                  ),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.72),
+                  ),
+                ),
+                child: SizedBox(
+                  width: metrics.totalWidth,
+                  height: metrics.gridHeight,
+                  child: Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: [
+                      ...weekDays.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final day = entry.value;
+                        final isToday = _isToday(day);
+                        return Positioned(
+                          left: metrics.leftForDay(index),
+                          top: 0,
+                          width: metrics.dayWidth,
+                          height: metrics.gridHeight,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color:
+                                  isToday
+                                      ? colorScheme.primary.withValues(
+                                        alpha: isDark ? 0.08 : 0.06,
+                                      )
+                                      : Colors.transparent,
+                            ),
+                          ),
+                        );
+                      }),
+                      ...List.generate(_sectionCount, (index) {
+                        final top = metrics.topForSection(index + 1);
+                        return Positioned(
+                          left: metrics.timeColumnWidth + _columnGap,
+                          right: 0,
+                          top: top,
+                          height: metrics.slotHeight,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(
+                                  color: colorScheme.outlineVariant.withValues(
+                                    alpha: isDark ? 0.24 : 0.34,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                      ...List.generate(6, (index) {
+                        final left =
+                            metrics.leftForDay(index) +
+                            metrics.dayWidth +
+                            (_columnGap / 2);
+                        return Positioned(
+                          left: left,
+                          top: 0,
+                          width: 1,
+                          height: metrics.gridHeight,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colorScheme.outlineVariant.withValues(
+                                alpha: isDark ? 0.18 : 0.22,
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                      ..._sectionTimes.map((section) {
+                        final top = metrics.topForSection(section.index);
+                        return Positioned(
+                          left: 0,
+                          top: top,
+                          width: metrics.timeColumnWidth,
+                          height: metrics.slotHeight,
+                          child: _TimeAxisLabel(section: section),
+                        );
+                      }),
+                      if (placedCourses.isEmpty)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: Center(
+                              child: Text(
+                                '本周暂无课程',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant
+                                      .withValues(alpha: 0.82),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ...placedCourses.map((placement) {
+                        final palette = _getCoursePalette(
+                          placement.course.name,
+                        );
+                        return Positioned(
+                          left: placement.left,
+                          top: placement.top,
+                          width: placement.width,
+                          height: placement.height,
+                          child: _ScheduleCourseCard(
+                            course: placement.course,
+                            palette: palette,
+                            onTap: () => _showCourseDetails(placement),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<_PlacedCourse> _layoutDayCourses({
     required List<Course> dayCourses,
     required DateTime dayDate,
@@ -2410,8 +2639,7 @@ class _CourseTableViewState extends State<CourseTableView> {
 
   @override
   Widget build(BuildContext context) {
-    final weekStart = _getStartOfWeek(_currentDate);
-    final weekDays = List.generate(7, (i) => weekStart.add(Duration(days: i)));
+    final weekDays = _buildWeekDaysForWeek(_currentWeek);
     final showWeekStr = '第$_currentWeek周';
 
     return Scaffold(
@@ -2450,213 +2678,27 @@ class _CourseTableViewState extends State<CourseTableView> {
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final metrics = _buildGridMetrics(constraints);
-                          final placedCourses = _buildPlacedCourses(
-                            weekDays,
-                            metrics,
-                          );
-                          final theme = Theme.of(context);
-                          final colorScheme = theme.colorScheme;
-                          final isDark = theme.brightness == Brightness.dark;
-
-                          return GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onHorizontalDragEnd: (details) {
-                              final velocity = details.primaryVelocity ?? 0;
-                              if (velocity > 10) {
-                                _previousWeek();
-                              } else if (velocity < -10) {
-                                _nextWeek();
-                              }
-                            },
-                            child: Align(
-                              alignment: Alignment.topCenter,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  SizedBox(
-                                    height: _headerHeight,
-                                    width: metrics.totalWidth,
-                                    child: _WeekHeaderStrip(
-                                      weekDays: weekDays,
-                                      weekdayMap: _weekdayMap,
-                                      metrics: metrics,
-                                    ),
-                                  ),
-                                  const SizedBox(height: _headerGap),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(22),
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(22),
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            Colors.white.withValues(
-                                              alpha: isDark ? 0.10 : 0.52,
-                                            ),
-                                            colorScheme.surface.withValues(
-                                              alpha: isDark ? 0.08 : 0.30,
-                                            ),
-                                          ],
-                                        ),
-                                        border: Border.all(
-                                          color: Colors.white.withValues(
-                                            alpha: isDark ? 0.10 : 0.72,
-                                          ),
-                                        ),
-                                      ),
-                                      child: SizedBox(
-                                        width: metrics.totalWidth,
-                                        height: metrics.gridHeight,
-                                        child: Stack(
-                                          clipBehavior: Clip.hardEdge,
-                                          children: [
-                                            ...weekDays.asMap().entries.map((
-                                              entry,
-                                            ) {
-                                              final index = entry.key;
-                                              final day = entry.value;
-                                              final isToday = _isToday(day);
-                                              return Positioned(
-                                                left: metrics.leftForDay(index),
-                                                top: 0,
-                                                width: metrics.dayWidth,
-                                                height: metrics.gridHeight,
-                                                child: DecoratedBox(
-                                                  decoration: BoxDecoration(
-                                                    color:
-                                                        isToday
-                                                            ? colorScheme
-                                                                .primary
-                                                                .withValues(
-                                                                  alpha:
-                                                                      isDark
-                                                                          ? 0.08
-                                                                          : 0.06,
-                                                                )
-                                                            : Colors
-                                                                .transparent,
-                                                  ),
-                                                ),
-                                              );
-                                            }),
-                                            ...List.generate(_sectionCount, (
-                                              index,
-                                            ) {
-                                              final top = metrics.topForSection(
-                                                index + 1,
-                                              );
-                                              return Positioned(
-                                                left:
-                                                    metrics.timeColumnWidth +
-                                                    _columnGap,
-                                                right: 0,
-                                                top: top,
-                                                height: metrics.slotHeight,
-                                                child: DecoratedBox(
-                                                  decoration: BoxDecoration(
-                                                    border: Border(
-                                                      top: BorderSide(
-                                                        color: colorScheme
-                                                            .outlineVariant
-                                                            .withValues(
-                                                              alpha:
-                                                                  isDark
-                                                                      ? 0.24
-                                                                      : 0.34,
-                                                            ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              );
-                                            }),
-                                            ...List.generate(6, (index) {
-                                              final left =
-                                                  metrics.leftForDay(index) +
-                                                  metrics.dayWidth +
-                                                  (_columnGap / 2);
-                                              return Positioned(
-                                                left: left,
-                                                top: 0,
-                                                width: 1,
-                                                height: metrics.gridHeight,
-                                                child: DecoratedBox(
-                                                  decoration: BoxDecoration(
-                                                    color: colorScheme
-                                                        .outlineVariant
-                                                        .withValues(
-                                                          alpha:
-                                                              isDark
-                                                                  ? 0.18
-                                                                  : 0.22,
-                                                        ),
-                                                  ),
-                                                ),
-                                              );
-                                            }),
-                                            ..._sectionTimes.map((section) {
-                                              final top = metrics.topForSection(
-                                                section.index,
-                                              );
-                                              return Positioned(
-                                                left: 0,
-                                                top: top,
-                                                width: metrics.timeColumnWidth,
-                                                height: metrics.slotHeight,
-                                                child: _TimeAxisLabel(
-                                                  section: section,
-                                                ),
-                                              );
-                                            }),
-                                            if (placedCourses.isEmpty)
-                                              Positioned.fill(
-                                                child: IgnorePointer(
-                                                  child: Center(
-                                                    child: Text(
-                                                      '本周暂无课程',
-                                                      style: theme
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                            color: colorScheme
-                                                                .onSurfaceVariant
-                                                                .withValues(
-                                                                  alpha: 0.82,
-                                                                ),
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ...placedCourses.map((placement) {
-                                              final palette = _getCoursePalette(
-                                                placement.course.name,
-                                              );
-                                              return Positioned(
-                                                left: placement.left,
-                                                top: placement.top,
-                                                width: placement.width,
-                                                height: placement.height,
-                                                child: _ScheduleCourseCard(
-                                                  course: placement.course,
-                                                  palette: palette,
-                                                  onTap:
-                                                      () => _showCourseDetails(
-                                                        placement,
-                                                      ),
-                                                ),
-                                              );
-                                            }),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                          return Align(
+                            alignment: Alignment.topCenter,
+                            child: SizedBox(
+                              width: metrics.totalWidth,
+                              child: PageView.builder(
+                                key: const ValueKey('course-table-week-pager'),
+                                controller: _weekPageController,
+                                itemCount: _allWeek,
+                                physics:
+                                    _allWeek <= 1
+                                        ? const NeverScrollableScrollPhysics()
+                                        : null,
+                                onPageChanged: _handleWeekPageChanged,
+                                itemBuilder: (context, index) {
+                                  final weekNumber = index + 1;
+                                  return _buildWeekPage(
+                                    context: context,
+                                    weekDays: _buildWeekDaysForWeek(weekNumber),
+                                    metrics: metrics,
+                                  );
+                                },
                               ),
                             ),
                           );

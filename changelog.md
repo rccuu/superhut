@@ -12,7 +12,18 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
-## 2026-03-24 · `待提交` · chore(release): prepare v1.4.6
+## 2026-03-24 · `待提交` · chore(release): prepare v1.4.7
+- 作者：Codex
+- 这次发版是在 `v1.4.5` 这个最后一个可验证正式 tag 之后，继续把已经进入主线但尚未对外打 tag 的 `v1.4.6` 收口，以及刚完成的课表连续分页优化，一起整理成新的 `1.4.7` 发布包。也就是说，这次对外公告的口径不是只看当前工作区，而是明确覆盖 `v1.4.5..当前版本` 这一段真实进入版本的变化。
+- 延续 `831bd0a` 那轮 UI 减重与玻璃层级收口，本次版本继续保留更轻的全局视觉基底：课表、空教室、成绩页、首页、功能页、我的页和统一登录页都已经收敛到更克制的 `soft` 背景和更明确的面板层级，这部分虽然已经在主线里，但直到这次才和新的交互优化一起进入新的正式版本口径。
+- 本轮真正新增、也是用户直接推动的改动，集中在 `lib/home/coursetable/view.dart` 的课表切周体验。原先实现是“三页循环 + 中页重置”，用户慢慢拖动跨过半页时会被程序直接 `jumpToPage(1)` 抢走控制权，看起来像页面突然脱手。现在改成按周连续分页：`PageView.builder` 直接渲染完整周序列，慢拖时相邻周内容会像纸张一样持续随手势进入视口，快速甩动时则保留系统原生分页物理，自然落到上一周或下一周。
+- 课表页这次不只是把分页容器换掉，还顺手统一了周状态同步模型。初始化、切换课表、回到本周和手势切周现在都共用同一套目标周同步逻辑，避免页码、周标题和顶部日期范围出现不同步。对应地，`test/home/coursetable/course_table_swipe_test.dart` 也补了新的慢拖回归测试，专门验证“手指还按着时 pager 仍停留在分数页位置，不会被程序强行吸回整页”。
+- 工程维护侧补了一个很小但实际有用的收尾：`.gitignore` 新增 `.serena`，避免本地语义分析缓存继续污染工作区。这个改动不会影响用户功能，但能减少后续发版和 review 时的噪音。
+- 本次提交同时把版本号提升到 `1.4.7+1`，并重新生成 iOS unsigned IPA，方便直接进入后续签名或分发流程。
+- 关键文件：`pubspec.yaml`、`changelog.md`、`lib/home/coursetable/view.dart`、`test/home/coursetable/course_table_swipe_test.dart`、`.gitignore`
+- 代码统计（待提交时回填）：5 files changed, version bump + release notes update + smoother course table paging + regression test + local ignore cleanup
+
+## 2026-03-24 · `831bd0a` · chore(release): prepare v1.4.6
 - 作者：Codex
 - 这次发版整理不是继续扩需求，而是把当前工作区里已经确认保留的一轮 UI 减重与交互收口正式整理成 `1.4.6`。总体方向很明确：尽量保留现有玻璃主题的质感，但降低 blur、阴影和过度透明带来的性能与廉价感问题，重点覆盖空教室、课表、成绩页和几个高频入口页。
 - `lib/core/ui/apple_glass.dart` 新增 `AppGlassBackgroundStyle` / `GlassPanelStyle` 两套分层枚举，把背景拆成 `rich / soft / flat`，把面板拆成 `hero / floating / card / list / solid`。这样一来，不同页面和不同密度的组件都可以按场景选更轻的材质，而不是继续让整页所有卡片都走同一种重玻璃参数。
@@ -22,14 +33,14 @@
 - 关键文件：`lib/core/ui/apple_glass.dart`、`lib/home/coursetable/view.dart`、`lib/home/coursetable/widgets/course_table_widgets.dart`、`lib/pages/freeroom/room.dart`、`lib/pages/score/scorepage.dart`、`pubspec.yaml`、`changelog.md`
 - 代码统计：14 files changed, 809 insertions(+), 422 deletions(-)
 
-## 2026-03-23 · `待提交` · chore(release): prepare v1.4.5
+## 2026-03-23 · `38bf9ef` · chore(release): prepare v1.4.5
 - 作者：Codex
 - 这次发版准备把应用版本从 `1.4.2+1` 提升到 `1.4.5+1`，并把 `v1.4.2` 之后已经进入主线的 UI 与 Android 高刷改动整理成一份可直接用于发布说明的摘要。
 - 需要特别说明的是：仓库里当前没有可验证的 `v1.4.3` Git tag，本次发布摘要因此按最后一个可验证正式基线 `v1.4.2` 到当前主线 `b6c9f2b` 的实际提交来整理，不把不存在的 tag 当作差异基线。
 - 从代码层面看，`357f96d` 先补了一轮全局深色模式细节修正，覆盖登录、评教、考试安排、慧生活 798、宿舍热水和 HUT WebView 等页面；`b7dd274` 继续重做成绩查询、空教室查询和宿舍热水三条高频路径，重点是压缩留白、提高信息密度、统一玻璃材质与深浅色表现；`b6c9f2b` 则把 Android 高刷新率适配落到了原生入口，策略是优先 120Hz，没有 120Hz 就回退到设备支持的最高高刷档。
 - 这次提交本身只负责发版元数据和说明整理，不引入新的功能逻辑；真正进入安装包的功能改动以上述三次主线提交为准。
 - 关键文件：`pubspec.yaml`、`changelog.md`
-- 代码统计（待提交时回填）：2 files changed, version bump + release notes update
+- 代码统计：2 files changed, version bump + release notes update
 
 ## 2026-03-23 · `b6c9f2b` · feat(android): prefer high refresh rate on supported devices
 - 作者：rccuu
