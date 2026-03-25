@@ -14,6 +14,7 @@ cd "$PROJECT_ROOT"
 
 # 获取版本号
 VERSION=$(grep "version:" pubspec.yaml | awk '{print $2}' | tr -d '\r')
+APP_BUNDLE_NAME="Superhut.app"
 
 # 清理并构建
 echo "📦 清理项目..."
@@ -32,8 +33,21 @@ echo "🔨 构建 iOS 应用..."
 flutter build ios --no-codesign --release > /dev/null
 
 echo "📱 创建 IPA 包..."
+SOURCE_APP_PATH="build/ios/iphoneos/${APP_BUNDLE_NAME}"
+if [ ! -d "$SOURCE_APP_PATH" ]; then
+  LEGACY_SOURCE_APP_PATH="build/ios/iphoneos/Runner.app"
+  if [ -d "$LEGACY_SOURCE_APP_PATH" ]; then
+    SOURCE_APP_PATH="$LEGACY_SOURCE_APP_PATH"
+  else
+    echo "❌ 缺少 iOS 构建产物: build/ios/iphoneos/${APP_BUNDLE_NAME} 或 build/ios/iphoneos/Runner.app"
+    exit 1
+  fi
+fi
+
+rm -rf build/ios/ipa/Payload
 mkdir -p build/ios/ipa/Payload
-cp -r build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+cp -R "$SOURCE_APP_PATH" "build/ios/ipa/Payload/${APP_BUNDLE_NAME}"
+echo "📦 已将 $(basename "$SOURCE_APP_PATH") 重命名为 ${APP_BUNDLE_NAME}"
 
 # 创建输出目录
 mkdir -p releases

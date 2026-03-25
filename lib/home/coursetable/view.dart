@@ -7,6 +7,7 @@ import 'dart:ui' as ui;
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -73,6 +74,7 @@ class _CourseTableViewState extends State<CourseTableView> {
   static const double _cardInnerGap = 2;
   late final Future<void> _initialLoadFuture;
   late final PageController _weekPageController;
+  late final ValueNotifier<int> _displayedWeekNotifier;
   bool _hasLinkedCampusAccount = false;
   bool _isPrimaryActionLoading = false;
   bool _isCurrentTermSchedule = true;
@@ -113,11 +115,13 @@ class _CourseTableViewState extends State<CourseTableView> {
   void initState() {
     super.initState();
     _weekPageController = PageController();
+    _displayedWeekNotifier = ValueNotifier<int>(_currentWeek);
     _initialLoadFuture = _loadInitialData();
   }
 
   @override
   void dispose() {
+    _displayedWeekNotifier.dispose();
     _weekPageController.dispose();
     super.dispose();
   }
@@ -311,6 +315,7 @@ class _CourseTableViewState extends State<CourseTableView> {
       _hasLinkedCampusAccount = hasLinkedCampusAccount;
       _isCurrentTermSchedule = isCurrentTermSchedule;
     });
+    _displayedWeekNotifier.value = currentWeek;
     _syncWeekPageToCurrentWeek();
   }
 
@@ -372,10 +377,9 @@ class _CourseTableViewState extends State<CourseTableView> {
         _isSameDay(targetDate, _currentDate)) {
       return;
     }
-    setState(() {
-      _currentWeek = normalizedWeek;
-      _currentDate = targetDate;
-    });
+    _currentWeek = normalizedWeek;
+    _currentDate = targetDate;
+    _displayedWeekNotifier.value = normalizedWeek;
   }
 
   void _moveWeekPagerTo(int targetWeek, {bool animated = false}) {
@@ -2639,9 +2643,6 @@ class _CourseTableViewState extends State<CourseTableView> {
 
   @override
   Widget build(BuildContext context) {
-    final weekDays = _buildWeekDaysForWeek(_currentWeek);
-    final showWeekStr = '第$_currentWeek周';
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
@@ -2663,21 +2664,37 @@ class _CourseTableViewState extends State<CourseTableView> {
                 padding: const EdgeInsets.fromLTRB(8, 10, 8, 88),
                 child: Column(
                   children: [
-                    CourseTableToolbar(
-                      weekTitle: showWeekStr,
-                      weekDateRange: _buildWeekDateRange(weekDays),
-                      currentWeekLabel: _buildCurrentWeekLabel(),
-                      isShowingCurrentWeek: _currentWeek == _currentRealWeek,
-                      onBackToCurrentWeek: _backToRealWeek,
-                      onManageSchedules: _showScheduleManager,
-                      showExperimentCourses: _showExperimentCourses,
-                      onShowExperimentCoursesChanged: _setShowExperimentCourses,
+                    ValueListenableBuilder<int>(
+                      valueListenable: _displayedWeekNotifier,
+                      builder: (context, displayedWeek, child) {
+                        final weekDays = _buildWeekDaysForWeek(displayedWeek);
+                        return CourseTableToolbar(
+                          weekTitle: '第$displayedWeek周',
+                          weekDateRange: _buildWeekDateRange(weekDays),
+                          currentWeekLabel: _buildCurrentWeekLabel(),
+                          isShowingCurrentWeek:
+                              displayedWeek == _currentRealWeek,
+                          onBackToCurrentWeek: _backToRealWeek,
+                          onManageSchedules: _showScheduleManager,
+                          showExperimentCourses: _showExperimentCourses,
+                          onShowExperimentCoursesChanged:
+                              _setShowExperimentCourses,
+                        );
+                      },
                     ),
                     const SizedBox(height: 10),
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
                           final metrics = _buildGridMetrics(constraints);
+                          final basePagingPhysics =
+                              _allWeek <= 1
+                                  ? const NeverScrollableScrollPhysics()
+                                  : const _CourseTablePagingPhysics().applyTo(
+                                    ScrollConfiguration.of(
+                                      context,
+                                    ).getScrollPhysics(context),
+                                  );
                           return Align(
                             alignment: Alignment.topCenter,
                             child: SizedBox(
@@ -2686,10 +2703,9 @@ class _CourseTableViewState extends State<CourseTableView> {
                                 key: const ValueKey('course-table-week-pager'),
                                 controller: _weekPageController,
                                 itemCount: _allWeek,
-                                physics:
-                                    _allWeek <= 1
-                                        ? const NeverScrollableScrollPhysics()
-                                        : null,
+                                dragStartBehavior: DragStartBehavior.down,
+                                allowImplicitScrolling: true,
+                                physics: basePagingPhysics,
                                 onPageChanged: _handleWeekPageChanged,
                                 itemBuilder: (context, index) {
                                   final weekNumber = index + 1;
@@ -2752,6 +2768,28 @@ class _CourseTableViewState extends State<CourseTableView> {
               ExperimentStudentsSheet(baseData: baseData, students: students),
     );
   }
+}
+
+class _CourseTablePagingPhysics extends ScrollPhysics {
+  const _CourseTablePagingPhysics({super.parent});
+
+  static const double _minCourseTableFlingDistance = 8.0;
+  static const double _minCourseTableFlingVelocity = 20.0;
+  static const double _dragMotionThreshold = 1.5;
+
+  @override
+  _CourseTablePagingPhysics applyTo(ScrollPhysics? ancestor) {
+    return _CourseTablePagingPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double get minFlingDistance => _minCourseTableFlingDistance;
+
+  @override
+  double get minFlingVelocity => _minCourseTableFlingVelocity;
+
+  @override
+  double? get dragStartDistanceMotionThreshold => _dragMotionThreshold;
 }
 
 class _CoursePalette {
