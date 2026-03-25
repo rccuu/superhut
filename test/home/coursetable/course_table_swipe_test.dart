@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -149,4 +150,79 @@ void main() {
 
     expect(find.text('第2周'), findsOneWidget);
   });
+
+  testWidgets('uses immediate drag start and prebuilds adjacent weeks', (
+    tester,
+  ) async {
+    final schedule = buildTestSchedule();
+    await tester.pumpWidget(
+      MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final pager = tester.widget<PageView>(
+      find.byKey(const ValueKey('course-table-week-pager')),
+    );
+
+    expect(pager.dragStartBehavior, DragStartBehavior.down);
+    expect(pager.allowImplicitScrolling, isTrue);
+    expect(pager.physics?.minFlingDistance, 8.0);
+    expect(pager.physics?.minFlingVelocity, 20.0);
+    expect(pager.physics?.dragStartDistanceMotionThreshold, 1.5);
+  });
+
+  testWidgets('turns page on a short but fast fling', (tester) async {
+    final schedule = buildTestSchedule();
+    await tester.pumpWidget(
+      MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final pagerFinder = find.byKey(const ValueKey('course-table-week-pager'));
+    final pagerSize = tester.getSize(pagerFinder);
+
+    await tester.fling(pagerFinder, Offset(-pagerSize.width * 0.22, 0), 2600);
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('第2周'), findsOneWidget);
+  });
+
+  testWidgets(
+    'recognizes a lower-speed fling once drag has cleared touch slop',
+    (tester) async {
+      final schedule = buildTestSchedule();
+      await tester.pumpWidget(
+        MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+
+      final pagerFinder = find.byKey(const ValueKey('course-table-week-pager'));
+      final pager = tester.widget<PageView>(pagerFinder);
+      final recognizer =
+          HorizontalDragGestureRecognizer()
+            ..minFlingDistance = pager.physics?.minFlingDistance
+            ..minFlingVelocity = pager.physics?.minFlingVelocity;
+
+      try {
+        expect(
+          recognizer.isFlingGesture(
+            const VelocityEstimate(
+              pixelsPerSecond: Offset(-24, 0),
+              offset: Offset(-24, 0),
+              duration: Duration(milliseconds: 20),
+              confidence: 1.0,
+            ),
+            PointerDeviceKind.touch,
+          ),
+          isTrue,
+        );
+      } finally {
+        recognizer.dispose();
+      }
+    },
+  );
 }

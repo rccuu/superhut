@@ -12,8 +12,19 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
-## 2026-03-24 · `待提交` · chore(release): prepare v1.4.7
-- 作者：Codex
+## 2026-03-25 · `待提交` · chore(release): prepare v1.4.8
+- 作者：rccuu
+- 这次发版不再继续沿着上一轮那种更激进的课表自定义吸附方案往前推，而是收口回“更接近系统原生分页，但把真正影响手感的触发条件继续打磨顺手”的方向。目标很明确：优先把课表左右切周做得自然、稳、可预期，而不是为了更早翻页引入新的顿挫和反向抽动。
+- `lib/home/coursetable/view.dart` 里，顶部周标题和日期范围的刷新从整页 `setState` 拆成 `ValueNotifier<int> + ValueListenableBuilder<int>`，切周时只更新周信息本身，不再把整页课表内容一起重建。这样做主要是为了减少翻页落点附近那一下不必要的整页刷新，把“快到下一页时那一下明显顿一下”的感觉继续往下压。
+- 课表分页容器本身继续保留 `PageView.builder` 的连续周序列实现，但这次更明确地把交互细节收成更顺手的一组组合：`dragStartBehavior: DragStartBehavior.down` 让手指一落下就尽快接管横向拖动，`allowImplicitScrolling: true` 让相邻周更早参与布局预热，而 `_CourseTablePagingPhysics` 则只保留轻量调参，不再强行接管整套吸附行为。
+- 这组物理参数当前的收口结果是：`minFlingDistance = 8.0`、`minFlingVelocity = 20.0`、`dragStartDistanceMotionThreshold = 1.5`。也就是说，保留系统原生分页吸附的同时，把短距离快速甩动的识别门槛继续下调，让用户在真正完成横向手势接管之后，不必再靠特别大的位移才能翻到下一周。
+- 为了防止后续继续在“感觉更丝滑”和“实际更稳”之间来回摆动，`test/home/coursetable/course_table_swipe_test.dart` 这次补齐了几类关键回归：立即起拖与相邻周预构建、短距离高速甩动翻页，以及在越过 touch slop 后较低速度 fling 仍能被识别。这样至少能把这次明确确认保留的手感参数固定下来，避免后续再悄悄退回更钝的状态。
+- 本次提交同时把版本号提升到 `1.4.8+1`，用于对应这一轮课表横滑手感打磨后的正式发版整理。
+- 关键文件：`pubspec.yaml`、`changelog.md`、`lib/home/coursetable/view.dart`、`test/home/coursetable/course_table_swipe_test.dart`
+- 代码统计：4 files changed, 150 insertions(+), 25 deletions(-)
+
+## 2026-03-24 · `17c95a7` · chore(release): prepare v1.4.7
+- 作者：rccuu
 - 这次发版是在 `v1.4.5` 这个最后一个可验证正式 tag 之后，继续把已经进入主线但尚未对外打 tag 的 `v1.4.6` 收口，以及刚完成的课表连续分页优化，一起整理成新的 `1.4.7` 发布包。也就是说，这次对外公告的口径不是只看当前工作区，而是明确覆盖 `v1.4.5..当前版本` 这一段真实进入版本的变化。
 - 延续 `831bd0a` 那轮 UI 减重与玻璃层级收口，本次版本继续保留更轻的全局视觉基底：课表、空教室、成绩页、首页、功能页、我的页和统一登录页都已经收敛到更克制的 `soft` 背景和更明确的面板层级，这部分虽然已经在主线里，但直到这次才和新的交互优化一起进入新的正式版本口径。
 - 本轮真正新增、也是用户直接推动的改动，集中在 `lib/home/coursetable/view.dart` 的课表切周体验。原先实现是“三页循环 + 中页重置”，用户慢慢拖动跨过半页时会被程序直接 `jumpToPage(1)` 抢走控制权，看起来像页面突然脱手。现在改成按周连续分页：`PageView.builder` 直接渲染完整周序列，慢拖时相邻周内容会像纸张一样持续随手势进入视口，快速甩动时则保留系统原生分页物理，自然落到上一周或下一周。
@@ -24,7 +35,7 @@
 - 代码统计（待提交时回填）：5 files changed, version bump + release notes update + smoother course table paging + regression test + local ignore cleanup
 
 ## 2026-03-24 · `831bd0a` · chore(release): prepare v1.4.6
-- 作者：Codex
+- 作者：rccuu
 - 这次发版整理不是继续扩需求，而是把当前工作区里已经确认保留的一轮 UI 减重与交互收口正式整理成 `1.4.6`。总体方向很明确：尽量保留现有玻璃主题的质感，但降低 blur、阴影和过度透明带来的性能与廉价感问题，重点覆盖空教室、课表、成绩页和几个高频入口页。
 - `lib/core/ui/apple_glass.dart` 新增 `AppGlassBackgroundStyle` / `GlassPanelStyle` 两套分层枚举，把背景拆成 `rich / soft / flat`，把面板拆成 `hero / floating / card / list / solid`。这样一来，不同页面和不同密度的组件都可以按场景选更轻的材质，而不是继续让整页所有卡片都走同一种重玻璃参数。
 - 课表和空教室是这轮最核心的用户路径。`lib/home/coursetable/view.dart`、`lib/home/coursetable/widgets/course_table_widgets.dart` 统一了底部弹层的 route background / barrier 策略，课程详情与实验名单弹层改成更稳定的分段式卡片结构，顺手修掉点击课程后详情层后方背景缺失的问题；`lib/pages/freeroom/room.dart` 则保留性能向优化，用 `SliverChildBuilderDelegate` 和预计算 `_RoomGridItem` 降低网格滚动开销，同时把具体教室空闲状态弹层改成更实的双卡片结构，提升可读性但不再让外层托举区域变成生硬的纯白块。
@@ -34,7 +45,7 @@
 - 代码统计：14 files changed, 809 insertions(+), 422 deletions(-)
 
 ## 2026-03-23 · `38bf9ef` · chore(release): prepare v1.4.5
-- 作者：Codex
+- 作者：rccuu
 - 这次发版准备把应用版本从 `1.4.2+1` 提升到 `1.4.5+1`，并把 `v1.4.2` 之后已经进入主线的 UI 与 Android 高刷改动整理成一份可直接用于发布说明的摘要。
 - 需要特别说明的是：仓库里当前没有可验证的 `v1.4.3` Git tag，本次发布摘要因此按最后一个可验证正式基线 `v1.4.2` 到当前主线 `b6c9f2b` 的实际提交来整理，不把不存在的 tag 当作差异基线。
 - 从代码层面看，`357f96d` 先补了一轮全局深色模式细节修正，覆盖登录、评教、考试安排、慧生活 798、宿舍热水和 HUT WebView 等页面；`b7dd274` 继续重做成绩查询、空教室查询和宿舍热水三条高频路径，重点是压缩留白、提高信息密度、统一玻璃材质与深浅色表现；`b6c9f2b` 则把 Android 高刷新率适配落到了原生入口，策略是优先 120Hz，没有 120Hz 就回退到设备支持的最高高刷档。
