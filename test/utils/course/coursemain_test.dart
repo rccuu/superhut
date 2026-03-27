@@ -83,52 +83,138 @@ void main() {
   });
 
   test(
-    'saveCourseDataToJson writes cache for app and widget readers',
-    () async {
-      final courseData = <String, List<Course>>{
-        '2026-03-19': [
-          Course(
-            name: '软件工程',
-            teacherName: '张老师',
-            weekDuration: '1-16',
-            location: '公共201',
-            startSection: 1,
-            duration: 2,
-          ),
-        ],
-      };
-
-      await saveCourseDataToJson(courseData);
-
-      final appFile = File('${tempDirectory.path}/course_data.json');
-      final widgetFile = File(
-        '${tempDirectory.path}/app_flutter/course_data.json',
+    'buildCompactCourseWidgetPayload limits to three courses and computes week',
+    () {
+      final schedule = SavedCourseSchedule(
+        id: 'widget-schedule',
+        name: '紧凑课表',
+        ownerName: '测试用户',
+        termLabel: '2025-2026-2',
+        semesterId: '2025-2026-2',
+        firstDay: '2026-03-16',
+        maxWeek: 20,
+        sourceType: CourseScheduleSourceType.manual,
+        isReadOnly: false,
+        createdAt: '2026-03-16T08:00:00.000',
+        updatedAt: '2026-03-27T07:30:00.000',
+        courseData: {
+          '2026-03-27': [
+            Course(
+              name: '课程1',
+              teacherName: '张老师',
+              weekDuration: '1-16',
+              location: '公共101',
+              startSection: 1,
+              duration: 2,
+            ),
+            Course(
+              name: '课程2',
+              teacherName: '李老师',
+              weekDuration: '1-16',
+              location: '公共102',
+              startSection: 3,
+              duration: 2,
+            ),
+            Course(
+              name: '课程3',
+              teacherName: '王老师',
+              weekDuration: '1-16',
+              location: '公共103',
+              startSection: 5,
+              duration: 2,
+            ),
+            Course(
+              name: '课程4',
+              teacherName: '赵老师',
+              weekDuration: '1-16',
+              location: '公共104',
+              startSection: 7,
+              duration: 2,
+            ),
+          ],
+        },
       );
 
-      expect(appFile.existsSync(), isTrue);
-      expect(widgetFile.existsSync(), isTrue);
-
-      final appJson =
-          jsonDecode(await appFile.readAsString()) as Map<String, dynamic>;
-      final widgetJson =
-          jsonDecode(await widgetFile.readAsString()) as Map<String, dynamic>;
-      final loadedCourseData = await loadClassFromLocal();
-      final savedSchedules = await loadSavedCourseSchedules();
-
-      expect((appJson['2026-03-19'] as List).single['name'], '软件工程');
-      expect((widgetJson['2026-03-19'] as List).single['location'], '公共201');
-      expect(loadedCourseData['2026-03-19']?.single.name, '软件工程');
-      expect(loadedCourseData['2026-03-19']?.single.teacherName, '张老师');
-      expect(savedSchedules, hasLength(1));
-      expect(
-        savedSchedules.single.courseData['2026-03-19']?.single.name,
-        '软件工程',
+      final payload = buildCompactCourseWidgetPayload(
+        schedule,
+        now: DateTime.parse('2026-03-27T09:00:00'),
       );
-      expect(widgetRefreshCalls.map((call) => call.method).toList(), [
-        'refreshCourseTableWidget',
-      ]);
+
+      expect(payload.date, '2026-03-27');
+      expect(payload.weekdayLabel, '周五');
+      expect(payload.weekIndex, 2);
+      expect(payload.isEmpty, isFalse);
+      expect(payload.courses, hasLength(3));
+      expect(payload.courses.first.name, '课程1');
+      expect(payload.courses.first.startTime, '08:00');
+      expect(payload.courses.first.sectionLabel, '1-2节');
+      expect(payload.courses.last.name, '课程3');
     },
   );
+
+  test('saveCourseDataToJson writes cache for app and widget readers', () async {
+    final now = DateTime.now();
+    final dateKey =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final courseData = <String, List<Course>>{
+      dateKey: [
+        Course(
+          name: '软件工程',
+          teacherName: '张老师',
+          weekDuration: '1-16',
+          location: '公共201',
+          startSection: 1,
+          duration: 2,
+        ),
+      ],
+    };
+
+    await saveCourseDataToJson(courseData);
+
+    final appFile = File('${tempDirectory.path}/course_data.json');
+    final widgetFile = File(
+      '${tempDirectory.path}/app_flutter/course_data.json',
+    );
+    final payloadFile = File(
+      '${tempDirectory.path}/course_widget_payload.json',
+    );
+    final widgetPayloadFile = File(
+      '${tempDirectory.path}/app_flutter/course_widget_payload.json',
+    );
+
+    expect(appFile.existsSync(), isTrue);
+    expect(widgetFile.existsSync(), isTrue);
+    expect(payloadFile.existsSync(), isTrue);
+    expect(widgetPayloadFile.existsSync(), isTrue);
+
+    final appJson =
+        jsonDecode(await appFile.readAsString()) as Map<String, dynamic>;
+    final widgetJson =
+        jsonDecode(await widgetFile.readAsString()) as Map<String, dynamic>;
+    final payloadJson =
+        jsonDecode(await payloadFile.readAsString()) as Map<String, dynamic>;
+    final loadedCourseData = await loadClassFromLocal();
+    final savedSchedules = await loadSavedCourseSchedules();
+    final loadedPayload = await loadCourseWidgetPayloadFromLocal();
+
+    expect((appJson[dateKey] as List).single['name'], '软件工程');
+    expect((widgetJson[dateKey] as List).single['location'], '公共201');
+    expect(loadedCourseData[dateKey]?.single.name, '软件工程');
+    expect(loadedCourseData[dateKey]?.single.teacherName, '张老师');
+    expect(savedSchedules, hasLength(1));
+    expect(savedSchedules.single.courseData[dateKey]?.single.name, '软件工程');
+    expect(payloadJson['date'], dateKey);
+    expect(payloadJson['isEmpty'], isFalse);
+    expect((payloadJson['courses'] as List).single['name'], '软件工程');
+    expect(loadedPayload?.courses.single.location, '公共201');
+    expect(widgetRefreshCalls.map((call) => call.method).toList(), [
+      'syncCourseTableWidget',
+    ]);
+    expect(
+      (widgetRefreshCalls.single.arguments as Map)['payloadJson'],
+      contains('软件工程'),
+    );
+  });
 
   test(
     'loadClassFromLocal returns empty data when cache file is missing',
@@ -259,7 +345,7 @@ void main() {
       );
       expect(activeCourseData['2026-03-16']?.single.name, '离散数学');
       expect(widgetRefreshCalls.map((call) => call.method).toList(), [
-        'refreshCourseTableWidget',
+        'syncCourseTableWidget',
       ]);
     },
   );
@@ -305,7 +391,7 @@ void main() {
       expect(savedSchedules.single.ownerName, '赵六');
       expect(activeCourseData['2026-03-20']?.single.name, '操作系统');
       expect(widgetRefreshCalls.map((call) => call.method).toList(), [
-        'refreshCourseTableWidget',
+        'syncCourseTableWidget',
       ]);
     },
   );
@@ -346,8 +432,8 @@ void main() {
     expect(activeSchedule?.name, '新名称');
     expect(savedSchedules.single.name, '新名称');
     expect(widgetRefreshCalls.map((call) => call.method).toList(), [
-      'refreshCourseTableWidget',
-      'refreshCourseTableWidget',
+      'syncCourseTableWidget',
+      'syncCourseTableWidget',
     ]);
   });
 
@@ -439,7 +525,7 @@ void main() {
       );
       expect(savedSchedules.single.semesterId, '2025-2026-2');
       expect(widgetRefreshCalls.map((call) => call.method), [
-        'refreshCourseTableWidget',
+        'syncCourseTableWidget',
       ]);
     },
   );

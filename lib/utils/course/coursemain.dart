@@ -16,6 +16,7 @@ const int _courseScheduleShareSchemaVersion = 1;
 const int _courseScheduleFileSchemaVersion = 1;
 const String _courseScheduleArchiveFileName = 'course_schedules.json';
 const String _legacyCourseDataFileName = 'course_data.json';
+const String _courseWidgetPayloadFileName = 'course_widget_payload.json';
 const String _courseSharePrefix = 'SUPERHUT1:';
 const String _courseScheduleSharePayloadType = 'superhut_course_schedule_share';
 const String _courseScheduleFilePayloadType = 'superhut_course_schedule_file';
@@ -342,6 +343,94 @@ CourseSyncResult _buildCourseSyncFailure(Object error, StackTrace stackTrace) {
   return const CourseSyncResult.failure('课表加载失败，请稍后重试');
 }
 
+class CourseWidgetCourseEntry {
+  const CourseWidgetCourseEntry({
+    required this.name,
+    required this.location,
+    required this.startSection,
+    required this.endSection,
+    required this.startTime,
+    required this.sectionLabel,
+  });
+
+  final String name;
+  final String location;
+  final int startSection;
+  final int endSection;
+  final String startTime;
+  final String sectionLabel;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'location': location,
+      'startSection': startSection,
+      'endSection': endSection,
+      'startTime': startTime,
+      'sectionLabel': sectionLabel,
+    };
+  }
+
+  factory CourseWidgetCourseEntry.fromJson(Map<String, dynamic> json) {
+    return CourseWidgetCourseEntry(
+      name: _stringValue(json['name']),
+      location: _stringValue(json['location']),
+      startSection: _intValue(json['startSection'], fallback: 0),
+      endSection: _intValue(json['endSection'], fallback: 0),
+      startTime: _stringValue(json['startTime']),
+      sectionLabel: _stringValue(json['sectionLabel']),
+    );
+  }
+}
+
+class CourseWidgetPayload {
+  const CourseWidgetPayload({
+    required this.date,
+    required this.weekdayLabel,
+    required this.weekIndex,
+    required this.isEmpty,
+    required this.updatedAt,
+    required this.courses,
+  });
+
+  final String date;
+  final String weekdayLabel;
+  final int weekIndex;
+  final bool isEmpty;
+  final String updatedAt;
+  final List<CourseWidgetCourseEntry> courses;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'date': date,
+      'weekdayLabel': weekdayLabel,
+      'weekIndex': weekIndex,
+      'isEmpty': isEmpty,
+      'updatedAt': updatedAt,
+      'courses': courses.map((course) => course.toJson()).toList(),
+    };
+  }
+
+  factory CourseWidgetPayload.fromJson(Map<String, dynamic> json) {
+    final rawCourses = json['courses'] as List? ?? const <dynamic>[];
+    return CourseWidgetPayload(
+      date: _stringValue(json['date']),
+      weekdayLabel: _stringValue(json['weekdayLabel']),
+      weekIndex: _intValue(json['weekIndex'], fallback: 0),
+      isEmpty: json['isEmpty'] == true,
+      updatedAt: _stringValue(json['updatedAt']),
+      courses:
+          rawCourses
+              .map(
+                (rawCourse) => CourseWidgetCourseEntry.fromJson(
+                  Map<String, dynamic>.from(rawCourse as Map),
+                ),
+              )
+              .toList(),
+    );
+  }
+}
+
 Future<void> saveExperimentRawDataToJson(
   Map<String, dynamic> experimentRawData,
 ) async {
@@ -359,6 +448,85 @@ Map<String, List<Map<String, dynamic>>> _encodeCourseDataMap(
     courseDataMap[date] = courses.map((course) => course.toJson()).toList();
   });
   return courseDataMap;
+}
+
+String _dateKey(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+DateTime _startOfMonday(DateTime date) {
+  final normalized = DateTime(date.year, date.month, date.day);
+  final daysToSubtract =
+      normalized.weekday == DateTime.sunday ? 6 : normalized.weekday - 1;
+  return normalized.subtract(Duration(days: daysToSubtract));
+}
+
+int _resolveCourseWidgetWeekIndex({
+  required String firstDay,
+  required int maxWeek,
+  required DateTime today,
+}) {
+  final parsedFirstDay = DateTime.tryParse(firstDay);
+  if (parsedFirstDay == null) {
+    return 0;
+  }
+
+  final firstMonday = _startOfMonday(parsedFirstDay);
+  final currentMonday = _startOfMonday(today);
+  final difference = currentMonday.difference(firstMonday).inDays;
+  if (difference < 0) {
+    return 0;
+  }
+
+  final computedWeek = difference ~/ 7 + 1;
+  if (maxWeek <= 0) {
+    return computedWeek;
+  }
+  return computedWeek.clamp(1, maxWeek).toInt();
+}
+
+CourseWidgetPayload buildCompactCourseWidgetPayload(
+  SavedCourseSchedule? schedule, {
+  DateTime? now,
+}) {
+  final resolvedNow = now ?? DateTime.now();
+  final today = DateTime(resolvedNow.year, resolvedNow.month, resolvedNow.day);
+  final todayKey = _dateKey(today);
+  final rawCourses = schedule?.courseData[todayKey]?.toList();
+  rawCourses?.sort(
+    (left, right) => left.startSection.compareTo(right.startSection),
+  );
+
+  final visibleCourses =
+      (rawCourses ?? const <Course>[]).take(3).map((course) {
+        final endSection = course.startSection + course.duration - 1;
+        return CourseWidgetCourseEntry(
+          name: course.name,
+          location: course.location,
+          startSection: course.startSection,
+          endSection: endSection,
+          startTime: _sectionStartTime(course.startSection),
+          sectionLabel: '${course.startSection}-$endSection节',
+        );
+      }).toList();
+
+  return CourseWidgetPayload(
+    date: todayKey,
+    weekdayLabel: _weekdayLabel(today.weekday),
+    weekIndex:
+        schedule == null
+            ? 0
+            : _resolveCourseWidgetWeekIndex(
+              firstDay: schedule.firstDay,
+              maxWeek: schedule.maxWeek,
+              today: today,
+            ),
+    isEmpty: visibleCourses.isEmpty,
+    updatedAt: schedule?.updatedAt ?? resolvedNow.toIso8601String(),
+    courses: visibleCourses,
+  );
 }
 
 String _findFirstCourseDate(Map<String, List<Course>> courseData) {
@@ -387,6 +555,11 @@ Future<File> _courseArchiveFile() async {
 Future<File> _legacyCourseCacheFile() async {
   final appDocumentsDir = await getApplicationDocumentsDirectory();
   return File('${appDocumentsDir.path}/$_legacyCourseDataFileName');
+}
+
+Future<File> _courseWidgetPayloadCacheFile() async {
+  final appDocumentsDir = await getApplicationDocumentsDirectory();
+  return File('${appDocumentsDir.path}/$_courseWidgetPayloadFileName');
 }
 
 DateTime? _tryParseIsoTime(String value) {
@@ -446,9 +619,8 @@ SavedCourseSchedule? _resolveArchiveActiveSchedule(
 }
 
 Future<void> _writeLegacyCourseDataCache(
-  Map<String, List<Course>> courseData, {
-  bool refreshWidget = true,
-}) async {
+  Map<String, List<Course>> courseData,
+) async {
   final jsonString = jsonEncode(_encodeCourseDataMap(courseData));
   final file = await _legacyCourseCacheFile();
   await file.writeAsString(jsonString);
@@ -456,10 +628,19 @@ Future<void> _writeLegacyCourseDataCache(
   final flutterDir = await _ensureCourseWidgetDirectory();
   final widgetFile = File('${flutterDir.path}/$_legacyCourseDataFileName');
   await widgetFile.writeAsString(jsonString);
+}
 
-  if (refreshWidget) {
-    await WidgetRefreshService.refreshCourseTableWidget();
-  }
+Future<String> _writeCompactCourseWidgetPayload(
+  CourseWidgetPayload payload,
+) async {
+  final payloadJson = jsonEncode(payload.toJson());
+  final file = await _courseWidgetPayloadCacheFile();
+  await file.writeAsString(payloadJson);
+
+  final flutterDir = await _ensureCourseWidgetDirectory();
+  final widgetFile = File('${flutterDir.path}/$_courseWidgetPayloadFileName');
+  await widgetFile.writeAsString(payloadJson);
+  return payloadJson;
 }
 
 Future<void> _persistCourseScheduleArchive(
@@ -472,8 +653,13 @@ Future<void> _persistCourseScheduleArchive(
   final activeSchedule = _resolveArchiveActiveSchedule(archive);
   await _writeLegacyCourseDataCache(
     activeSchedule?.courseData ?? const <String, List<Course>>{},
-    refreshWidget: refreshWidget,
   );
+
+  final widgetPayload = buildCompactCourseWidgetPayload(activeSchedule);
+  final payloadJson = await _writeCompactCourseWidgetPayload(widgetPayload);
+  if (refreshWidget) {
+    await WidgetRefreshService.syncCourseTableWidget(payloadJson: payloadJson);
+  }
 }
 
 Future<SavedCourseSchedule?> _migrateLegacyCourseCacheIfNeeded() async {
@@ -888,6 +1074,55 @@ Future<Map<String, List<Course>>> loadClassFromLocal() async {
       stackTrace: stackTrace,
     );
     return {};
+  }
+}
+
+Future<CourseWidgetPayload?> loadCourseWidgetPayloadFromLocal() async {
+  try {
+    final payloadFile = await _courseWidgetPayloadCacheFile();
+    if (!payloadFile.existsSync()) {
+      return null;
+    }
+    final payloadJson =
+        jsonDecode(await payloadFile.readAsString()) as Map<String, dynamic>;
+    return CourseWidgetPayload.fromJson(payloadJson);
+  } catch (error, stackTrace) {
+    AppLogger.error(
+      'Error reading compact course widget payload',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    return null;
+  }
+}
+
+String _weekdayLabel(int weekday) {
+  const labels = <int, String>{
+    DateTime.monday: '周一',
+    DateTime.tuesday: '周二',
+    DateTime.wednesday: '周三',
+    DateTime.thursday: '周四',
+    DateTime.friday: '周五',
+    DateTime.saturday: '周六',
+    DateTime.sunday: '周日',
+  };
+  return labels[weekday] ?? '';
+}
+
+String _sectionStartTime(int startSection) {
+  switch (startSection) {
+    case 1:
+      return '08:00';
+    case 3:
+      return '10:00';
+    case 5:
+      return '14:00';
+    case 7:
+      return '16:00';
+    case 9:
+      return '19:00';
+    default:
+      return '--:--';
   }
 }
 
