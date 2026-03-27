@@ -28,7 +28,7 @@ class HomeviewPage extends StatefulWidget {
 
 class _HomeviewPageState extends State<HomeviewPage> {
   static const int _courseTabIndex = 0;
-  static const _pages = [CourseTableView(), FunctionPage(), UserPage()];
+  static const _tabAnimationDuration = Duration(milliseconds: 190);
   static const _dockItems = [
     _DockItemData(icon: CupertinoIcons.calendar, label: '课表'),
     _DockItemData(icon: CupertinoIcons.square_grid_2x2, label: '功能'),
@@ -37,12 +37,20 @@ class _HomeviewPageState extends State<HomeviewPage> {
   String _currentVersion = '0.0.1'; // 默认版本号
   late int _selectedIndex;
   late final List<bool> _loadedPages;
+  late final ValueNotifier<bool> _courseTransitionLiteMode;
+  late final List<Widget> _pages;
   int _tabAnimationSeed = 0;
   int _tabAnimationDirection = 1;
 
   @override
   void initState() {
     super.initState();
+    _courseTransitionLiteMode = ValueNotifier<bool>(false);
+    _pages = <Widget>[
+      CourseTableView(transitionLiteModeListenable: _courseTransitionLiteMode),
+      const FunctionPage(),
+      const UserPage(),
+    ];
     _selectedIndex = widget.initialIndex.clamp(0, _pages.length - 1);
     _loadedPages = List<bool>.filled(_pages.length, false);
     _loadedPages[_selectedIndex] = true;
@@ -53,6 +61,12 @@ class _HomeviewPageState extends State<HomeviewPage> {
       _checkVersion();
     });
     checkAlert();
+  }
+
+  @override
+  void dispose() {
+    _courseTransitionLiteMode.dispose();
+    super.dispose();
   }
 
   Future<void> _getCurrentVersion() async {
@@ -256,9 +270,14 @@ class _HomeviewPageState extends State<HomeviewPage> {
         animationSeed: _tabAnimationSeed,
         slideDirection: _tabAnimationDirection,
         pageIndex: index,
-        child: KeyedSubtree(
-          key: PageStorageKey<String>('home-tab-$index'),
-          child: _pages[index],
+        transitionNotifier:
+            index == _courseTabIndex ? _courseTransitionLiteMode : null,
+        child: TickerMode(
+          enabled: _selectedIndex == index,
+          child: KeyedSubtree(
+            key: PageStorageKey<String>('home-tab-$index'),
+            child: _pages[index],
+          ),
         ),
       ),
     );
@@ -293,6 +312,7 @@ class _AnimatedTabPage extends StatefulWidget {
     required this.animationSeed,
     required this.slideDirection,
     required this.pageIndex,
+    this.transitionNotifier,
   });
 
   final Widget child;
@@ -300,6 +320,7 @@ class _AnimatedTabPage extends StatefulWidget {
   final int animationSeed;
   final int slideDirection;
   final int pageIndex;
+  final ValueNotifier<bool>? transitionNotifier;
 
   @override
   State<_AnimatedTabPage> createState() => _AnimatedTabPageState();
@@ -307,13 +328,11 @@ class _AnimatedTabPage extends StatefulWidget {
 
 class _AnimatedTabPageState extends State<_AnimatedTabPage>
     with SingleTickerProviderStateMixin {
-  static const _tabAnimationDuration = Duration(milliseconds: 190);
   static const _tabSlideOffset = 0.055;
-  static const _tabStartOpacity = 0.86;
 
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: _tabAnimationDuration,
+    duration: _HomeviewPageState._tabAnimationDuration,
     value: 1,
   );
   late final CurvedAnimation _curve = CurvedAnimation(
@@ -321,16 +340,35 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
     curve: Curves.easeOutCubic,
   );
   late Animation<Offset> _slide;
-  late Animation<double> _opacity;
 
   @override
   void initState() {
     super.initState();
+    _controller.addStatusListener(_handleAnimationStatusChanged);
     _configureAnimations();
     if (widget.isActive && widget.animationSeed > 0) {
-      _controller.value = 0;
-      _controller.forward();
+      _startTransition();
     }
+  }
+
+  void _handleAnimationStatusChanged(AnimationStatus status) {
+    if (status == AnimationStatus.completed ||
+        status == AnimationStatus.dismissed) {
+      _setTransitionLiteMode(false);
+    }
+  }
+
+  void _setTransitionLiteMode(bool value) {
+    final notifier = widget.transitionNotifier;
+    if (notifier == null || notifier.value == value) {
+      return;
+    }
+    notifier.value = value;
+  }
+
+  void _startTransition() {
+    _setTransitionLiteMode(true);
+    _controller.forward(from: 0);
   }
 
   void _configureAnimations() {
@@ -338,7 +376,6 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
       begin: Offset(widget.slideDirection * _tabSlideOffset, 0),
       end: Offset.zero,
     ).animate(_curve);
-    _opacity = Tween<double>(begin: _tabStartOpacity, end: 1).animate(_curve);
   }
 
   @override
@@ -348,14 +385,19 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
         widget.isActive != oldWidget.isActive) {
       _configureAnimations();
     }
+    if (!widget.isActive) {
+      _setTransitionLiteMode(false);
+    }
     if (widget.isActive && widget.animationSeed != oldWidget.animationSeed) {
       _configureAnimations();
-      _controller.forward(from: 0);
+      _startTransition();
     }
   }
 
   @override
   void dispose() {
+    _setTransitionLiteMode(false);
+    _controller.removeStatusListener(_handleAnimationStatusChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -364,17 +406,15 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
   Widget build(BuildContext context) {
     final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations;
     if (!widget.isActive || disableAnimations == true) {
+      _setTransitionLiteMode(false);
       return widget.child;
     }
 
     return ClipRect(
-      child: FadeTransition(
-        opacity: _opacity,
-        child: SlideTransition(
-          key: ValueKey<String>('home-tab-slide-${widget.pageIndex}'),
-          position: _slide,
-          child: widget.child,
-        ),
+      child: SlideTransition(
+        key: ValueKey<String>('home-tab-slide-${widget.pageIndex}'),
+        position: _slide,
+        child: widget.child,
       ),
     );
   }
@@ -442,8 +482,10 @@ class _ClassicTabBar extends StatelessWidget {
             ),
           ),
           GlassPanel(
+            key: const ValueKey<String>('home-bottom-nav-panel-stable'),
             style: GlassPanelStyle.floating,
             blur: isDark ? 18 : 24,
+            useBackdropFilter: true,
             borderRadius: panelRadius,
             gradient: panelGradient,
             borderColor: panelBorder,

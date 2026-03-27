@@ -171,6 +171,71 @@ void main() {
     expect(slideToCourse.position.value.dy, 0);
   });
 
+  testWidgets('keeps dock style stable during tab transition', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('home-bottom-nav-panel-stable')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('home-bottom-nav-panel-stable')),
+      findsOneWidget,
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('home-bottom-nav-panel-stable')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('disables ticker activity for inactive tabs', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    final courseTickerFinder = find.descendant(
+      of: find.byKey(const ValueKey('home-loaded-tab-0'), skipOffstage: false),
+      matching: find.byType(TickerMode, skipOffstage: false),
+    );
+    final functionTickerFinder = find.descendant(
+      of: find.byKey(const ValueKey('home-loaded-tab-1'), skipOffstage: false),
+      matching: find.byType(TickerMode, skipOffstage: false),
+    );
+
+    expect(
+      tester.widget<TickerMode>(courseTickerFinder.first).enabled,
+      isFalse,
+    );
+    expect(
+      tester.widget<TickerMode>(functionTickerFinder.first).enabled,
+      isTrue,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-课表')));
+    await tester.pump();
+
+    expect(tester.widget<TickerMode>(courseTickerFinder.first).enabled, isTrue);
+    expect(
+      tester.widget<TickerMode>(functionTickerFinder.first).enabled,
+      isFalse,
+    );
+  });
+
   testWidgets('skips tab transition animation when animations are disabled', (
     WidgetTester tester,
   ) async {

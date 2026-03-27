@@ -32,6 +32,11 @@ void main() {
     return '${date.year}-$month-$day';
   }
 
+  String courseCardHitKey(DateTime day, Course course) {
+    final endSection = course.startSection + course.duration - 1;
+    return '${dateKey(day)}-${course.startSection}-$endSection-${course.name}';
+  }
+
   SavedCourseSchedule buildTestSchedule() {
     final monday = currentMonday();
     final nextMonday = monday.add(const Duration(days: 7));
@@ -151,6 +156,115 @@ void main() {
     expect(find.text('第1周'), findsOneWidget);
   });
 
+  testWidgets('renders the static grid on a dedicated custom paint layer', (
+    tester,
+  ) async {
+    final schedule = buildTestSchedule();
+    await tester.pumpWidget(
+      MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(
+      find.byKey(const ValueKey('course-table-static-grid-layer')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('course-table-static-card-layer')),
+      findsOneWidget,
+    );
+    expect(find.byType(CustomPaint), findsWidgets);
+  });
+
+  testWidgets('keeps painterized course cards interactive', (tester) async {
+    final schedule = buildTestSchedule();
+    final monday = currentMonday();
+    final course = schedule.courseData[dateKey(monday)]!.single;
+
+    await tester.pumpWidget(
+      MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final hitTarget = find.byKey(
+      ValueKey<String>('course-card-hit-${courseCardHitKey(monday, course)}'),
+    );
+
+    expect(hitTarget, findsOneWidget);
+    expect(find.text('当前周课程'), findsNothing);
+
+    await tester.tap(hitTarget);
+    await tester.pumpAndSettle();
+
+    expect(find.text('当前周课程'), findsOneWidget);
+    expect(find.text('公共101'), findsOneWidget);
+  });
+
+  testWidgets('switches toolbar to lite style during tab transition', (
+    tester,
+  ) async {
+    final schedule = buildTestSchedule();
+    final transitionLiteMode = ValueNotifier<bool>(false);
+    addTearDown(transitionLiteMode.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CourseTableView(
+          transitionLiteModeListenable: transitionLiteMode,
+          debugScheduleOverride: schedule,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(
+      find.byKey(const ValueKey('course-table-toolbar-full')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('course-table-toolbar-lite')),
+      findsNothing,
+    );
+
+    transitionLiteMode.value = true;
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('course-table-toolbar-lite')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('course-table-toolbar-full')),
+      findsNothing,
+    );
+
+    transitionLiteMode.value = false;
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('course-table-toolbar-lite')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('course-table-toolbar-full')),
+      findsNothing,
+    );
+
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('course-table-toolbar-lite')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('course-table-toolbar-full')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('keeps the pager under the finger during a slow drag', (
     tester,
   ) async {
@@ -179,26 +293,27 @@ void main() {
     expect(find.text('第2周'), findsOneWidget);
   });
 
-  testWidgets('uses immediate drag start and prebuilds adjacent weeks', (
-    tester,
-  ) async {
-    final schedule = buildTestSchedule();
-    await tester.pumpWidget(
-      MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600));
+  testWidgets(
+    'uses immediate drag start without implicit adjacent-week prebuild',
+    (tester) async {
+      final schedule = buildTestSchedule();
+      await tester.pumpWidget(
+        MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
 
-    final pager = tester.widget<PageView>(
-      find.byKey(const ValueKey('course-table-week-pager')),
-    );
+      final pager = tester.widget<PageView>(
+        find.byKey(const ValueKey('course-table-week-pager')),
+      );
 
-    expect(pager.dragStartBehavior, DragStartBehavior.down);
-    expect(pager.allowImplicitScrolling, isTrue);
-    expect(pager.physics?.minFlingDistance, 8.0);
-    expect(pager.physics?.minFlingVelocity, 20.0);
-    expect(pager.physics?.dragStartDistanceMotionThreshold, 1.5);
-  });
+      expect(pager.dragStartBehavior, DragStartBehavior.down);
+      expect(pager.allowImplicitScrolling, isFalse);
+      expect(pager.physics?.minFlingDistance, 8.0);
+      expect(pager.physics?.minFlingVelocity, 20.0);
+      expect(pager.physics?.dragStartDistanceMotionThreshold, 1.5);
+    },
+  );
 
   testWidgets('turns page on a short but fast fling', (tester) async {
     final schedule = buildTestSchedule();
