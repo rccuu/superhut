@@ -18,7 +18,11 @@ void main() {
   const packageInfoChannel = MethodChannel(
     'dev.fluttercommunity.plus/package_info',
   );
+  const widgetActionsChannel = MethodChannel(
+    'com.superhut.rice.superhut/widget_actions',
+  );
   late Directory applicationDocumentsDirectory;
+  String? initialWidgetAction;
 
   setUpAll(() {
     applicationDocumentsDirectory = Directory.systemTemp.createTempSync(
@@ -40,6 +44,15 @@ void main() {
           }
           return null;
         });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(widgetActionsChannel, (call) async {
+          if (call.method == 'getInitialWidgetAction') {
+            final action = initialWidgetAction;
+            initialWidgetAction = null;
+            return action;
+          }
+          return null;
+        });
   });
 
   tearDownAll(() {
@@ -49,10 +62,13 @@ void main() {
     PathProviderMock.uninstall();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(packageInfoChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(widgetActionsChannel, null);
   });
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    initialWidgetAction = null;
     for (final entity in applicationDocumentsDirectory.listSync()) {
       entity.deleteSync(recursive: true);
     }
@@ -72,6 +88,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(UserPage), findsOneWidget);
+  });
+
+  testWidgets('opens the course tab when launched from the course widget', (
+    WidgetTester tester,
+  ) async {
+    initialWidgetAction = 'course';
+
+    await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CourseTableView), findsOneWidget);
+    expect(find.byType(FunctionPage), findsNothing);
   });
 
   testWidgets('switches tabs on a phone-sized viewport', (

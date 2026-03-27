@@ -281,6 +281,7 @@ class _MyAppState extends State<MyApp> {
   bool _hasSession = false;
   bool _hasLocalCourseCache = false;
   bool _isLoading = true;
+  String? _initialWidgetAction;
   static const platform = MethodChannel(
     'com.superhut.rice.superhut/widget_actions',
   );
@@ -307,6 +308,16 @@ class _MyAppState extends State<MyApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final context = navigatorKey.currentContext;
       if (context != null) {
+        if (actionType == 'course') {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => const HomeviewPage(initialIndex: 0),
+            ),
+            (route) => false,
+          );
+          return;
+        }
+
         Widget? targetPage;
 
         switch (actionType) {
@@ -333,16 +344,39 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  Future<String?> _consumeInitialWidgetAction() async {
+    try {
+      final action = await platform.invokeMethod<String>(
+        'getInitialWidgetAction',
+      );
+      if (action == null || action.trim().isEmpty) {
+        return null;
+      }
+      return action;
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
   Future<void> _resolveStartupState() async {
     final storage = AppAuthStorage.instance;
-    final hasSession = await storage.hasAnyCampusSession();
-    final hasLocalCourseCache = (await loadClassFromLocal()).isNotEmpty;
+    final results = await Future.wait<Object?>([
+      storage.hasAnyCampusSession(),
+      loadClassFromLocal().then((courseData) => courseData.isNotEmpty),
+      _consumeInitialWidgetAction(),
+    ]);
+    final hasSession = results[0] as bool;
+    final hasLocalCourseCache = results[1] as bool;
+    final initialWidgetAction = results[2] as String?;
     if (!mounted) {
       return;
     }
     setState(() {
       _hasSession = hasSession;
       _hasLocalCourseCache = hasLocalCourseCache;
+      _initialWidgetAction = initialWidgetAction;
       _isLoading = false;
     });
   }
@@ -371,7 +405,12 @@ class _MyAppState extends State<MyApp> {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       home: HomeviewPage(
-        initialIndex: _hasSession || _hasLocalCourseCache ? 0 : 1,
+        initialIndex:
+            _initialWidgetAction == 'course'
+                ? 0
+                : _hasSession || _hasLocalCourseCache
+                ? 0
+                : 1,
       ),
       builder: (context, child) {
         return ResponsiveBreakpoints.builder(

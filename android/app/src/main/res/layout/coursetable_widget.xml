@@ -1,40 +1,141 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_card_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_background"
     android:orientation="vertical"
-    android:padding="2dp">
+    android:padding="6dp">
 
     <TextView
         android:id="@+id/widget_title"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="@drawable/title_background"
-        android:padding="4dp"
-        android:text="今日课程"
-        android:textAlignment="center"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
+        android:paddingLeft="10dp"
+        android:paddingTop="5dp"
+        android:paddingRight="10dp"
+        android:paddingBottom="5dp"
+        android:text="第3周"
+        android:textColor="#204FC9"
+        android:textSize="13sp"
         android:textStyle="bold" />
 
-    <ListView
-        android:id="@+id/widget_course_list"
+    <TextView
+        android:id="@+id/widget_subtitle"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_margin="4dp"
-        android:divider="@null"
-        android:dividerHeight="6dp" />
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="周五 · 03/27"
+        android:textColor="#6B7A99"
+        android:textSize="11sp" />
+
+    <LinearLayout
+        android:id="@+id/widget_course_row_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/list_item_background"
+        android:orientation="vertical"
+        android:padding="7dp">
+
+        <TextView
+            android:id="@+id/widget_course_name_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="课程名称"
+            android:textColor="#16233C"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_course_meta_1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="08:00 · 1-2节 · 公共201"
+            android:textColor="#6B7A99"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_course_row_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/list_item_background"
+        android:orientation="vertical"
+        android:padding="7dp">
+
+        <TextView
+            android:id="@+id/widget_course_name_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="课程名称"
+            android:textColor="#16233C"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_course_meta_2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="10:00 · 3-4节 · 公共202"
+            android:textColor="#6B7A99"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/widget_course_row_3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/list_item_background"
+        android:orientation="vertical"
+        android:padding="7dp">
+
+        <TextView
+            android:id="@+id/widget_course_name_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="课程名称"
+            android:textColor="#16233C"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_course_meta_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="14:00 · 5-6节 · 公共203"
+            android:textColor="#6B7A99"
+            android:textSize="11sp" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/widget_empty_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:gravity="center"
-        android:text="今日无课程"
-        android:textColor="#757575"
-        android:textSize="14sp"
+        android:text="今日暂无课程"
+        android:textColor="#6B7A99"
+        android:textSize="13sp"
+        android:textStyle="bold"
         android:visibility="gone" />
 
 </LinearLayout>

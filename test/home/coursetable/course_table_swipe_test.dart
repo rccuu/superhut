@@ -93,7 +93,7 @@ void main() {
     SecureStorageMock.reset();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(widgetChannel, (call) async {
-          if (call.method == 'refreshCourseTableWidget') {
+          if (call.method == 'syncCourseTableWidget') {
             return true;
           }
           return null;
