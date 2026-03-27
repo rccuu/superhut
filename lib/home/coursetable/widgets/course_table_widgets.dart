@@ -19,6 +19,7 @@ class CourseTableToolbar extends StatelessWidget {
     required this.onManageSchedules,
     required this.showExperimentCourses,
     required this.onShowExperimentCoursesChanged,
+    this.useLiteStyle = false,
   });
 
   final String weekTitle;
@@ -29,6 +30,7 @@ class CourseTableToolbar extends StatelessWidget {
   final VoidCallback onManageSchedules;
   final bool showExperimentCourses;
   final ValueChanged<bool> onShowExperimentCoursesChanged;
+  final bool useLiteStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -36,8 +38,14 @@ class CourseTableToolbar extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return GlassPanel(
-      style: GlassPanelStyle.floating,
-      blur: 18,
+      key: ValueKey<String>(
+        useLiteStyle
+            ? 'course-table-toolbar-lite'
+            : 'course-table-toolbar-full',
+      ),
+      style: useLiteStyle ? GlassPanelStyle.solid : GlassPanelStyle.floating,
+      blur: useLiteStyle ? 0 : 18,
+      useBackdropFilter: !useLiteStyle,
       borderRadius: BorderRadius.circular(22),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(

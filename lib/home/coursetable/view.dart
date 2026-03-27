@@ -9,6 +9,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
@@ -31,10 +32,20 @@ import '../../widget_refresh_service.dart';
 import 'widgets/course_table_widgets.dart';
 
 class CourseTableView extends StatefulWidget {
-  const CourseTableView({super.key, this.debugScheduleOverride});
+  const CourseTableView({
+    super.key,
+    this.transitionLiteModeListenable,
+    this.debugScheduleOverride,
+    this.debugForceTransitionLiteMode,
+  });
+
+  final ValueListenable<bool>? transitionLiteModeListenable;
 
   @visibleForTesting
   final SavedCourseSchedule? debugScheduleOverride;
+
+  @visibleForTesting
+  final bool? debugForceTransitionLiteMode;
 
   @override
   State<CourseTableView> createState() => _CourseTableViewState();
@@ -65,6 +76,7 @@ DateTime getMondayOfCurrentWeek({bool refreshWidget = true}) {
 class _CourseTableViewState extends State<CourseTableView> {
   static const int _defaultMaxWeek = 20;
   static const int _sectionCount = 10;
+  static const int _glassRestoreDelayFrames = 2;
   static const String _showExperimentCoursesKey = 'showExperimentCourses';
   static const double _timeColumnWidth = 30;
   static const double _columnGap = 2;
@@ -74,10 +86,17 @@ class _CourseTableViewState extends State<CourseTableView> {
   static const double _cardInnerGap = 2;
   late final PageController _weekPageController;
   late final ValueNotifier<int> _displayedWeekNotifier;
+  late final ValueNotifier<bool> _transitionLiteModeNotifier;
   bool _hasLinkedCampusAccount = false;
   bool _isPrimaryActionLoading = false;
   bool _isCurrentTermSchedule = true;
   bool _isInitialLoadComplete = false;
+  bool _weekPlacementWarmupPending = false;
+  int _transitionLiteModeRequestId = 0;
+  final Map<String, List<_PlacedCourse>> _weekPlacementsCache =
+      <String, List<_PlacedCourse>>{};
+  final Map<String, List<_CourseCardPaintData>> _weekCourseCardPaintCache =
+      <String, List<_CourseCardPaintData>>{};
 
   // DateTime _currentDate = DateTime.now();
   DateTime _currentDate = getMondayOfCurrentWeek(refreshWidget: false);
@@ -116,14 +135,105 @@ class _CourseTableViewState extends State<CourseTableView> {
     super.initState();
     _weekPageController = PageController();
     _displayedWeekNotifier = ValueNotifier<int>(_currentWeek);
+    _transitionLiteModeNotifier = ValueNotifier<bool>(
+      _resolveTransitionLiteModeValue(),
+    );
+    widget.transitionLiteModeListenable?.addListener(
+      _handleTransitionLiteModeChanged,
+    );
     _loadInitialData();
   }
 
   @override
+  void didUpdateWidget(covariant CourseTableView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.transitionLiteModeListenable !=
+        widget.transitionLiteModeListenable) {
+      oldWidget.transitionLiteModeListenable?.removeListener(
+        _handleTransitionLiteModeChanged,
+      );
+      widget.transitionLiteModeListenable?.addListener(
+        _handleTransitionLiteModeChanged,
+      );
+    }
+    final nextTransitionLiteMode = _resolveTransitionLiteModeValue();
+    if (mounted) {
+      _applyTransitionLiteMode(nextTransitionLiteMode);
+    }
+    if (oldWidget.debugScheduleOverride != widget.debugScheduleOverride) {
+      unawaited(_reloadScheduleState());
+    }
+  }
+
+  @override
   void dispose() {
+    widget.transitionLiteModeListenable?.removeListener(
+      _handleTransitionLiteModeChanged,
+    );
+    _transitionLiteModeNotifier.dispose();
     _displayedWeekNotifier.dispose();
     _weekPageController.dispose();
     super.dispose();
+  }
+
+  bool _resolveTransitionLiteModeValue() {
+    return widget.debugForceTransitionLiteMode ??
+        widget.transitionLiteModeListenable?.value ??
+        false;
+  }
+
+  void _handleTransitionLiteModeChanged() {
+    if (!mounted) {
+      return;
+    }
+    _applyTransitionLiteMode(_resolveTransitionLiteModeValue());
+  }
+
+  void _applyTransitionLiteMode(bool nextValue) {
+    if (nextValue) {
+      _transitionLiteModeRequestId++;
+      if (_transitionLiteModeNotifier.value) {
+        return;
+      }
+      _transitionLiteModeNotifier.value = true;
+      return;
+    }
+
+    if (!_transitionLiteModeNotifier.value) {
+      _transitionLiteModeRequestId++;
+      return;
+    }
+
+    final requestId = ++_transitionLiteModeRequestId;
+    _scheduleLiteModeExit(
+      requestId: requestId,
+      framesRemaining: _glassRestoreDelayFrames,
+    );
+  }
+
+  void _scheduleLiteModeExit({
+    required int requestId,
+    required int framesRemaining,
+  }) {
+    SchedulerBinding.instance.scheduleFrameCallback((_) {
+      if (!mounted || requestId != _transitionLiteModeRequestId) {
+        return;
+      }
+      if (_resolveTransitionLiteModeValue()) {
+        return;
+      }
+      if (framesRemaining > 1) {
+        _scheduleLiteModeExit(
+          requestId: requestId,
+          framesRemaining: framesRemaining - 1,
+        );
+        return;
+      }
+      if (_transitionLiteModeNotifier.value) {
+        _transitionLiteModeNotifier.value = false;
+      }
+    });
+    SchedulerBinding.instance.scheduleFrame();
   }
 
   // 综合计算周数的完整函数
@@ -325,6 +435,7 @@ class _CourseTableViewState extends State<CourseTableView> {
       return;
     }
 
+    _clearWeekPlacementCache();
     setState(() {
       _savedSchedules = savedSchedules;
       _activeSchedule = activeSchedule;
@@ -358,6 +469,7 @@ class _CourseTableViewState extends State<CourseTableView> {
       return;
     }
     setState(() {
+      _clearWeekPlacementCache();
       _showExperimentCourses = value;
     });
   }
@@ -490,6 +602,74 @@ class _CourseTableViewState extends State<CourseTableView> {
       return List<Course>.from(courses);
     }
     return courses.where((course) => !course.isExp).toList();
+  }
+
+  void _clearWeekPlacementCache() {
+    _weekPlacementsCache.clear();
+    _weekCourseCardPaintCache.clear();
+    _weekPlacementWarmupPending = false;
+  }
+
+  String _buildWeekPlacementCacheKey(
+    List<DateTime> weekDays,
+    _WeekGridMetrics metrics,
+  ) {
+    final scheduleId = _activeSchedule?.id ?? 'no-schedule';
+    return [
+      scheduleId,
+      _showExperimentCourses ? 'exp-on' : 'exp-off',
+      _dateKey(weekDays.first),
+      metrics.timeColumnWidth.toStringAsFixed(2),
+      metrics.dayWidth.toStringAsFixed(2),
+      metrics.columnGap.toStringAsFixed(2),
+      metrics.rowGap.toStringAsFixed(2),
+      metrics.slotHeight.toStringAsFixed(2),
+      metrics.gridHeight.toStringAsFixed(2),
+    ].join('|');
+  }
+
+  bool _hasWeekPlacementCache(int weekNumber, _WeekGridMetrics metrics) {
+    final weekDays = _buildWeekDaysForWeek(weekNumber);
+    return _weekPlacementsCache.containsKey(
+      _buildWeekPlacementCacheKey(weekDays, metrics),
+    );
+  }
+
+  void _scheduleWeekPlacementWarmup(_WeekGridMetrics metrics) {
+    if (_weekPlacementWarmupPending ||
+        !_isInitialLoadComplete ||
+        _courseData.isEmpty) {
+      return;
+    }
+
+    final centerWeek = _normalizeWeek(_displayedWeekNotifier.value);
+    final targetWeeks =
+        <int>{
+            centerWeek,
+            if (centerWeek > 1) centerWeek - 1,
+            if (centerWeek < _allWeek) centerWeek + 1,
+          }.toList()
+          ..sort();
+    final needsWarmup = targetWeeks.any(
+      (weekNumber) => !_hasWeekPlacementCache(weekNumber, metrics),
+    );
+    if (!needsWarmup) {
+      return;
+    }
+
+    _weekPlacementWarmupPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _weekPlacementWarmupPending = false;
+      if (!mounted || _courseData.isEmpty) {
+        return;
+      }
+      for (final weekNumber in targetWeeks) {
+        if (_hasWeekPlacementCache(weekNumber, metrics)) {
+          continue;
+        }
+        _buildPlacedCourses(_buildWeekDaysForWeek(weekNumber), metrics);
+      }
+    });
   }
 
   /*
@@ -2354,15 +2534,22 @@ class _CourseTableViewState extends State<CourseTableView> {
                 valueListenable: _displayedWeekNotifier,
                 builder: (context, displayedWeek, child) {
                   final weekDays = _buildWeekDaysForWeek(displayedWeek);
-                  return CourseTableToolbar(
-                    weekTitle: '第$displayedWeek周',
-                    weekDateRange: _buildWeekDateRange(weekDays),
-                    currentWeekLabel: _buildCurrentWeekLabel(),
-                    isShowingCurrentWeek: displayedWeek == _currentRealWeek,
-                    onBackToCurrentWeek: _backToRealWeek,
-                    onManageSchedules: _showScheduleManager,
-                    showExperimentCourses: _showExperimentCourses,
-                    onShowExperimentCoursesChanged: _setShowExperimentCourses,
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: _transitionLiteModeNotifier,
+                    builder: (context, useLiteStyle, child) {
+                      return CourseTableToolbar(
+                        weekTitle: '第$displayedWeek周',
+                        weekDateRange: _buildWeekDateRange(weekDays),
+                        currentWeekLabel: _buildCurrentWeekLabel(),
+                        isShowingCurrentWeek: displayedWeek == _currentRealWeek,
+                        onBackToCurrentWeek: _backToRealWeek,
+                        onManageSchedules: _showScheduleManager,
+                        showExperimentCourses: _showExperimentCourses,
+                        onShowExperimentCoursesChanged:
+                            _setShowExperimentCourses,
+                        useLiteStyle: useLiteStyle,
+                      );
+                    },
                   );
                 },
               ),
@@ -2372,6 +2559,7 @@ class _CourseTableViewState extends State<CourseTableView> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final metrics = _buildGridMetrics(constraints);
+                  _scheduleWeekPlacementWarmup(metrics);
                   final basePagingPhysics =
                       _allWeek <= 1
                           ? const NeverScrollableScrollPhysics()
@@ -2389,7 +2577,7 @@ class _CourseTableViewState extends State<CourseTableView> {
                         controller: _weekPageController,
                         itemCount: _allWeek,
                         dragStartBehavior: DragStartBehavior.down,
-                        allowImplicitScrolling: true,
+                        allowImplicitScrolling: false,
                         physics: basePagingPhysics,
                         onPageChanged: _handleWeekPageChanged,
                         itemBuilder: (context, index) {
@@ -2496,6 +2684,12 @@ class _CourseTableViewState extends State<CourseTableView> {
     List<DateTime> weekDays,
     _WeekGridMetrics metrics,
   ) {
+    final cacheKey = _buildWeekPlacementCacheKey(weekDays, metrics);
+    final cachedPlacements = _weekPlacementsCache[cacheKey];
+    if (cachedPlacements != null) {
+      return cachedPlacements;
+    }
+
     final placements = <_PlacedCourse>[];
     for (var dayIndex = 0; dayIndex < weekDays.length; dayIndex++) {
       final dayCourses = _visibleCoursesForDay(weekDays[dayIndex]);
@@ -2508,7 +2702,399 @@ class _CourseTableViewState extends State<CourseTableView> {
         ),
       );
     }
-    return placements;
+    final cachedResult = List<_PlacedCourse>.unmodifiable(placements);
+    _weekPlacementsCache[cacheKey] = cachedResult;
+    return cachedResult;
+  }
+
+  String _buildWeekCourseCardPaintCacheKey(
+    List<DateTime> weekDays,
+    _WeekGridMetrics metrics,
+    ThemeData theme,
+    ui.TextDirection textDirection,
+    TextScaler textScaler,
+  ) {
+    final bodySmall = theme.textTheme.bodySmall;
+    final labelSmall = theme.textTheme.labelSmall;
+    return [
+      _buildWeekPlacementCacheKey(weekDays, metrics),
+      theme.brightness.name,
+      bodySmall?.fontFamily ?? 'default',
+      (bodySmall?.fontSize ?? 0).toStringAsFixed(2),
+      labelSmall?.fontFamily ?? 'default',
+      (labelSmall?.fontSize ?? 0).toStringAsFixed(2),
+      textDirection.name,
+      textScaler.scale(1).toStringAsFixed(2),
+    ].join('|');
+  }
+
+  List<_CourseCardPaintData> _buildWeekCourseCardPaintData({
+    required BuildContext context,
+    required List<DateTime> weekDays,
+    required _WeekGridMetrics metrics,
+    required List<_PlacedCourse> placedCourses,
+  }) {
+    if (placedCourses.isEmpty) {
+      return const <_CourseCardPaintData>[];
+    }
+
+    final theme = Theme.of(context);
+    final textDirection = Directionality.of(context);
+    final textScaler = MediaQuery.textScalerOf(context);
+    final cacheKey = _buildWeekCourseCardPaintCacheKey(
+      weekDays,
+      metrics,
+      theme,
+      textDirection,
+      textScaler,
+    );
+    final cachedCards = _weekCourseCardPaintCache[cacheKey];
+    if (cachedCards != null) {
+      return cachedCards;
+    }
+
+    final cards = placedCourses
+        .map(
+          (placement) => _buildCourseCardPaintData(
+            placement: placement,
+            palette: _getCoursePalette(placement.course.name),
+            theme: theme,
+            textDirection: textDirection,
+            textScaler: textScaler,
+          ),
+        )
+        .toList(growable: false);
+    final cachedResult = List<_CourseCardPaintData>.unmodifiable(cards);
+    _weekCourseCardPaintCache[cacheKey] = cachedResult;
+    return cachedResult;
+  }
+
+  _CourseCardPaintData _buildCourseCardPaintData({
+    required _PlacedCourse placement,
+    required _CoursePalette palette,
+    required ThemeData theme,
+    required ui.TextDirection textDirection,
+    required TextScaler textScaler,
+  }) {
+    final course = placement.course;
+    final width = placement.width;
+    final height = placement.height;
+    final compact = height < 44 || width < 38;
+    final showLocation = course.location.trim().isNotEmpty;
+    final showTeacher = course.teacherName.trim().isNotEmpty;
+    final detailLineCount = (showLocation ? 1 : 0) + (showTeacher ? 1 : 0);
+    final titleBaseStyle =
+        theme.textTheme.bodySmall?.copyWith(
+          color: palette.foreground.withValues(alpha: 0.88),
+          fontWeight: FontWeight.w700,
+          height: 1.18,
+          letterSpacing: -0.12,
+        ) ??
+        TextStyle(
+          color: palette.foreground.withValues(alpha: 0.88),
+          fontWeight: FontWeight.w700,
+          height: 1.18,
+          letterSpacing: -0.12,
+        );
+    final horizontalPadding = compact ? 3.5 : 5.0;
+    final topPadding = compact ? 3.5 : 5.0;
+    final bottomPadding = compact ? 2.5 : 4.0;
+    final detailSpacing = detailLineCount == 0 ? 0.0 : (compact ? 1.0 : 2.0);
+    final contentHeight = math.max(0.0, height - topPadding - bottomPadding);
+    final contentWidth = math.max(0.0, width - horizontalPadding * 2);
+    final minTitleHeight = compact ? 9.0 : 11.5;
+    final preferredDetailLineHeight = compact ? 9.4 : 11.8;
+    final detailHeightBudget = math.max(
+      0.0,
+      contentHeight - minTitleHeight - detailSpacing * detailLineCount,
+    );
+    final detailLineHeight =
+        detailLineCount == 0
+            ? 0.0
+            : math.min(
+              preferredDetailLineHeight,
+              detailHeightBudget / detailLineCount,
+            );
+    final titleHeight = math.max(
+      0.0,
+      contentHeight -
+          detailLineCount * detailLineHeight -
+          detailLineCount * detailSpacing,
+    );
+    final titleReferenceLineHeight = compact ? 10.6 : 12.4;
+    final titleMinFontSize = compact ? 7.8 : 8.8;
+    final titleMaxFontSize = math.min(
+      compact ? 15.0 : 16.8,
+      math.max(compact ? 10.6 : 11.8, width * (compact ? 0.34 : 0.29)),
+    );
+    final titleMaxLines = math.max(
+      1,
+      (titleHeight / titleReferenceLineHeight).floor(),
+    );
+    final titleFontSize = _fitMultilineFontSize(
+      text: course.name,
+      style: titleBaseStyle,
+      maxWidth: contentWidth,
+      maxHeight: titleHeight,
+      maxLines: titleMaxLines,
+      minFontSize: titleMinFontSize,
+      maxFontSize: titleMaxFontSize,
+      textDirection: textDirection,
+      textScaler: textScaler,
+    );
+    final titlePainter = TextPainter(
+      text: TextSpan(
+        text: course.name,
+        style: titleBaseStyle.copyWith(fontSize: titleFontSize),
+      ),
+      textDirection: textDirection,
+      maxLines: titleMaxLines,
+      ellipsis: '…',
+      textScaler: textScaler,
+    )..layout(maxWidth: contentWidth);
+
+    final detailFontSize = math.max(
+      compact ? 8.0 : 9.0,
+      detailLineHeight * (compact ? 0.92 : 0.94),
+    );
+    final locationStyle =
+        theme.textTheme.labelSmall?.copyWith(
+          color: palette.foreground.withValues(alpha: 0.88),
+          fontSize: detailFontSize,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ) ??
+        TextStyle(
+          color: palette.foreground.withValues(alpha: 0.88),
+          fontSize: detailFontSize,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        );
+    final teacherStyle =
+        theme.textTheme.labelSmall?.copyWith(
+          color: palette.foreground.withValues(alpha: 0.82),
+          fontSize: detailFontSize,
+          fontWeight: FontWeight.w600,
+          height: 1,
+        ) ??
+        TextStyle(
+          color: palette.foreground.withValues(alpha: 0.82),
+          fontSize: detailFontSize,
+          fontWeight: FontWeight.w600,
+          height: 1,
+        );
+
+    TextPainter? locationPainter;
+    Offset? locationOffset;
+    TextPainter? teacherPainter;
+    Offset? teacherOffset;
+    var detailTop = placement.top + topPadding + titleHeight;
+
+    if (showLocation) {
+      detailTop += detailSpacing;
+      final locationFontSize = _fitSingleLineFontSize(
+        text: course.location,
+        style: locationStyle,
+        maxWidth: contentWidth,
+        maxHeight: detailLineHeight,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      );
+      locationPainter = TextPainter(
+        text: TextSpan(
+          text: course.location,
+          style: locationStyle.copyWith(fontSize: locationFontSize),
+        ),
+        textDirection: textDirection,
+        maxLines: 1,
+        textScaler: textScaler,
+      )..layout(maxWidth: contentWidth);
+      locationOffset = Offset(placement.left + horizontalPadding, detailTop);
+      detailTop += detailLineHeight;
+    }
+
+    if (showTeacher) {
+      detailTop += detailSpacing;
+      final teacherFontSize = _fitSingleLineFontSize(
+        text: course.teacherName,
+        style: teacherStyle,
+        maxWidth: contentWidth,
+        maxHeight: detailLineHeight,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      );
+      teacherPainter = TextPainter(
+        text: TextSpan(
+          text: course.teacherName,
+          style: teacherStyle.copyWith(fontSize: teacherFontSize),
+        ),
+        textDirection: textDirection,
+        maxLines: 1,
+        textScaler: textScaler,
+      )..layout(maxWidth: contentWidth);
+      teacherOffset = Offset(placement.left + horizontalPadding, detailTop);
+    }
+
+    final borderRadius = BorderRadius.circular(compact ? 10 : 14);
+    final rect = Rect.fromLTWH(
+      placement.left,
+      placement.top,
+      placement.width,
+      placement.height,
+    );
+
+    return _CourseCardPaintData(
+      rect: rect,
+      rrect: borderRadius.toRRect(rect),
+      fillColor: palette.fill,
+      accentColor: Color.lerp(palette.fill, palette.border, 0.42)!,
+      borderColor: palette.border,
+      shadow: BoxShadow(
+        color: palette.border.withValues(alpha: 0.14),
+        blurRadius: compact ? 8 : 12,
+        offset: const Offset(0, 5),
+      ),
+      titlePainter: titlePainter,
+      titleOffset: Offset(
+        placement.left + horizontalPadding,
+        placement.top + topPadding,
+      ),
+      locationPainter: locationPainter,
+      locationOffset: locationOffset,
+      teacherPainter: teacherPainter,
+      teacherOffset: teacherOffset,
+    );
+  }
+
+  double _fitMultilineFontSize({
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+    required double maxHeight,
+    required int maxLines,
+    required double minFontSize,
+    required double maxFontSize,
+    required ui.TextDirection textDirection,
+    required TextScaler textScaler,
+  }) {
+    if (text.trim().isEmpty || maxWidth <= 0 || maxHeight <= 0) {
+      return minFontSize;
+    }
+
+    final maxReadableFontSize = _maxFontSizeForSample(
+      sample: '课程名',
+      style: style,
+      maxWidth: maxWidth,
+      minFontSize: minFontSize,
+      maxFontSize: maxFontSize,
+      textDirection: textDirection,
+      textScaler: textScaler,
+    );
+    double low = minFontSize;
+    double high = maxReadableFontSize;
+    double best = minFontSize;
+
+    for (var index = 0; index < 9; index++) {
+      final current = (low + high) / 2;
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style.copyWith(fontSize: current)),
+        textDirection: textDirection,
+        maxLines: maxLines,
+        ellipsis: '…',
+        textScaler: textScaler,
+      )..layout(maxWidth: maxWidth);
+
+      if (painter.height <= maxHeight + 0.01) {
+        best = current;
+        low = current;
+      } else {
+        high = current;
+      }
+    }
+
+    return best;
+  }
+
+  double _fitSingleLineFontSize({
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+    required double maxHeight,
+    required ui.TextDirection textDirection,
+    required TextScaler textScaler,
+  }) {
+    if (text.trim().isEmpty || maxWidth <= 0 || maxHeight <= 0) {
+      return style.fontSize ?? 12;
+    }
+
+    final baseFontSize = style.fontSize ?? 12;
+    final minFontSize = math.max(1.0, baseFontSize * 0.55);
+    final maxFontSize = baseFontSize;
+    double low = minFontSize;
+    double high = maxFontSize;
+    double best = minFontSize;
+
+    for (var index = 0; index < 9; index++) {
+      final current = (low + high) / 2;
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style.copyWith(fontSize: current)),
+        textDirection: textDirection,
+        maxLines: 1,
+        textScaler: textScaler,
+      )..layout(maxWidth: double.infinity);
+
+      if (painter.width <= maxWidth + 0.01 &&
+          painter.height <= maxHeight + 0.01) {
+        best = current;
+        low = current;
+      } else {
+        high = current;
+      }
+    }
+
+    return best;
+  }
+
+  double _maxFontSizeForSample({
+    required String sample,
+    required TextStyle style,
+    required double maxWidth,
+    required double minFontSize,
+    required double maxFontSize,
+    required ui.TextDirection textDirection,
+    required TextScaler textScaler,
+  }) {
+    double low = minFontSize;
+    double high = maxFontSize;
+    double best = minFontSize;
+
+    for (var index = 0; index < 9; index++) {
+      final current = (low + high) / 2;
+      final painter = TextPainter(
+        text: TextSpan(text: sample, style: style.copyWith(fontSize: current)),
+        textDirection: textDirection,
+        maxLines: 1,
+        textScaler: textScaler,
+      )..layout(maxWidth: double.infinity);
+
+      if (painter.width <= maxWidth + 0.01) {
+        best = current;
+        low = current;
+      } else {
+        high = current;
+      }
+    }
+
+    return best;
+  }
+
+  String _buildCourseCardHitKey(_PlacedCourse placement) {
+    return [
+      _dateKey(placement.day),
+      placement.startSection,
+      placement.endSection,
+      placement.course.name,
+    ].join('-');
   }
 
   Widget _buildWeekPage({
@@ -2517,6 +3103,12 @@ class _CourseTableViewState extends State<CourseTableView> {
     required _WeekGridMetrics metrics,
   }) {
     final placedCourses = _buildPlacedCourses(weekDays, metrics);
+    final paintedCards = _buildWeekCourseCardPaintData(
+      context: context,
+      weekDays: weekDays,
+      metrics: metrics,
+      placedCourses: placedCourses,
+    );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
@@ -2563,66 +3155,26 @@ class _CourseTableViewState extends State<CourseTableView> {
                   child: Stack(
                     clipBehavior: Clip.hardEdge,
                     children: [
-                      ...weekDays.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final day = entry.value;
-                        final isToday = _isToday(day);
-                        return Positioned(
-                          left: metrics.leftForDay(index),
-                          top: 0,
-                          width: metrics.dayWidth,
-                          height: metrics.gridHeight,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color:
-                                  isToday
-                                      ? colorScheme.primary.withValues(
-                                        alpha: isDark ? 0.08 : 0.06,
-                                      )
-                                      : Colors.transparent,
+                      Positioned.fill(
+                        child: RepaintBoundary(
+                          child: CustomPaint(
+                            key: const ValueKey(
+                              'course-table-static-grid-layer',
+                            ),
+                            painter: _WeekGridStaticPainter(
+                              metrics: metrics,
+                              sectionCount: _sectionCount,
+                              todayColumnIndex: weekDays.indexWhere(_isToday),
+                              todayHighlightColor: colorScheme.primary
+                                  .withValues(alpha: isDark ? 0.08 : 0.06),
+                              horizontalLineColor: colorScheme.outlineVariant
+                                  .withValues(alpha: isDark ? 0.24 : 0.34),
+                              verticalLineColor: colorScheme.outlineVariant
+                                  .withValues(alpha: isDark ? 0.18 : 0.22),
                             ),
                           ),
-                        );
-                      }),
-                      ...List.generate(_sectionCount, (index) {
-                        final top = metrics.topForSection(index + 1);
-                        return Positioned(
-                          left: metrics.timeColumnWidth + _columnGap,
-                          right: 0,
-                          top: top,
-                          height: metrics.slotHeight,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                top: BorderSide(
-                                  color: colorScheme.outlineVariant.withValues(
-                                    alpha: isDark ? 0.24 : 0.34,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                      ...List.generate(6, (index) {
-                        final left =
-                            metrics.leftForDay(index) +
-                            metrics.dayWidth +
-                            (_columnGap / 2);
-                        return Positioned(
-                          left: left,
-                          top: 0,
-                          width: 1,
-                          height: metrics.gridHeight,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colorScheme.outlineVariant.withValues(
-                                alpha: isDark ? 0.18 : 0.22,
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
+                        ),
+                      ),
                       ..._sectionTimes.map((section) {
                         final top = metrics.topForSection(section.index);
                         return Positioned(
@@ -2633,6 +3185,21 @@ class _CourseTableViewState extends State<CourseTableView> {
                           child: _TimeAxisLabel(section: section),
                         );
                       }),
+                      if (paintedCards.isNotEmpty)
+                        Positioned.fill(
+                          child: RepaintBoundary(
+                            child: CustomPaint(
+                              key: const ValueKey(
+                                'course-table-static-card-layer',
+                              ),
+                              painter: _WeekCourseCardPainter(
+                                cards: paintedCards,
+                              ),
+                              isComplex: true,
+                              willChange: false,
+                            ),
+                          ),
+                        ),
                       if (placedCourses.isEmpty)
                         Positioned.fill(
                           child: IgnorePointer(
@@ -2649,17 +3216,16 @@ class _CourseTableViewState extends State<CourseTableView> {
                           ),
                         ),
                       ...placedCourses.map((placement) {
-                        final palette = _getCoursePalette(
-                          placement.course.name,
-                        );
                         return Positioned(
                           left: placement.left,
                           top: placement.top,
                           width: placement.width,
                           height: placement.height,
-                          child: _ScheduleCourseCard(
-                            course: placement.course,
-                            palette: palette,
+                          child: _ScheduleCourseCardHitTarget(
+                            key: ValueKey<String>(
+                              'course-card-hit-${_buildCourseCardHitKey(placement)}',
+                            ),
+                            semanticLabel: placement.course.name,
                             onTap: () => _showCourseDetails(placement),
                           ),
                         );
@@ -2767,18 +3333,24 @@ class _CourseTableViewState extends State<CourseTableView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: AppGlassBackground(
-        style:
-            _isInitialLoadComplete
-                ? AppGlassBackgroundStyle.soft
-                : AppGlassBackgroundStyle.flat,
-        bottomHighlightOpacity: 0,
-        lightBottomColor: const Color(0xFFEAF0FA),
-        darkBottomColor: const Color(0xFF101826),
+      body: ValueListenableBuilder<bool>(
+        valueListenable: _transitionLiteModeNotifier,
         child: SafeArea(
           bottom: false,
           child: _buildCourseTableContent(context),
         ),
+        builder: (context, useLiteStyle, child) {
+          return AppGlassBackground(
+            style:
+                _isInitialLoadComplete && !useLiteStyle
+                    ? AppGlassBackgroundStyle.soft
+                    : AppGlassBackgroundStyle.flat,
+            bottomHighlightOpacity: 0,
+            lightBottomColor: const Color(0xFFEAF0FA),
+            darkBottomColor: const Color(0xFF101826),
+            child: child!,
+          );
+        },
       ),
     );
   }
@@ -2906,6 +3478,78 @@ class _WeekGridMetrics {
 
   double heightForDuration(int duration) {
     return slotHeight * duration + rowGap * (duration - 1);
+  }
+}
+
+class _WeekGridStaticPainter extends CustomPainter {
+  const _WeekGridStaticPainter({
+    required this.metrics,
+    required this.sectionCount,
+    required this.todayColumnIndex,
+    required this.todayHighlightColor,
+    required this.horizontalLineColor,
+    required this.verticalLineColor,
+  });
+
+  final _WeekGridMetrics metrics;
+  final int sectionCount;
+  final int todayColumnIndex;
+  final Color todayHighlightColor;
+  final Color horizontalLineColor;
+  final Color verticalLineColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (todayColumnIndex >= 0 && todayColumnIndex < 7) {
+      final highlightRect = Rect.fromLTWH(
+        metrics.leftForDay(todayColumnIndex),
+        0,
+        metrics.dayWidth,
+        size.height,
+      );
+      canvas.drawRect(highlightRect, Paint()..color = todayHighlightColor);
+    }
+
+    final horizontalPaint =
+        Paint()
+          ..color = horizontalLineColor
+          ..strokeWidth = 1;
+    final horizontalStartX = metrics.timeColumnWidth + metrics.columnGap;
+    for (var index = 0; index < sectionCount; index++) {
+      final y = metrics.topForSection(index + 1) + 0.5;
+      canvas.drawLine(
+        Offset(horizontalStartX, y),
+        Offset(size.width, y),
+        horizontalPaint,
+      );
+    }
+
+    final verticalPaint =
+        Paint()
+          ..color = verticalLineColor
+          ..strokeWidth = 1;
+    for (var index = 0; index < 6; index++) {
+      final x =
+          metrics.leftForDay(index) +
+          metrics.dayWidth +
+          (metrics.columnGap / 2);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), verticalPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WeekGridStaticPainter oldDelegate) {
+    return oldDelegate.sectionCount != sectionCount ||
+        oldDelegate.todayColumnIndex != todayColumnIndex ||
+        oldDelegate.todayHighlightColor != todayHighlightColor ||
+        oldDelegate.horizontalLineColor != horizontalLineColor ||
+        oldDelegate.verticalLineColor != verticalLineColor ||
+        oldDelegate.metrics.timeColumnWidth != metrics.timeColumnWidth ||
+        oldDelegate.metrics.dayWidth != metrics.dayWidth ||
+        oldDelegate.metrics.columnGap != metrics.columnGap ||
+        oldDelegate.metrics.rowGap != metrics.rowGap ||
+        oldDelegate.metrics.slotHeight != metrics.slotHeight ||
+        oldDelegate.metrics.gridHeight != metrics.gridHeight;
   }
 }
 
@@ -3110,296 +3754,105 @@ class _TimeAxisLabel extends StatelessWidget {
   }
 }
 
-class _ScheduleCourseCard extends StatelessWidget {
-  const _ScheduleCourseCard({
-    required this.course,
-    required this.palette,
+class _ScheduleCourseCardHitTarget extends StatelessWidget {
+  const _ScheduleCourseCardHitTarget({
+    super.key,
+    required this.semanticLabel,
     required this.onTap,
   });
 
-  final Course course;
-  final _CoursePalette palette;
+  final String semanticLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final height = constraints.maxHeight;
-        final width = constraints.maxWidth;
-        final compact = height < 44 || width < 38;
-        final showLocation = course.location.trim().isNotEmpty;
-        final showTeacher = course.teacherName.trim().isNotEmpty;
-        final detailLineCount = (showLocation ? 1 : 0) + (showTeacher ? 1 : 0);
-        final titleBaseStyle =
-            Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: palette.foreground.withValues(alpha: 0.88),
-              fontWeight: FontWeight.w700,
-              height: 1.18,
-              letterSpacing: -0.12,
-            ) ??
-            TextStyle(
-              color: palette.foreground.withValues(alpha: 0.88),
-              fontWeight: FontWeight.w700,
-              height: 1.18,
-              letterSpacing: -0.12,
-            );
-        final horizontalPadding = compact ? 3.5 : 5.0;
-        final topPadding = compact ? 3.5 : 5.0;
-        final bottomPadding = compact ? 2.5 : 4.0;
-        final detailSpacing =
-            detailLineCount == 0 ? 0.0 : (compact ? 1.0 : 2.0);
-        final contentHeight = math.max(
-          0.0,
-          height - topPadding - bottomPadding,
-        );
-        final minTitleHeight = compact ? 9.0 : 11.5;
-        final preferredDetailLineHeight = compact ? 9.4 : 11.8;
-        final detailHeightBudget = math.max(
-          0.0,
-          contentHeight - minTitleHeight - detailSpacing * detailLineCount,
-        );
-        final detailLineHeight =
-            detailLineCount == 0
-                ? 0.0
-                : math.min(
-                  preferredDetailLineHeight,
-                  detailHeightBudget / detailLineCount,
-                );
-        final titleReferenceLineHeight = compact ? 10.6 : 12.4;
-        final titleMinFontSize = compact ? 7.8 : 8.8;
-        final titleMaxFontSize = math.min(
-          compact ? 15.0 : 16.8,
-          math.max(compact ? 10.6 : 11.8, width * (compact ? 0.34 : 0.29)),
-        );
-        final detailFontSize = math.max(
-          compact ? 8.0 : 9.0,
-          detailLineHeight * (compact ? 0.92 : 0.94),
-        );
-        final locationStyle =
-            Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: palette.foreground.withValues(alpha: 0.88),
-              fontSize: detailFontSize,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ) ??
-            TextStyle(
-              color: palette.foreground.withValues(alpha: 0.88),
-              fontSize: detailFontSize,
-              fontWeight: FontWeight.w700,
-              height: 1,
-            );
-        final teacherStyle =
-            Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: palette.foreground.withValues(alpha: 0.82),
-              fontSize: detailFontSize,
-              fontWeight: FontWeight.w600,
-              height: 1,
-            ) ??
-            TextStyle(
-              color: palette.foreground.withValues(alpha: 0.82),
-              fontSize: detailFontSize,
-              fontWeight: FontWeight.w600,
-              height: 1,
-            );
-
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(compact ? 10 : 14),
-            onTap: onTap,
-            child: Ink(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(compact ? 10 : 14),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    palette.fill,
-                    Color.lerp(palette.fill, palette.border, 0.42)!,
-                  ],
-                ),
-                border: Border.all(color: palette.border),
-                boxShadow: [
-                  BoxShadow(
-                    color: palette.border.withValues(alpha: 0.14),
-                    blurRadius: compact ? 8 : 12,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      horizontalPadding,
-                      topPadding,
-                      horizontalPadding,
-                      bottomPadding,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, titleConstraints) {
-                              final titleHeight = titleConstraints.maxHeight;
-                              final titleMaxLines = math.max(
-                                1,
-                                (titleHeight / titleReferenceLineHeight)
-                                    .floor(),
-                              );
-                              return _AdaptiveCourseTitleText(
-                                text: course.name,
-                                style: titleBaseStyle,
-                                maxLines: titleMaxLines,
-                                maxHeight: titleHeight,
-                                minFontSize: titleMinFontSize,
-                                maxFontSize: titleMaxFontSize,
-                              );
-                            },
-                          ),
-                        ),
-                        if (showLocation) ...[
-                          SizedBox(height: detailSpacing),
-                          _SingleLineScaleText(
-                            text: course.location,
-                            style: locationStyle,
-                            height: detailLineHeight,
-                          ),
-                        ],
-                        if (showTeacher) ...[
-                          SizedBox(height: detailSpacing),
-                          _SingleLineScaleText(
-                            text: course.teacherName,
-                            style: teacherStyle,
-                            height: detailLineHeight,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: const SizedBox.expand(),
+      ),
     );
   }
 }
 
-class _AdaptiveCourseTitleText extends StatelessWidget {
-  const _AdaptiveCourseTitleText({
-    required this.text,
-    required this.style,
-    required this.maxLines,
-    required this.maxHeight,
-    required this.minFontSize,
-    required this.maxFontSize,
+class _CourseCardPaintData {
+  const _CourseCardPaintData({
+    required this.rect,
+    required this.rrect,
+    required this.fillColor,
+    required this.accentColor,
+    required this.borderColor,
+    required this.shadow,
+    required this.titlePainter,
+    required this.titleOffset,
+    this.locationPainter,
+    this.locationOffset,
+    this.teacherPainter,
+    this.teacherOffset,
   });
 
-  final String text;
-  final TextStyle style;
-  final int maxLines;
-  final double maxHeight;
-  final double minFontSize;
-  final double maxFontSize;
+  final Rect rect;
+  final RRect rrect;
+  final Color fillColor;
+  final Color accentColor;
+  final Color borderColor;
+  final BoxShadow shadow;
+  final TextPainter titlePainter;
+  final Offset titleOffset;
+  final TextPainter? locationPainter;
+  final Offset? locationOffset;
+  final TextPainter? teacherPainter;
+  final Offset? teacherOffset;
+}
+
+class _WeekCourseCardPainter extends CustomPainter {
+  const _WeekCourseCardPainter({required this.cards});
+
+  final List<_CourseCardPaintData> cards;
 
   @override
-  Widget build(BuildContext context) {
-    if (text.trim().isEmpty || maxHeight <= 0) {
-      return const SizedBox.shrink();
+  void paint(Canvas canvas, Size size) {
+    for (final card in cards) {
+      canvas.drawRRect(
+        card.rrect.shift(card.shadow.offset),
+        card.shadow.toPaint(),
+      );
+
+      final fillPaint =
+          Paint()
+            ..shader = LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [card.fillColor, card.accentColor],
+            ).createShader(card.rect);
+      canvas.drawRRect(card.rrect, fillPaint);
+
+      final borderPaint =
+          Paint()
+            ..color = card.borderColor
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1;
+      canvas.drawRRect(card.rrect, borderPaint);
+
+      canvas.save();
+      canvas.clipRRect(card.rrect);
+      card.titlePainter.paint(canvas, card.titleOffset);
+      if (card.locationPainter != null && card.locationOffset != null) {
+        card.locationPainter!.paint(canvas, card.locationOffset!);
+      }
+      if (card.teacherPainter != null && card.teacherOffset != null) {
+        card.teacherPainter!.paint(canvas, card.teacherOffset!);
+      }
+      canvas.restore();
     }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        if (maxWidth <= 0) {
-          return const SizedBox.shrink();
-        }
-
-        final textDirection = Directionality.of(context);
-        final maxReadableFontSize = _maxFontSizeForSample(
-          sample: '课程名',
-          style: style,
-          maxWidth: maxWidth,
-          minFontSize: minFontSize,
-          maxFontSize: maxFontSize,
-          textDirection: textDirection,
-        );
-        double low = minFontSize;
-        double high = maxReadableFontSize;
-        double best = minFontSize;
-
-        for (var index = 0; index < 9; index++) {
-          final current = (low + high) / 2;
-          final painter = TextPainter(
-            text: TextSpan(
-              text: text,
-              style: style.copyWith(fontSize: current),
-            ),
-            textDirection: textDirection,
-            maxLines: maxLines,
-            ellipsis: '…',
-          )..layout(maxWidth: maxWidth);
-
-          if (painter.height <= maxHeight + 0.01) {
-            best = current;
-            low = current;
-          } else {
-            high = current;
-          }
-        }
-
-        return ClipRect(
-          child: SizedBox(
-            width: double.infinity,
-            height: maxHeight,
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Text(
-                text,
-                maxLines: maxLines,
-                overflow: TextOverflow.ellipsis,
-                style: style.copyWith(fontSize: best),
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 
-  double _maxFontSizeForSample({
-    required String sample,
-    required TextStyle style,
-    required double maxWidth,
-    required double minFontSize,
-    required double maxFontSize,
-    required ui.TextDirection textDirection,
-  }) {
-    double low = minFontSize;
-    double high = maxFontSize;
-    double best = minFontSize;
-
-    for (var index = 0; index < 9; index++) {
-      final current = (low + high) / 2;
-      final painter = TextPainter(
-        text: TextSpan(text: sample, style: style.copyWith(fontSize: current)),
-        textDirection: textDirection,
-        maxLines: 1,
-      )..layout(maxWidth: double.infinity);
-
-      if (painter.width <= maxWidth + 0.01) {
-        best = current;
-        low = current;
-      } else {
-        high = current;
-      }
-    }
-
-    return best;
+  @override
+  bool shouldRepaint(covariant _WeekCourseCardPainter oldDelegate) {
+    return oldDelegate.cards != cards;
   }
 }
 
@@ -3435,6 +3888,7 @@ class _SingleLineScaleText extends StatelessWidget {
         }
 
         final textDirection = Directionality.of(context);
+        final textScaler = MediaQuery.textScalerOf(context);
         final baseFontSize = resolvedStyle.fontSize ?? 12;
         final minFontSize = math.max(1.0, baseFontSize * 0.55);
         final maxFontSize = baseFontSize;
@@ -3451,6 +3905,7 @@ class _SingleLineScaleText extends StatelessWidget {
             ),
             textDirection: textDirection,
             maxLines: 1,
+            textScaler: textScaler,
           )..layout(maxWidth: double.infinity);
 
           if (painter.width <= maxWidth + 0.01 &&
