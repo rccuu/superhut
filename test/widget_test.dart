@@ -100,6 +100,10 @@ void main() {
 
     final leftHitZone = find.byKey(const ValueKey('home-hit-zone-课表'));
     expect(leftHitZone, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-loaded-tab-0'), skipOffstage: false),
+      findsOneWidget,
+    );
     final leftHitZoneRect = tester.getRect(leftHitZone);
     expect(leftHitZoneRect.width, greaterThan(90));
 
@@ -116,6 +120,76 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
     await tester.pumpAndSettle();
 
+    expect(find.byType(UserPage), findsOneWidget);
+  });
+
+  testWidgets('preloads the course tab offstage after the first frame', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('home-loaded-tab-0'), skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(find.byType(CourseTableView), findsNothing);
+    expect(find.byType(CourseTableView, skipOffstage: false), findsOneWidget);
+
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('animates tab transitions horizontally by tab order', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.pump();
+
+    final slideToUser = tester.widget<SlideTransition>(
+      find.byKey(const ValueKey('home-tab-slide-2')),
+    );
+    expect(slideToUser.position.value.dx, greaterThan(0));
+    expect(slideToUser.position.value.dy, 0);
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-课表')));
+    await tester.pump();
+
+    final slideToCourse = tester.widget<SlideTransition>(
+      find.byKey(const ValueKey('home-tab-slide-0')),
+    );
+    expect(slideToCourse.position.value.dx, lessThan(0));
+    expect(slideToCourse.position.value.dy, 0);
+  });
+
+  testWidgets('skips tab transition animation when animations are disabled', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        builder:
+            (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
+        home: const HomeviewPage(initialIndex: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('home-tab-slide-2')), findsNothing);
     expect(find.byType(UserPage), findsOneWidget);
   });
 }

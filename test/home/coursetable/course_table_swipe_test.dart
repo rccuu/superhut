@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -121,6 +122,33 @@ void main() {
 
     expect(find.text('第2周'), findsOneWidget);
     expect(find.text('当前第1周'), findsOneWidget);
+  });
+
+  testWidgets('shows a compact cupertino preparing indicator first', (
+    tester,
+  ) async {
+    final schedule = buildTestSchedule();
+    await tester.pumpWidget(
+      MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+    );
+
+    expect(
+      find.byKey(const ValueKey('course-table-preparing-state')),
+      findsOneWidget,
+    );
+    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('正在准备课表'), findsNothing);
+    expect(find.text('正在恢复本地课表数据'), findsNothing);
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    expect(
+      find.byKey(const ValueKey('course-table-preparing-state')),
+      findsNothing,
+    );
+    expect(find.text('第1周'), findsOneWidget);
   });
 
   testWidgets('keeps the pager under the finger during a slow drag', (

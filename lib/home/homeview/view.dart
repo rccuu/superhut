@@ -27,6 +27,7 @@ class HomeviewPage extends StatefulWidget {
 }
 
 class _HomeviewPageState extends State<HomeviewPage> {
+  static const int _courseTabIndex = 0;
   static const _pages = [CourseTableView(), FunctionPage(), UserPage()];
   static const _dockItems = [
     _DockItemData(icon: CupertinoIcons.calendar, label: '课表'),
@@ -37,6 +38,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
   late int _selectedIndex;
   late final List<bool> _loadedPages;
   int _tabAnimationSeed = 0;
+  int _tabAnimationDirection = 1;
 
   @override
   void initState() {
@@ -44,6 +46,9 @@ class _HomeviewPageState extends State<HomeviewPage> {
     _selectedIndex = widget.initialIndex.clamp(0, _pages.length - 1);
     _loadedPages = List<bool>.filled(_pages.length, false);
     _loadedPages[_selectedIndex] = true;
+    if (_selectedIndex != _courseTabIndex) {
+      _loadedPages[_courseTabIndex] = true;
+    }
     _getCurrentVersion().then((_) {
       _checkVersion();
     });
@@ -245,9 +250,12 @@ class _HomeviewPageState extends State<HomeviewPage> {
     }
 
     return RepaintBoundary(
+      key: ValueKey<String>('home-loaded-tab-$index'),
       child: _AnimatedTabPage(
         isActive: _selectedIndex == index,
         animationSeed: _tabAnimationSeed,
+        slideDirection: _tabAnimationDirection,
+        pageIndex: index,
         child: KeyedSubtree(
           key: PageStorageKey<String>('home-tab-$index'),
           child: _pages[index],
@@ -261,7 +269,9 @@ class _HomeviewPageState extends State<HomeviewPage> {
       return;
     }
 
+    final previousIndex = _selectedIndex;
     setState(() {
+      _tabAnimationDirection = index > previousIndex ? 1 : -1;
       _selectedIndex = index;
       _loadedPages[index] = true;
       _tabAnimationSeed++;
@@ -281,11 +291,15 @@ class _AnimatedTabPage extends StatefulWidget {
     required this.child,
     required this.isActive,
     required this.animationSeed,
+    required this.slideDirection,
+    required this.pageIndex,
   });
 
   final Widget child;
   final bool isActive;
   final int animationSeed;
+  final int slideDirection;
+  final int pageIndex;
 
   @override
   State<_AnimatedTabPage> createState() => _AnimatedTabPageState();
@@ -293,24 +307,49 @@ class _AnimatedTabPage extends StatefulWidget {
 
 class _AnimatedTabPageState extends State<_AnimatedTabPage>
     with SingleTickerProviderStateMixin {
+  static const _tabAnimationDuration = Duration(milliseconds: 190);
+  static const _tabSlideOffset = 0.055;
+  static const _tabStartOpacity = 0.86;
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 150),
+    duration: _tabAnimationDuration,
     value: 1,
   );
   late final CurvedAnimation _curve = CurvedAnimation(
     parent: _controller,
     curve: Curves.easeOutCubic,
   );
-  late final Animation<Offset> _slide = Tween<Offset>(
-    begin: const Offset(0, 0.018),
-    end: Offset.zero,
-  ).animate(_curve);
+  late Animation<Offset> _slide;
+  late Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _configureAnimations();
+    if (widget.isActive && widget.animationSeed > 0) {
+      _controller.value = 0;
+      _controller.forward();
+    }
+  }
+
+  void _configureAnimations() {
+    _slide = Tween<Offset>(
+      begin: Offset(widget.slideDirection * _tabSlideOffset, 0),
+      end: Offset.zero,
+    ).animate(_curve);
+    _opacity = Tween<double>(begin: _tabStartOpacity, end: 1).animate(_curve);
+  }
 
   @override
   void didUpdateWidget(covariant _AnimatedTabPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.slideDirection != oldWidget.slideDirection ||
+        widget.isActive != oldWidget.isActive) {
+      _configureAnimations();
+    }
     if (widget.isActive && widget.animationSeed != oldWidget.animationSeed) {
+      _configureAnimations();
       _controller.forward(from: 0);
     }
   }
@@ -323,13 +362,20 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.isActive) {
+    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations;
+    if (!widget.isActive || disableAnimations == true) {
       return widget.child;
     }
 
-    return FadeTransition(
-      opacity: _curve,
-      child: SlideTransition(position: _slide, child: widget.child),
+    return ClipRect(
+      child: FadeTransition(
+        opacity: _opacity,
+        child: SlideTransition(
+          key: ValueKey<String>('home-tab-slide-${widget.pageIndex}'),
+          position: _slide,
+          child: widget.child,
+        ),
+      ),
     );
   }
 }

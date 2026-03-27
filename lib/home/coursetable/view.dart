@@ -4,8 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -72,15 +72,15 @@ class _CourseTableViewState extends State<CourseTableView> {
   static const double _headerHeight = 54;
   static const double _headerGap = 8;
   static const double _cardInnerGap = 2;
-  late final Future<void> _initialLoadFuture;
   late final PageController _weekPageController;
   late final ValueNotifier<int> _displayedWeekNotifier;
   bool _hasLinkedCampusAccount = false;
   bool _isPrimaryActionLoading = false;
   bool _isCurrentTermSchedule = true;
+  bool _isInitialLoadComplete = false;
 
   // DateTime _currentDate = DateTime.now();
-  DateTime _currentDate = getMondayOfCurrentWeek();
+  DateTime _currentDate = getMondayOfCurrentWeek(refreshWidget: false);
 
   //设置周数
   //当前显示周数
@@ -116,7 +116,7 @@ class _CourseTableViewState extends State<CourseTableView> {
     super.initState();
     _weekPageController = PageController();
     _displayedWeekNotifier = ValueNotifier<int>(_currentWeek);
-    _initialLoadFuture = _loadInitialData();
+    _loadInitialData();
   }
 
   @override
@@ -272,18 +272,40 @@ class _CourseTableViewState extends State<CourseTableView> {
     return badges;
   }
 
+  SavedCourseSchedule? _resolveActiveScheduleFromArchive(
+    CourseScheduleArchive archive,
+  ) {
+    if (archive.schedules.isEmpty) {
+      return null;
+    }
+
+    for (final schedule in archive.schedules) {
+      if (schedule.id == archive.activeScheduleId) {
+        return schedule;
+      }
+    }
+    return archive.schedules.first;
+  }
+
   Future<void> _reloadScheduleState() async {
-    final prefs = await SharedPreferences.getInstance();
+    final overrideSchedule = widget.debugScheduleOverride;
+    final prefsFuture = SharedPreferences.getInstance();
+    final hasLinkedCampusAccountFuture =
+        AppAuthStorage.instance.hasLinkedCampusAccount();
+    final archiveFuture =
+        overrideSchedule == null ? loadCourseScheduleArchive() : null;
+
+    final prefs = await prefsFuture;
     final showExperimentCourses =
         prefs.getBool(_showExperimentCoursesKey) ?? true;
-    final hasLinkedCampusAccount =
-        await AppAuthStorage.instance.hasLinkedCampusAccount();
-    final overrideSchedule = widget.debugScheduleOverride;
+    final hasLinkedCampusAccount = await hasLinkedCampusAccountFuture;
+    final archive = overrideSchedule == null ? await archiveFuture! : null;
     final savedSchedules =
         overrideSchedule == null
-            ? await loadSavedCourseSchedules()
+            ? archive!.schedules
             : <SavedCourseSchedule>[overrideSchedule];
-    final activeSchedule = overrideSchedule ?? await loadActiveCourseSchedule();
+    final activeSchedule =
+        overrideSchedule ?? _resolveActiveScheduleFromArchive(archive!);
     final courseData =
         activeSchedule?.courseData ?? const <String, List<Course>>{};
     final isCurrentTermSchedule = _isScheduleCurrentTerm(activeSchedule);
@@ -321,6 +343,12 @@ class _CourseTableViewState extends State<CourseTableView> {
 
   Future<void> _loadInitialData() async {
     await _reloadScheduleState();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isInitialLoadComplete = true;
+    });
   }
 
   Future<void> _setShowExperimentCourses(bool value) async {
@@ -2290,6 +2318,100 @@ class _CourseTableViewState extends State<CourseTableView> {
     );
   }
 
+  Widget _buildPreparingState(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      key: const ValueKey('course-table-preparing-state'),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+      child: Center(
+        child: RepaintBoundary(
+          child: CupertinoActivityIndicator(
+            radius: 11,
+            color: colorScheme.primary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCourseTableContent(BuildContext context) {
+    if (!_isInitialLoadComplete) {
+      return _buildPreparingState(context);
+    }
+
+    if (_courseData.isEmpty) {
+      return _buildEmptyState(context);
+    }
+
+    return RepaintBoundary(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 10, 8, 88),
+        child: Column(
+          children: [
+            RepaintBoundary(
+              child: ValueListenableBuilder<int>(
+                valueListenable: _displayedWeekNotifier,
+                builder: (context, displayedWeek, child) {
+                  final weekDays = _buildWeekDaysForWeek(displayedWeek);
+                  return CourseTableToolbar(
+                    weekTitle: '第$displayedWeek周',
+                    weekDateRange: _buildWeekDateRange(weekDays),
+                    currentWeekLabel: _buildCurrentWeekLabel(),
+                    isShowingCurrentWeek: displayedWeek == _currentRealWeek,
+                    onBackToCurrentWeek: _backToRealWeek,
+                    onManageSchedules: _showScheduleManager,
+                    showExperimentCourses: _showExperimentCourses,
+                    onShowExperimentCoursesChanged: _setShowExperimentCourses,
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final metrics = _buildGridMetrics(constraints);
+                  final basePagingPhysics =
+                      _allWeek <= 1
+                          ? const NeverScrollableScrollPhysics()
+                          : const _CourseTablePagingPhysics().applyTo(
+                            ScrollConfiguration.of(
+                              context,
+                            ).getScrollPhysics(context),
+                          );
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      width: metrics.totalWidth,
+                      child: PageView.builder(
+                        key: const ValueKey('course-table-week-pager'),
+                        controller: _weekPageController,
+                        itemCount: _allWeek,
+                        dragStartBehavior: DragStartBehavior.down,
+                        allowImplicitScrolling: true,
+                        physics: basePagingPhysics,
+                        onPageChanged: _handleWeekPageChanged,
+                        itemBuilder: (context, index) {
+                          final weekNumber = index + 1;
+                          return _buildWeekPage(
+                            context: context,
+                            weekDays: _buildWeekDaysForWeek(weekNumber),
+                            metrics: metrics,
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   static const List<_SectionTime> _sectionTimes = [
     _SectionTime(index: 1, start: '08:00', end: '08:45'),
     _SectionTime(index: 2, start: '08:55', end: '09:40'),
@@ -2646,91 +2768,16 @@ class _CourseTableViewState extends State<CourseTableView> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: AppGlassBackground(
-        style: AppGlassBackgroundStyle.soft,
+        style:
+            _isInitialLoadComplete
+                ? AppGlassBackgroundStyle.soft
+                : AppGlassBackgroundStyle.flat,
         bottomHighlightOpacity: 0,
         lightBottomColor: const Color(0xFFEAF0FA),
         darkBottomColor: const Color(0xFF101826),
         child: SafeArea(
           bottom: false,
-          child: EnhancedFutureBuilder(
-            future: _initialLoadFuture,
-            rememberFutureResult: true,
-            whenDone: (_) {
-              if (_courseData.isEmpty) {
-                return _buildEmptyState(context);
-              }
-
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(8, 10, 8, 88),
-                child: Column(
-                  children: [
-                    ValueListenableBuilder<int>(
-                      valueListenable: _displayedWeekNotifier,
-                      builder: (context, displayedWeek, child) {
-                        final weekDays = _buildWeekDaysForWeek(displayedWeek);
-                        return CourseTableToolbar(
-                          weekTitle: '第$displayedWeek周',
-                          weekDateRange: _buildWeekDateRange(weekDays),
-                          currentWeekLabel: _buildCurrentWeekLabel(),
-                          isShowingCurrentWeek:
-                              displayedWeek == _currentRealWeek,
-                          onBackToCurrentWeek: _backToRealWeek,
-                          onManageSchedules: _showScheduleManager,
-                          showExperimentCourses: _showExperimentCourses,
-                          onShowExperimentCoursesChanged:
-                              _setShowExperimentCourses,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final metrics = _buildGridMetrics(constraints);
-                          final basePagingPhysics =
-                              _allWeek <= 1
-                                  ? const NeverScrollableScrollPhysics()
-                                  : const _CourseTablePagingPhysics().applyTo(
-                                    ScrollConfiguration.of(
-                                      context,
-                                    ).getScrollPhysics(context),
-                                  );
-                          return Align(
-                            alignment: Alignment.topCenter,
-                            child: SizedBox(
-                              width: metrics.totalWidth,
-                              child: PageView.builder(
-                                key: const ValueKey('course-table-week-pager'),
-                                controller: _weekPageController,
-                                itemCount: _allWeek,
-                                dragStartBehavior: DragStartBehavior.down,
-                                allowImplicitScrolling: true,
-                                physics: basePagingPhysics,
-                                onPageChanged: _handleWeekPageChanged,
-                                itemBuilder: (context, index) {
-                                  final weekNumber = index + 1;
-                                  return _buildWeekPage(
-                                    context: context,
-                                    weekDays: _buildWeekDaysForWeek(weekNumber),
-                                    metrics: metrics,
-                                  );
-                                },
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-            whenNotDone: Center(
-              child: CircularProgressIndicator(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ),
+          child: _buildCourseTableContent(context),
         ),
       ),
     );

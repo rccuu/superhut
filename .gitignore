@@ -51,6 +51,6 @@ app.*.map.json
 /key/
 /android/app/key/
 AGENTS.md
-docs
-outputs
+docs/
+outputs/
 .serena
