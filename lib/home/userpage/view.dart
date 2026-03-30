@@ -5,9 +5,9 @@ import 'package:ionicons/ionicons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../bridge/get_course_page.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
+import '../../core/services/course_sync_service.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../login/unified_login_page.dart';
 import '../../pages/score/logic.dart';
@@ -221,6 +221,14 @@ class _UserPageState extends State<UserPage> {
   }
 
   Future<void> _refreshCourse() async {
+    if (CourseSyncService.instance.state.isRunning) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('课表正在同步，请稍候')));
+      }
+      return;
+    }
     final renewed = await renewToken(context);
     if (!mounted) {
       return;
@@ -229,9 +237,11 @@ class _UserPageState extends State<UserPage> {
       await _openLoginPage();
       return;
     }
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const Getcoursepage(renew: true)),
-    );
+    final token = await getToken();
+    if (!mounted) {
+      return;
+    }
+    await CourseSyncService.instance.startManualSync(token);
   }
 
   Future<void> _logout() async {

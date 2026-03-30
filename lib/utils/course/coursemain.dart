@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 import '../../login/loginwithpost.dart';
+import 'course_sync_progress.dart';
 import 'get_course.dart';
 
 const int _courseScheduleArchiveSchemaVersion = 1;
@@ -2146,6 +2147,7 @@ String _sectionEndTime(int endSection) {
 Future<CourseSyncResult> saveClassToLocal(
   String token, {
   BuildContext? context,
+  CourseSyncProgressCallback? onProgress,
 }) async {
   if (token.isEmpty) {
     return const CourseSyncResult.failure('登录信息已失效，请重新登录后再试');
@@ -2159,10 +2161,21 @@ Future<CourseSyncResult> saveClassToLocal(
     final snapshot = await loadCourseSyncSnapshotFromUrl(
       token,
       context: context,
+      onProgress: onProgress,
     );
     if (snapshot.courseData.isEmpty) {
       return const CourseSyncResult.failure('未获取到任何课表数据，请确认当前学期已有课表');
     }
+
+    final totalUnits = snapshot.maxWeek > 0 ? 1 + snapshot.maxWeek * 2 + 1 : 42;
+    onProgress?.call(
+      CourseSyncProgress(
+        phase: CourseSyncPhase.saving,
+        completedUnits: totalUnits - 1,
+        totalUnits: totalUnits,
+        message: '正在保存课表',
+      ),
+    );
 
     final prefs = await SharedPreferences.getInstance();
     final ownerName = prefs.getString('name') ?? '';
@@ -2225,6 +2238,14 @@ Future<CourseSyncResult> saveClassToLocal(
         );
 
     await saveCourseSchedule(savedSchedule, setActive: true);
+    onProgress?.call(
+      CourseSyncProgress(
+        phase: CourseSyncPhase.saving,
+        completedUnits: totalUnits,
+        totalUnits: totalUnits,
+        message: '课表同步完成',
+      ),
+    );
     return CourseSyncResult.success(
       '课表同步完成，共更新 ${snapshot.courseData.length} 天的数据',
     );
@@ -2256,10 +2277,32 @@ Future<Map<String, List<Course>>> testc() async {
 Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
   String token, {
   BuildContext? context,
+  CourseSyncProgressCallback? onProgress,
 }) async {
   final GetOrgDataWeb getOrgDataWeb = GetOrgDataWeb(token: token);
   getOrgDataWeb.initData();
+  final totalWeeks =
+      getOrgDataWeb.maxWeek >= getOrgDataWeb.firstWeek
+          ? getOrgDataWeb.maxWeek - getOrgDataWeb.firstWeek + 1
+          : 0;
+  final totalUnits = 1 + totalWeeks * 2 + 1;
+  onProgress?.call(
+    CourseSyncProgress(
+      phase: CourseSyncPhase.preparing,
+      completedUnits: 0,
+      totalUnits: totalUnits,
+      message: '正在准备同步课表',
+    ),
+  );
   await getOrgDataWeb.getCurrentSemesterId();
+  onProgress?.call(
+    CourseSyncProgress(
+      phase: CourseSyncPhase.semester,
+      completedUnits: 1,
+      totalUnits: totalUnits,
+      message: '正在确认当前学期',
+    ),
+  );
   if (context != null && !context.mounted) {
     return const CourseSyncSnapshot(
       courseData: <String, List<Course>>{},
@@ -2269,7 +2312,12 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
     );
   }
   final Map<String, List<Course>> courseData = await getOrgDataWeb
-      .getAllWeekClass(context);
+      .getAllWeekClass(
+        context,
+        onProgress: onProgress,
+        completedUnitsOffset: 1,
+        totalUnits: totalUnits,
+      );
   if (context != null && !context.mounted) {
     return CourseSyncSnapshot(
       courseData: courseData,
@@ -2279,7 +2327,12 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
     );
   }
   final Map<String, List<Course>> expCourseData = await getOrgDataWeb
-      .getAllWeekExpClass(context);
+      .getAllWeekExpClass(
+        context,
+        onProgress: onProgress,
+        completedUnitsOffset: 1 + totalWeeks,
+        totalUnits: totalUnits,
+      );
   try {
     await saveExperimentRawDataToJson(getOrgDataWeb.expRawWeeklyResponses);
   } catch (error, stackTrace) {

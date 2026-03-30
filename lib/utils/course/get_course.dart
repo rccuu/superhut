@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/services/app_logger.dart';
+import 'course_sync_progress.dart';
 import '../withhttp.dart';
 import 'coursemain.dart';
 
@@ -284,8 +285,11 @@ class GetOrgDataWeb {
   }
 
   Future<Map<String, List<Course>>> getAllWeekClass(
-    BuildContext? context,
-  ) async {
+    BuildContext? context, {
+    CourseSyncProgressCallback? onProgress,
+    required int completedUnitsOffset,
+    required int totalUnits,
+  }) async {
     bool needsFirstDay = true;
     bool receivedValidCourseResponse = false;
     Object? firstError;
@@ -311,28 +315,38 @@ class GetOrgDataWeb {
         }
         receivedValidCourseResponse = true;
 
-        if (!_hasScheduleData(data)) {
+        if (_hasScheduleData(data)) {
+          final getsingleweek = GetSingleWeekClass(orgdata: data);
+          getsingleweek.initData();
+          getsingleweek.getWeekDate();
+          final tempData = getsingleweek.getSingleClass();
+          _mergeCourseData(target: courseData, source: tempData);
+
+          if (needsFirstDay && tempData.isNotEmpty) {
+            final firstDate = tempData.keys.first;
+            await prefs.setString('firstDay', firstDate);
+            needsFirstDay = false;
+          }
+        } else {
           AppLogger.debug('第$i周没有课程数据');
-          continue;
-        }
-
-        final getsingleweek = GetSingleWeekClass(orgdata: data);
-        getsingleweek.initData();
-        getsingleweek.getWeekDate();
-        final tempData = getsingleweek.getSingleClass();
-        _mergeCourseData(target: courseData, source: tempData);
-
-        if (needsFirstDay && tempData.isNotEmpty) {
-          final firstDate = tempData.keys.first;
-          await prefs.setString('firstDay', firstDate);
-          needsFirstDay = false;
         }
 
         await Future.delayed(const Duration(microseconds: 300));
         if (context != null && !context.mounted) {
           return courseData;
         }
-        if (context != null) {
+        if (onProgress != null) {
+          onProgress(
+            CourseSyncProgress(
+              phase: CourseSyncPhase.courseWeeks,
+              completedUnits: completedUnitsOffset + (i - firstWeek + 1),
+              totalUnits: totalUnits,
+              message: '正在获取普通课表（第$i周）',
+              currentWeek: i,
+              totalWeeks: maxWeek,
+            ),
+          );
+        } else if (context != null) {
           _showLoadingSnackBar(context, '正在获取第$i周课表');
         }
       } catch (error, stackTrace) {
@@ -415,8 +429,11 @@ class GetOrgDataWeb {
   }
 
   Future<Map<String, List<Course>>> getAllWeekExpClass(
-    BuildContext? context,
-  ) async {
+    BuildContext? context, {
+    CourseSyncProgressCallback? onProgress,
+    required int completedUnitsOffset,
+    required int totalUnits,
+  }) async {
     final Map<String, List<Course>> expCourseData = {};
     final weeks = expRawWeeklyResponses['weeks'] as Map<String, dynamic>;
     try {
@@ -447,16 +464,28 @@ class GetOrgDataWeb {
           if (data == null || data['code']?.toString() != '1') {
             throw _buildCourseRequestStateError(response.data);
           }
-          if (!_hasScheduleData(data)) {
-            continue;
+          if (_hasScheduleData(data)) {
+            final getExpWeek = GetSingleWeekExpClass(orgdata: data);
+            getExpWeek.initData();
+            getExpWeek.getWeekDate();
+            final tempData = getExpWeek.getSingleClass();
+            _mergeCourseData(target: expCourseData, source: tempData);
+          } else {
+            AppLogger.debug('第$i周没有实验课表数据');
           }
-          final getExpWeek = GetSingleWeekExpClass(orgdata: data);
-          getExpWeek.initData();
-          getExpWeek.getWeekDate();
-          final tempData = getExpWeek.getSingleClass();
-          _mergeCourseData(target: expCourseData, source: tempData);
 
-          if (context != null) {
+          if (onProgress != null) {
+            onProgress(
+              CourseSyncProgress(
+                phase: CourseSyncPhase.experimentWeeks,
+                completedUnits: completedUnitsOffset + (i - firstWeek + 1),
+                totalUnits: totalUnits,
+                message: '正在获取实验课表（第$i周）',
+                currentWeek: i,
+                totalWeeks: maxWeek,
+              ),
+            );
+          } else if (context != null) {
             if (!context.mounted) {
               return expCourseData;
             }
