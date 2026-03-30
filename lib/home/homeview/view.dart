@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_logger.dart';
 import '../../core/services/app_update_service.dart';
+import '../../core/services/course_sync_service.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../pages/Electricitybill/electricity_api.dart';
 import '../../pages/Electricitybill/electricity_page.dart';
@@ -41,6 +42,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
   late final List<Widget> _pages;
   int _tabAnimationSeed = 0;
   int _tabAnimationDirection = 1;
+  int _handledCourseSyncEventId = 0;
 
   @override
   void initState() {
@@ -60,13 +62,39 @@ class _HomeviewPageState extends State<HomeviewPage> {
     _getCurrentVersion().then((_) {
       _checkVersion();
     });
+    CourseSyncService.instance.stateListenable.addListener(
+      _handleCourseSyncStateChanged,
+    );
     checkAlert();
   }
 
   @override
   void dispose() {
+    CourseSyncService.instance.stateListenable.removeListener(
+      _handleCourseSyncStateChanged,
+    );
     _courseTransitionLiteMode.dispose();
     super.dispose();
+  }
+
+  void _handleCourseSyncStateChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    final snapshot = CourseSyncService.instance.state;
+    if (snapshot.eventId <= 0 ||
+        snapshot.eventId == _handledCourseSyncEventId) {
+      return;
+    }
+    _handledCourseSyncEventId = snapshot.eventId;
+
+    if (snapshot.status == CourseSyncTaskStatus.success ||
+        snapshot.status == CourseSyncTaskStatus.failure) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(snapshot.message)));
+    }
   }
 
   Future<void> _getCurrentVersion() async {
@@ -220,6 +248,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final dockBottom = bottomInset > 12 ? bottomInset.toDouble() : 12.0;
+    final topInset = MediaQuery.viewPaddingOf(context).top;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -231,6 +260,12 @@ class _HomeviewPageState extends State<HomeviewPage> {
             sizing: StackFit.expand,
             index: _selectedIndex,
             children: List.generate(_pages.length, _buildPageSlot),
+          ),
+          Positioned(
+            top: topInset + 10,
+            left: 16,
+            right: 16,
+            child: const IgnorePointer(child: _CourseSyncOverlay()),
           ),
           Positioned(
             left: 0,
@@ -295,6 +330,138 @@ class _HomeviewPageState extends State<HomeviewPage> {
       _loadedPages[index] = true;
       _tabAnimationSeed++;
     });
+  }
+}
+
+class _CourseSyncOverlay extends StatelessWidget {
+  const _CourseSyncOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<CourseSyncTaskSnapshot>(
+      valueListenable: CourseSyncService.instance.stateListenable,
+      builder: (context, snapshot, _) {
+        final visible = snapshot.isVisible;
+        final colorScheme = Theme.of(context).colorScheme;
+        final bool isFailure = snapshot.status == CourseSyncTaskStatus.failure;
+        final bool isSuccess = snapshot.status == CourseSyncTaskStatus.success;
+        final Color accentColor =
+            isFailure
+                ? colorScheme.error
+                : isSuccess
+                ? colorScheme.primary
+                : colorScheme.primary;
+
+        return AnimatedSlide(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          offset: visible ? Offset.zero : const Offset(0, -1.2),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 180),
+            opacity: visible ? 1 : 0,
+            child:
+                !visible
+                    ? const SizedBox.shrink()
+                    : Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface.withValues(
+                                alpha: 0.96,
+                              ),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: accentColor.withValues(alpha: 0.22),
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                14,
+                                12,
+                                14,
+                                12,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        isFailure
+                                            ? CupertinoIcons
+                                                .exclamationmark_circle
+                                            : isSuccess
+                                            ? CupertinoIcons.check_mark_circled
+                                            : CupertinoIcons.arrow_2_circlepath,
+                                        size: 18,
+                                        color: accentColor,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          snapshot.message,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: colorScheme.onSurface,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      if (snapshot.status ==
+                                              CourseSyncTaskStatus.running &&
+                                          snapshot.currentWeek != null &&
+                                          snapshot.totalWeeks != null)
+                                        Text(
+                                          '${snapshot.currentWeek}/${snapshot.totalWeeks}',
+                                          style: TextStyle(
+                                            color: colorScheme.onSurfaceVariant,
+                                            fontSize: 12,
+                                            fontFeatures: const [
+                                              ui.FontFeature.tabularFigures(),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: LinearProgressIndicator(
+                                      minHeight: 6,
+                                      value:
+                                          snapshot.status ==
+                                                  CourseSyncTaskStatus.failure
+                                              ? null
+                                              : snapshot.progress,
+                                      color: accentColor,
+                                      backgroundColor: accentColor.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+          ),
+        );
+      },
+    );
   }
 }
 

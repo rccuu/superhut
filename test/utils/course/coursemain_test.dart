@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/utils/course/get_course.dart';
+import 'package:superhut/utils/course/course_sync_progress.dart';
 import 'package:superhut/utils/course/coursemain.dart';
 import 'package:superhut/utils/withhttp.dart';
 
@@ -1234,6 +1235,79 @@ void main() {
     },
   );
 
+  test('saveClassToLocal reports sync progress for running stages', () async {
+    SharedPreferences.setMockInitialValues({
+      'user': '20230001',
+      'token': 'jwxt-token',
+      'my_client_ticket': '',
+      'loginType': 'jwxt',
+      'name': '测试同学',
+    });
+
+    final originalAdapter = dio.httpClientAdapter;
+    dio.httpClientAdapter = _FakeCourseHttpClientAdapter((options) {
+      final path = options.path;
+      if (path == '/njwhd/student/curriculum?week=1') {
+        return _jsonResponse({
+          'code': '1',
+          'data': [
+            {
+              'date': [
+                {'xqid': 1, 'mxrq': '2026-03-16'},
+              ],
+              'item': [
+                {
+                  'classTime': '10102',
+                  'courseName': '软件工程',
+                  'teacherName': '张老师',
+                  'classWeek': '1-16',
+                  'location': '公共201',
+                },
+              ],
+            },
+          ],
+        });
+      }
+      if (path.startsWith('/njwhd/student/curriculum?week=')) {
+        return _jsonResponse({'code': '1', 'data': []});
+      }
+      if (path == '/njwhd/semesterList') {
+        return _jsonResponse({
+          'code': '1',
+          'data': [
+            {'nowXq': '1', 'semesterId': '2025-2026-2'},
+          ],
+        });
+      }
+      if (path.startsWith('/njwhd/teacher/courseScheduleExp?')) {
+        return _jsonResponse({'code': '1', 'data': []});
+      }
+      throw StateError('Unexpected request path: $path');
+    });
+    addTearDown(() {
+      dio.httpClientAdapter = originalAdapter;
+    });
+
+    final reportedPhases = <CourseSyncPhase>[];
+    final reportedMessages = <String>[];
+    final result = await saveClassToLocal(
+      'jwxt-token',
+      onProgress: (progress) {
+        reportedPhases.add(progress.phase);
+        reportedMessages.add(progress.message);
+      },
+    );
+
+    expect(result.success, isTrue);
+    expect(reportedPhases, contains(CourseSyncPhase.preparing));
+    expect(reportedPhases, contains(CourseSyncPhase.semester));
+    expect(reportedPhases, contains(CourseSyncPhase.courseWeeks));
+    expect(reportedPhases, contains(CourseSyncPhase.experimentWeeks));
+    expect(reportedPhases.last, CourseSyncPhase.saving);
+    expect(reportedMessages, contains('正在保存课表'));
+    expect(reportedMessages.last, '课表同步完成');
+  });
+
   test(
     'saveExperimentRawDataToJson writes raw experiment schedule snapshot for debugging',
     () async {
@@ -1315,7 +1389,11 @@ void main() {
 
       final getOrgDataWeb = GetOrgDataWeb(token: 'jwxt-token');
       getOrgDataWeb.initData();
-      await getOrgDataWeb.getAllWeekExpClass(null);
+      await getOrgDataWeb.getAllWeekExpClass(
+        null,
+        completedUnitsOffset: 21,
+        totalUnits: 42,
+      );
       await saveExperimentRawDataToJson(getOrgDataWeb.expRawWeeklyResponses);
 
       final rawFile = File('${tempDirectory.path}/experiment_course_raw.json');

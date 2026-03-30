@@ -20,8 +20,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../bridge/get_course_page.dart';
 import '../../core/services/app_auth_storage.dart';
+import '../../core/services/course_sync_service.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import '../../login/unified_login_page.dart';
@@ -93,6 +93,7 @@ class _CourseTableViewState extends State<CourseTableView> {
   bool _isInitialLoadComplete = false;
   bool _weekPlacementWarmupPending = false;
   int _transitionLiteModeRequestId = 0;
+  int _handledCourseSyncSuccessEventId = 0;
   final Map<String, List<_PlacedCourse>> _weekPlacementsCache =
       <String, List<_PlacedCourse>>{};
   final Map<String, List<_CourseCardPaintData>> _weekCourseCardPaintCache =
@@ -138,6 +139,9 @@ class _CourseTableViewState extends State<CourseTableView> {
     _transitionLiteModeNotifier = ValueNotifier<bool>(
       _resolveTransitionLiteModeValue(),
     );
+    CourseSyncService.instance.stateListenable.addListener(
+      _handleCourseSyncStateChanged,
+    );
     widget.transitionLiteModeListenable?.addListener(
       _handleTransitionLiteModeChanged,
     );
@@ -170,6 +174,9 @@ class _CourseTableViewState extends State<CourseTableView> {
     widget.transitionLiteModeListenable?.removeListener(
       _handleTransitionLiteModeChanged,
     );
+    CourseSyncService.instance.stateListenable.removeListener(
+      _handleCourseSyncStateChanged,
+    );
     _transitionLiteModeNotifier.dispose();
     _displayedWeekNotifier.dispose();
     _weekPageController.dispose();
@@ -187,6 +194,17 @@ class _CourseTableViewState extends State<CourseTableView> {
       return;
     }
     _applyTransitionLiteMode(_resolveTransitionLiteModeValue());
+  }
+
+  void _handleCourseSyncStateChanged() {
+    final snapshot = CourseSyncService.instance.state;
+    if (snapshot.status != CourseSyncTaskStatus.success ||
+        snapshot.eventId <= 0 ||
+        snapshot.eventId == _handledCourseSyncSuccessEventId) {
+      return;
+    }
+    _handledCourseSyncSuccessEventId = snapshot.eventId;
+    unawaited(_reloadScheduleState());
   }
 
   void _applyTransitionLiteMode(bool nextValue) {
@@ -820,6 +838,10 @@ class _CourseTableViewState extends State<CourseTableView> {
     if (_isPrimaryActionLoading) {
       return;
     }
+    if (CourseSyncService.instance.state.isRunning) {
+      _showSnackBar('课表正在同步，请稍候');
+      return;
+    }
 
     if (!_hasLinkedCampusAccount) {
       await _openCampusLogin();
@@ -839,12 +861,14 @@ class _CourseTableViewState extends State<CourseTableView> {
         await _openCampusLogin();
         return;
       }
-
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const Getcoursepage(renew: true),
-        ),
-      );
+      final token = await getToken();
+      if (!mounted) {
+        return;
+      }
+      final started = await CourseSyncService.instance.startManualSync(token);
+      if (!started && mounted && CourseSyncService.instance.state.isRunning) {
+        _showSnackBar('课表正在同步，请稍候');
+      }
     } finally {
       if (mounted) {
         setState(() {
