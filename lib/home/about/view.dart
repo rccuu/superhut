@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_update_service.dart';
 import '../../core/ui/apple_glass.dart';
+import 'trust_page.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -52,6 +53,9 @@ class _AboutPageState extends State<AboutPage> {
   );
   static final Uri _upstreamRepoUrl = Uri.parse(
     'https://github.com/cc2562/superhut',
+  );
+  static final Uri _releaseUrl = Uri.parse(
+    'https://github.com/rccuu/superhut/releases',
   );
 
   String _version = '--';
@@ -174,6 +178,10 @@ class _AboutPageState extends State<AboutPage> {
     return '${releaseNotes.substring(0, maxLength).trimRight()}\n\n……';
   }
 
+  Future<void> _openTrustPage() async {
+    await Navigator.of(context).push(TrustCenterPage.route());
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -200,6 +208,52 @@ class _AboutPageState extends State<AboutPage> {
                         _isCheckingUpdate || _version == '--'
                             ? null
                             : _checkForUpdates,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                RepaintBoundary(
+                  child: _AboutSectionPanel(
+                    icon: Ionicons.shield_checkmark_outline,
+                    title: '信任与隐私',
+                    tint: colorScheme.secondary,
+                    useLiteEffects: useLiteLayout,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _AboutFactLine(text: '当前仓库、上游仓库和版本发布页都公开可见。'),
+                        const SizedBox(height: 10),
+                        _AboutFactLine(text: '应用内更新检查直接读取 GitHub Releases 信息。'),
+                        const SizedBox(height: 10),
+                        _AboutFactLine(
+                          text: '当前公开代码里，主要业务域名是学校系统、服务提供方和 GitHub。',
+                        ),
+                        const SizedBox(height: 10),
+                        _AboutFactLine(text: '密码优先走系统安全存储，登录态和缓存默认保存在本机。'),
+                        const SizedBox(height: 18),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            FilledButton.tonalIcon(
+                              onPressed: _openTrustPage,
+                              icon: const Icon(
+                                Ionicons.shield_checkmark_outline,
+                                size: 18,
+                              ),
+                              label: const Text('查看完整说明'),
+                            ),
+                            FilledButton.tonalIcon(
+                              onPressed: () => _openUrl(_releaseUrl),
+                              icon: const Icon(
+                                Ionicons.download_outline,
+                                size: 18,
+                              ),
+                              label: const Text('打开版本发布'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -494,6 +548,41 @@ class _AboutPill extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AboutFactLine extends StatelessWidget {
+  const _AboutFactLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: Icon(
+            Ionicons.checkmark_circle,
+            size: 16,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

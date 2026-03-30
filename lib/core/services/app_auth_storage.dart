@@ -8,6 +8,7 @@ class AppAuthStorage {
 
   static final AppAuthStorage instance = AppAuthStorage._();
 
+  static const _hasSeenTrustNoticeKey = 'hasSeenTrustNotice';
   static const _jwxtPasswordKey = 'secure_jwxt_password';
   static const _hutPasswordKey = 'secure_hut_password';
 
@@ -23,6 +24,21 @@ class AppAuthStorage {
   Future<bool> isFirstOpen() async {
     final prefs = await _prefs;
     return prefs.getBool('isFirstOpen') ?? true;
+  }
+
+  Future<void> setHasSeenTrustNotice(bool value) async {
+    final prefs = await _prefs;
+    await prefs.setBool(_hasSeenTrustNoticeKey, value);
+  }
+
+  Future<bool> hasSeenTrustNotice() async {
+    final prefs = await _prefs;
+    return prefs.getBool(_hasSeenTrustNoticeKey) ?? false;
+  }
+
+  Future<bool> hasTrustNoticePreference() async {
+    final prefs = await _prefs;
+    return prefs.containsKey(_hasSeenTrustNoticeKey);
   }
 
   Future<bool> hasAnyCampusSession() async {

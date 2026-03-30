@@ -51,6 +51,13 @@ app.*.map.json
 /key/
 /android/app/key/
 AGENTS.md
-docs/
+docs/*
+!docs/optimization_plan.md
+!docs/optimization_summary.md
+!docs/plans/
+!docs/requirements/
+!docs/trust-and-privacy.md
 outputs/
 .serena
+docs/plans
+docs/requirements
