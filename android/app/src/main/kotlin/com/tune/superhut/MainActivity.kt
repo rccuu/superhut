@@ -19,6 +19,7 @@ class MainActivity : FlutterActivity() {
         private const val WIDGET_ACTIONS_CHANNEL =
             "com.superhut.rice.superhut/widget_actions"
         private const val EXTRA_WIDGET_ACTION = "widget_action"
+        private const val COURSE_WIDGET_STORE_FILE = "course_widget_store.json"
         private const val COURSE_WIDGET_PAYLOAD_FILE = "course_widget_payload.json"
     }
 
@@ -45,6 +46,8 @@ class MainActivity : FlutterActivity() {
                 "syncCourseTableWidget" -> {
                     val arguments = call.arguments as? Map<*, *>
                     val payloadJson = arguments?.get("payloadJson") as? String
+                    val storeJson = arguments?.get("storeJson") as? String
+                    cacheCourseWidgetStore(storeJson)
                     cacheCompactCourseWidgetPayload(payloadJson)
                     refreshCourseTableWidgets()
                     result.success(true)
@@ -111,8 +114,32 @@ class MainActivity : FlutterActivity() {
                 if (!exists()) {
                     mkdirs()
                 }
-            }
+        }
         File(filesDir, COURSE_WIDGET_PAYLOAD_FILE).writeText(payloadJson)
+    }
+
+    private fun cacheCourseWidgetStore(storeJson: String?) {
+        if (storeJson.isNullOrBlank()) {
+            return
+        }
+
+        val appDir = applicationContext.filesDir.parentFile ?: return
+        val flutterDir =
+            File(appDir, "app_flutter").apply {
+                if (!exists()) {
+                    mkdirs()
+                }
+            }
+
+        File(flutterDir, COURSE_WIDGET_STORE_FILE).writeText(storeJson)
+
+        val filesDir =
+            File(appDir, "files").apply {
+                if (!exists()) {
+                    mkdirs()
+                }
+            }
+        File(filesDir, COURSE_WIDGET_STORE_FILE).writeText(storeJson)
     }
 
     private fun refreshCourseTableWidgets() {

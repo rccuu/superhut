@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -6,6 +8,7 @@ import 'package:superhut/generated/assets.dart';
 import 'package:superhut/home/homeview/view.dart';
 import 'package:superhut/login/hut_cas_login_page.dart';
 import 'package:superhut/login/webview_login_screen.dart';
+import 'package:superhut/utils/course/coursemain.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
 import '../core/services/app_auth_storage.dart';
@@ -95,6 +98,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   }
 
   void _finishLogin() {
+    unawaited(ensureCourseScheduleFreshness());
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => const HomeviewPage(initialIndex: 0),
@@ -172,6 +176,10 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
       }
 
       await AppAuthStorage.instance.setFirstOpen(false);
+      await AppAuthStorage.instance.saveJwxtCredentials(
+        username: username,
+        password: password,
+      );
 
       if (!mounted) {
         return;

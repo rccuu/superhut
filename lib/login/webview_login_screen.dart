@@ -7,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../core/services/app_auth_storage.dart';
 import '../home/homeview/view.dart';
+import '../utils/course/coursemain.dart';
 import '../utils/token.dart';
 
 class WebViewLoginScreen extends StatefulWidget {
@@ -80,10 +81,12 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
     }
 
     final navigator = Navigator.of(context);
-    if (widget.renew || !widget.navigateToCoursePageOnSuccess) {
+    if (widget.renew) {
       navigator.pop(true);
       return;
     }
+
+    unawaited(ensureCourseScheduleFreshness());
     navigator.pushAndRemoveUntil(
       MaterialPageRoute(
         builder: (context) => const HomeviewPage(initialIndex: 0),

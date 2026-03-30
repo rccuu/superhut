@@ -46,6 +46,7 @@
                 <action android:name="android.appwidget.action.APPWIDGET_ENABLED" />
                 <action android:name="android.appwidget.action.APPWIDGET_DELETED" />
                 <action android:name="android.appwidget.action.APPWIDGET_DISABLED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="com.tune.superhut.ACTION_REFRESH" />
             </intent-filter>
             <meta-data

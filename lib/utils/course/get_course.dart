@@ -284,7 +284,7 @@ class GetOrgDataWeb {
   }
 
   Future<Map<String, List<Course>>> getAllWeekClass(
-    BuildContext context,
+    BuildContext? context,
   ) async {
     bool needsFirstDay = true;
     bool receivedValidCourseResponse = false;
@@ -329,10 +329,12 @@ class GetOrgDataWeb {
         }
 
         await Future.delayed(const Duration(microseconds: 300));
-        if (!context.mounted) {
+        if (context != null && !context.mounted) {
           return courseData;
         }
-        _showLoadingSnackBar(context, '正在获取第$i周课表');
+        if (context != null) {
+          _showLoadingSnackBar(context, '正在获取第$i周课表');
+        }
       } catch (error, stackTrace) {
         AppLogger.error('获取第$i周课表出错', error: error, stackTrace: stackTrace);
         firstError ??= error;

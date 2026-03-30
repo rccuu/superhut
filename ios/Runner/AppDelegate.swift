@@ -7,6 +7,7 @@ import WidgetKit
   private let courseWidgetChannelName = "com.superhut.rice.superhut/coursetable_widget"
   private let widgetActionsChannelName = "com.superhut.rice.superhut/widget_actions"
   private let courseWidgetAppGroupId = "group.com.tune.superhut.coursewidget"
+  private let courseWidgetStoreKey = "course_widget_store"
   private let courseWidgetPayloadKey = "course_widget_payload"
 
   private var widgetActionsChannel: FlutterMethodChannel?
@@ -61,6 +62,8 @@ import WidgetKit
       case "syncCourseTableWidget":
         let arguments = call.arguments as? [String: Any]
         let payloadJson = arguments?["payloadJson"] as? String
+        let storeJson = arguments?["storeJson"] as? String
+        self.persistCourseWidgetStore(storeJson)
         self.persistCourseWidgetPayload(payloadJson)
         self.reloadCourseWidgetTimelines()
         result(true)
@@ -97,6 +100,16 @@ import WidgetKit
 
     let defaults = UserDefaults(suiteName: courseWidgetAppGroupId)
     defaults?.set(payloadJson, forKey: courseWidgetPayloadKey)
+    defaults?.synchronize()
+  }
+
+  private func persistCourseWidgetStore(_ storeJson: String?) {
+    guard let storeJson, !storeJson.isEmpty else {
+      return
+    }
+
+    let defaults = UserDefaults(suiteName: courseWidgetAppGroupId)
+    defaults?.set(storeJson, forKey: courseWidgetStoreKey)
     defaults?.synchronize()
   }
 
