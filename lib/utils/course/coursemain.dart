@@ -8,19 +8,52 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/widget_refresh_service.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
+import '../../login/loginwithpost.dart';
 import 'get_course.dart';
 
 const int _courseScheduleArchiveSchemaVersion = 1;
 const int _courseScheduleShareSchemaVersion = 1;
 const int _courseScheduleFileSchemaVersion = 1;
+const int _courseWidgetStoreSchemaVersion = 2;
 const String _courseScheduleArchiveFileName = 'course_schedules.json';
 const String _legacyCourseDataFileName = 'course_data.json';
+const String _courseWidgetStoreFileName = 'course_widget_store.json';
 const String _courseWidgetPayloadFileName = 'course_widget_payload.json';
 const String _courseSharePrefix = 'SUPERHUT1:';
 const String _courseScheduleSharePayloadType = 'superhut_course_schedule_share';
 const String _courseScheduleFilePayloadType = 'superhut_course_schedule_file';
+const String _courseSilentRefreshAttemptAtKey = 'courseSilentRefreshAttemptAt';
+const String _courseSilentRefreshAttemptAccountKey =
+    'courseSilentRefreshAttemptAccount';
 const Uuid _uuid = Uuid();
+
+const Map<int, String> _courseSectionStartTimes = <int, String>{
+  1: '08:00',
+  2: '08:55',
+  3: '10:00',
+  4: '10:55',
+  5: '14:00',
+  6: '14:55',
+  7: '16:00',
+  8: '16:55',
+  9: '19:00',
+  10: '19:55',
+};
+
+const Map<int, String> _courseSectionEndTimes = <int, String>{
+  1: '08:45',
+  2: '09:40',
+  3: '10:45',
+  4: '11:40',
+  5: '14:45',
+  6: '15:40',
+  7: '16:45',
+  8: '17:40',
+  9: '19:45',
+  10: '20:40',
+};
 
 abstract final class CourseScheduleSourceType {
   static const String selfSync = 'self_sync';
@@ -109,6 +142,7 @@ class SavedCourseSchedule {
     required this.id,
     required this.name,
     required this.ownerName,
+    this.ownerAccount = '',
     required this.termLabel,
     required this.semesterId,
     required this.firstDay,
@@ -123,6 +157,7 @@ class SavedCourseSchedule {
   final String id;
   final String name;
   final String ownerName;
+  final String ownerAccount;
   final String termLabel;
   final String semesterId;
   final String firstDay;
@@ -154,6 +189,7 @@ class SavedCourseSchedule {
       id: _stringValue(json['id']),
       name: _stringValue(json['name']),
       ownerName: _stringValue(json['ownerName']),
+      ownerAccount: _stringValue(json['ownerAccount']),
       termLabel: _stringValue(json['termLabel']),
       semesterId: _stringValue(json['semesterId']),
       firstDay: _stringValue(json['firstDay']),
@@ -171,6 +207,7 @@ class SavedCourseSchedule {
       'id': id,
       'name': name,
       'ownerName': ownerName,
+      'ownerAccount': ownerAccount,
       'termLabel': termLabel,
       'semesterId': semesterId,
       'firstDay': firstDay,
@@ -205,6 +242,7 @@ class SavedCourseSchedule {
     String? id,
     String? name,
     String? ownerName,
+    String? ownerAccount,
     String? termLabel,
     String? semesterId,
     String? firstDay,
@@ -219,6 +257,7 @@ class SavedCourseSchedule {
       id: id ?? this.id,
       name: name ?? this.name,
       ownerName: ownerName ?? this.ownerName,
+      ownerAccount: ownerAccount ?? this.ownerAccount,
       termLabel: termLabel ?? this.termLabel,
       semesterId: semesterId ?? this.semesterId,
       firstDay: firstDay ?? this.firstDay,
@@ -317,6 +356,33 @@ class CourseSyncResult {
     : this._(success: false, message: message);
 }
 
+abstract final class CourseSilentRefreshReason {
+  static const String none = 'none';
+  static const String noSession = 'no_session';
+  static const String cooldown = 'cooldown';
+  static const String cacheFresh = 'cache_fresh';
+  static const String userManaged = 'user_managed';
+  static const String noActiveSchedule = 'no_active_schedule';
+  static const String migratedLegacy = 'migrated_legacy';
+  static const String accountChanged = 'account_changed';
+  static const String missingOwnerAccount = 'missing_owner_account';
+  static const String staleSchedule = 'stale_schedule';
+}
+
+class CourseSilentRefreshPlan {
+  const CourseSilentRefreshPlan({
+    required this.shouldSync,
+    required this.shouldClearSyncedSchedules,
+    required this.reason,
+    required this.accountId,
+  });
+
+  final bool shouldSync;
+  final bool shouldClearSyncedSchedules;
+  final String reason;
+  final String accountId;
+}
+
 CourseSyncResult _buildCourseSyncFailure(Object error, StackTrace stackTrace) {
   AppLogger.error(
     'Error saving course JSON file',
@@ -346,6 +412,7 @@ CourseSyncResult _buildCourseSyncFailure(Object error, StackTrace stackTrace) {
 class CourseWidgetCourseEntry {
   const CourseWidgetCourseEntry({
     required this.name,
+    required this.meta,
     required this.location,
     required this.startSection,
     required this.endSection,
@@ -354,6 +421,7 @@ class CourseWidgetCourseEntry {
   });
 
   final String name;
+  final String meta;
   final String location;
   final int startSection;
   final int endSection;
@@ -363,6 +431,7 @@ class CourseWidgetCourseEntry {
   Map<String, dynamic> toJson() {
     return {
       'name': name,
+      'meta': meta,
       'location': location,
       'startSection': startSection,
       'endSection': endSection,
@@ -374,6 +443,7 @@ class CourseWidgetCourseEntry {
   factory CourseWidgetCourseEntry.fromJson(Map<String, dynamic> json) {
     return CourseWidgetCourseEntry(
       name: _stringValue(json['name']),
+      meta: _stringValue(json['meta']),
       location: _stringValue(json['location']),
       startSection: _intValue(json['startSection'], fallback: 0),
       endSection: _intValue(json['endSection'], fallback: 0),
@@ -383,11 +453,107 @@ class CourseWidgetCourseEntry {
   }
 }
 
+class CourseWidgetStore {
+  const CourseWidgetStore({
+    required this.schemaVersion,
+    required this.updatedAt,
+    required this.days,
+    required this.dayCourses,
+  });
+
+  final int schemaVersion;
+  final String updatedAt;
+  final Map<String, CourseWidgetPayload> days;
+  final Map<String, List<CourseWidgetCourseEntry>> dayCourses;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'schemaVersion': schemaVersion,
+      'updatedAt': updatedAt,
+      'days': days.map(
+        (date, payload) => MapEntry<String, dynamic>(date, payload.toJson()),
+      ),
+      'dayCourses': dayCourses.map(
+        (date, courses) => MapEntry<String, dynamic>(
+          date,
+          courses.map((course) => course.toJson()).toList(),
+        ),
+      ),
+    };
+  }
+
+  factory CourseWidgetStore.fromJson(Map<String, dynamic> json) {
+    final rawDays = json['days'] as Map?;
+    if (rawDays != null) {
+      final days = <String, CourseWidgetPayload>{};
+      rawDays.forEach((date, rawPayload) {
+        days[date.toString()] = CourseWidgetPayload.fromJson(
+          Map<String, dynamic>.from(rawPayload as Map),
+        );
+      });
+
+      final rawDayCourses = json['dayCourses'] as Map?;
+      final dayCourses = <String, List<CourseWidgetCourseEntry>>{};
+      if (rawDayCourses != null) {
+        rawDayCourses.forEach((date, rawCourses) {
+          final courseList =
+              rawCourses is List ? rawCourses : const <dynamic>[];
+          dayCourses[date.toString()] =
+              courseList
+                  .map(
+                    (rawCourse) => CourseWidgetCourseEntry.fromJson(
+                      Map<String, dynamic>.from(rawCourse as Map),
+                    ),
+                  )
+                  .toList();
+        });
+      }
+
+      return CourseWidgetStore(
+        schemaVersion: _intValue(
+          json['schemaVersion'],
+          fallback: _courseWidgetStoreSchemaVersion,
+        ),
+        updatedAt: _stringValue(json['updatedAt']),
+        days: days,
+        dayCourses: dayCourses,
+      );
+    }
+
+    final legacyCourseData = Map<String, dynamic>.from(
+      json['courseData'] as Map? ?? const <String, dynamic>{},
+    );
+    final parsedCourseData = <String, List<Course>>{};
+    legacyCourseData.forEach((date, rawCourses) {
+      final courseList = rawCourses is List ? rawCourses : const <dynamic>[];
+      parsedCourseData[date] =
+          courseList
+              .map(
+                (rawCourse) => Course.fromJson(
+                  Map<String, dynamic>.from(rawCourse as Map),
+                ),
+              )
+              .toList();
+    });
+
+    return buildCourseWidgetStoreFromRawData(
+      firstDay: _stringValue(json['firstDay']),
+      maxWeek: _intValue(json['maxWeek'], fallback: 20),
+      updatedAt: _stringValue(json['updatedAt']),
+      courseData: parsedCourseData,
+    );
+  }
+}
+
 class CourseWidgetPayload {
   const CourseWidgetPayload({
     required this.date,
     required this.weekdayLabel,
     required this.weekIndex,
+    required this.status,
+    required this.headerTitle,
+    required this.headerSubtitle,
+    required this.emptyText,
     required this.isEmpty,
     required this.updatedAt,
     required this.courses,
@@ -396,6 +562,10 @@ class CourseWidgetPayload {
   final String date;
   final String weekdayLabel;
   final int weekIndex;
+  final String status;
+  final String headerTitle;
+  final String headerSubtitle;
+  final String emptyText;
   final bool isEmpty;
   final String updatedAt;
   final List<CourseWidgetCourseEntry> courses;
@@ -405,6 +575,10 @@ class CourseWidgetPayload {
       'date': date,
       'weekdayLabel': weekdayLabel,
       'weekIndex': weekIndex,
+      'status': status,
+      'headerTitle': headerTitle,
+      'headerSubtitle': headerSubtitle,
+      'emptyText': emptyText,
       'isEmpty': isEmpty,
       'updatedAt': updatedAt,
       'courses': courses.map((course) => course.toJson()).toList(),
@@ -417,6 +591,10 @@ class CourseWidgetPayload {
       date: _stringValue(json['date']),
       weekdayLabel: _stringValue(json['weekdayLabel']),
       weekIndex: _intValue(json['weekIndex'], fallback: 0),
+      status: _stringValue(json['status']),
+      headerTitle: _stringValue(json['headerTitle']),
+      headerSubtitle: _stringValue(json['headerSubtitle']),
+      emptyText: _stringValue(json['emptyText']),
       isEmpty: json['isEmpty'] == true,
       updatedAt: _stringValue(json['updatedAt']),
       courses:
@@ -487,45 +665,600 @@ int _resolveCourseWidgetWeekIndex({
   return computedWeek.clamp(1, maxWeek).toInt();
 }
 
-CourseWidgetPayload buildCompactCourseWidgetPayload(
-  SavedCourseSchedule? schedule, {
+CourseWidgetPayload buildCompactCourseWidgetPayloadFromStore(
+  CourseWidgetStore? store, {
   DateTime? now,
 }) {
   final resolvedNow = now ?? DateTime.now();
   final today = DateTime(resolvedNow.year, resolvedNow.month, resolvedNow.day);
+  if (store == null) {
+    return _buildEmptyCourseWidgetPayload(
+      date: today,
+      updatedAt: resolvedNow.toIso8601String(),
+    );
+  }
+
+  return _buildRelevantCourseWidgetPayloadFromStore(
+    store: store,
+    now: resolvedNow,
+  );
+}
+
+CourseWidgetPayload buildCompactCourseWidgetPayload(
+  SavedCourseSchedule? schedule, {
+  DateTime? now,
+}) {
+  if (schedule == null) {
+    return buildCompactCourseWidgetPayloadFromStore(null, now: now);
+  }
+
+  return buildCompactCourseWidgetPayloadFromStore(
+    buildCourseWidgetStore(schedule),
+    now: now,
+  );
+}
+
+List<Course> _sortedCoursesForDate(
+  Map<String, List<Course>> courseData,
+  String dateKey,
+) {
+  final courses = [...(courseData[dateKey] ?? const <Course>[])]
+    ..sort((left, right) => left.startSection.compareTo(right.startSection));
+  return courses;
+}
+
+List<CourseWidgetCourseEntry> _sortedWidgetCourses(
+  List<CourseWidgetCourseEntry> courses,
+) {
+  final sorted = [...courses]
+    ..sort((left, right) => left.startSection.compareTo(right.startSection));
+  return sorted;
+}
+
+DateTime _startOfDay(DateTime dateTime) {
+  return DateTime(dateTime.year, dateTime.month, dateTime.day);
+}
+
+bool _isSameDate(DateTime left, DateTime right) {
+  return left.year == right.year &&
+      left.month == right.month &&
+      left.day == right.day;
+}
+
+DateTime? _timeOnDate(DateTime date, String timeLabel) {
+  if (timeLabel.isEmpty || timeLabel == '--:--') {
+    return null;
+  }
+  final parts = timeLabel.split(':');
+  if (parts.length != 2) {
+    return null;
+  }
+  final hour = int.tryParse(parts[0]);
+  final minute = int.tryParse(parts[1]);
+  if (hour == null || minute == null) {
+    return null;
+  }
+  return DateTime(date.year, date.month, date.day, hour, minute);
+}
+
+DateTime? _courseEndsAt(DateTime date, CourseWidgetCourseEntry course) {
+  final endSection =
+      course.endSection > 0 ? course.endSection : course.startSection;
+  final timeLabel = _sectionEndTime(endSection);
+  return _timeOnDate(date, timeLabel);
+}
+
+List<CourseWidgetCourseEntry> _remainingCoursesForDate({
+  required DateTime date,
+  required DateTime now,
+  required List<CourseWidgetCourseEntry> courses,
+}) {
+  final sorted = _sortedWidgetCourses(courses);
+  if (!_isSameDate(date, now)) {
+    return sorted;
+  }
+
+  return sorted.where((course) {
+    final endAt = _courseEndsAt(date, course);
+    if (endAt == null) {
+      return true;
+    }
+    return endAt.isAfter(now);
+  }).toList();
+}
+
+List<CourseWidgetCourseEntry> _resolveStoreDayCourses(
+  CourseWidgetStore store,
+  String dateKey,
+) {
+  final rawDayCourses = store.dayCourses[dateKey];
+  if (rawDayCourses != null && rawDayCourses.isNotEmpty) {
+    return _sortedWidgetCourses(rawDayCourses);
+  }
+
+  final payload = store.days[dateKey];
+  if (payload != null &&
+      payload.status == 'today_courses' &&
+      payload.courses.isNotEmpty) {
+    return _sortedWidgetCourses(payload.courses);
+  }
+
+  return const <CourseWidgetCourseEntry>[];
+}
+
+DateTime? _findNextCourseDateAfterInStore(
+  DateTime currentDate,
+  CourseWidgetStore store,
+) {
+  final actualDateKeys = <String>{...store.dayCourses.keys};
+  if (actualDateKeys.isEmpty) {
+    store.days.forEach((dateKey, payload) {
+      if (payload.status == 'today_courses' && payload.courses.isNotEmpty) {
+        actualDateKeys.add(dateKey);
+      }
+    });
+  }
+
+  final sortedDateKeys = actualDateKeys.toList()..sort();
+  for (final dateKey in sortedDateKeys) {
+    final parsedDate = DateTime.tryParse(dateKey);
+    if (parsedDate == null) {
+      continue;
+    }
+    if (!parsedDate.isAfter(currentDate)) {
+      continue;
+    }
+    if (_resolveStoreDayCourses(store, dateKey).isNotEmpty) {
+      return parsedDate;
+    }
+  }
+  return null;
+}
+
+CourseWidgetPayload _buildEmptyCourseWidgetPayload({
+  required DateTime date,
+  required String updatedAt,
+}) {
+  final dateKey = _dateKey(date);
+  return CourseWidgetPayload(
+    date: dateKey,
+    weekdayLabel: _weekdayLabel(date.weekday),
+    weekIndex: 0,
+    status: 'empty',
+    headerTitle: '当前暂无课表',
+    headerSubtitle: '同步或导入后显示课程',
+    emptyText: '同步或导入后显示课程',
+    isEmpty: true,
+    updatedAt: updatedAt,
+    courses: const [],
+  );
+}
+
+int _weekIndexFromStore(CourseWidgetStore store, DateTime date) {
+  return store.days[_dateKey(date)]?.weekIndex ?? 0;
+}
+
+String _weekdayLabelFromStore(CourseWidgetStore store, DateTime date) {
+  final payload = store.days[_dateKey(date)];
+  final label = payload?.weekdayLabel ?? '';
+  return label.isNotEmpty ? label : _weekdayLabel(date.weekday);
+}
+
+CourseWidgetPayload _buildRelevantCourseWidgetPayloadFromStore({
+  required CourseWidgetStore store,
+  required DateTime now,
+}) {
+  final today = _startOfDay(now);
   final todayKey = _dateKey(today);
-  final rawCourses = schedule?.courseData[todayKey]?.toList();
-  rawCourses?.sort(
-    (left, right) => left.startSection.compareTo(right.startSection),
+  final updatedAt =
+      store.updatedAt.isNotEmpty ? store.updatedAt : now.toIso8601String();
+  final todayWeekIndex = _weekIndexFromStore(store, today);
+
+  final todayCourses = _remainingCoursesForDate(
+    date: today,
+    now: now,
+    courses: _resolveStoreDayCourses(store, todayKey),
   );
 
-  final visibleCourses =
-      (rawCourses ?? const <Course>[]).take(3).map((course) {
-        final endSection = course.startSection + course.duration - 1;
-        return CourseWidgetCourseEntry(
-          name: course.name,
-          location: course.location,
-          startSection: course.startSection,
-          endSection: endSection,
-          startTime: _sectionStartTime(course.startSection),
-          sectionLabel: '${course.startSection}-$endSection节',
-        );
-      }).toList();
+  if (todayCourses.isNotEmpty) {
+    return CourseWidgetPayload(
+      date: todayKey,
+      weekdayLabel: _weekdayLabelFromStore(store, today),
+      weekIndex: todayWeekIndex,
+      status: 'today_courses',
+      headerTitle: '今天课程',
+      headerSubtitle: _composeWeekSubtitle(
+        date: today,
+        weekIndex: todayWeekIndex,
+      ),
+      emptyText: '今日暂无课程',
+      isEmpty: false,
+      updatedAt: updatedAt,
+      courses: todayCourses.take(2).toList(),
+    );
+  }
+
+  final tomorrow = today.add(const Duration(days: 1));
+  final tomorrowKey = _dateKey(tomorrow);
+  final tomorrowCourses = _resolveStoreDayCourses(store, tomorrowKey);
+
+  if (today.weekday == DateTime.sunday && tomorrowCourses.isNotEmpty) {
+    final mondayWeekIndex = _weekIndexFromStore(store, tomorrow);
+    return CourseWidgetPayload(
+      date: todayKey,
+      weekdayLabel: _weekdayLabelFromStore(store, today),
+      weekIndex: todayWeekIndex,
+      status: 'next_monday',
+      headerTitle: '周一有课',
+      headerSubtitle: mondayWeekIndex > 0 ? '下周第$mondayWeekIndex周' : '明天上午别睡过',
+      emptyText: '周一有课',
+      isEmpty: false,
+      updatedAt: updatedAt,
+      courses: tomorrowCourses.take(2).toList(),
+    );
+  }
+
+  if (tomorrowCourses.isNotEmpty) {
+    final tomorrowWeekIndex = _weekIndexFromStore(store, tomorrow);
+    return CourseWidgetPayload(
+      date: todayKey,
+      weekdayLabel: _weekdayLabelFromStore(store, today),
+      weekIndex: todayWeekIndex,
+      status: 'tomorrow_courses',
+      headerTitle: '明天有课',
+      headerSubtitle: _composeWeekSubtitle(
+        date: tomorrow,
+        weekIndex: tomorrowWeekIndex,
+      ),
+      emptyText: '明天有课',
+      isEmpty: false,
+      updatedAt: updatedAt,
+      courses: tomorrowCourses.take(2).toList(),
+    );
+  }
+
+  final nextCourseDate = _findNextCourseDateAfterInStore(today, store);
+  if (nextCourseDate != null) {
+    final nextCourses = _resolveStoreDayCourses(
+      store,
+      _dateKey(nextCourseDate),
+    );
+    final nextWeekIndex = _weekIndexFromStore(store, nextCourseDate);
+    final sameWeek = _startOfMonday(nextCourseDate) == _startOfMonday(today);
+    return CourseWidgetPayload(
+      date: todayKey,
+      weekdayLabel: _weekdayLabelFromStore(store, today),
+      weekIndex: todayWeekIndex,
+      status: 'next_course',
+      headerTitle: '下次课程',
+      headerSubtitle:
+          sameWeek
+              ? _composeWeekSubtitle(
+                date: nextCourseDate,
+                weekIndex: nextWeekIndex,
+              )
+              : _composeWeekSubtitle(
+                date: nextCourseDate,
+                weekIndex: nextWeekIndex,
+                prefix: '本周无课',
+              ),
+      emptyText: '下次课程',
+      isEmpty: false,
+      updatedAt: updatedAt,
+      courses: nextCourses.take(2).toList(),
+    );
+  }
+
+  return _buildEmptyCourseWidgetPayload(date: today, updatedAt: updatedAt);
+}
+
+String _formatMonthDay(DateTime date) {
+  return '${date.month}/${date.day.toString().padLeft(2, '0')}';
+}
+
+String _composeWeekSubtitle({
+  required DateTime date,
+  required int weekIndex,
+  String? prefix,
+}) {
+  final parts = <String>[];
+  if (prefix != null && prefix.isNotEmpty) {
+    parts.add(prefix);
+  }
+  parts.add(_weekdayLabel(date.weekday));
+  if (weekIndex > 0) {
+    parts.add('第$weekIndex周');
+  }
+  return parts.join(' · ');
+}
+
+CourseWidgetCourseEntry _buildDisplayEntry(
+  Course course, {
+  required bool includeDatePrefix,
+  DateTime? date,
+}) {
+  final endSection = course.startSection + course.duration - 1;
+  final timeLabel = _sectionStartTime(course.startSection);
+  final titleBuffer = StringBuffer();
+  if (includeDatePrefix && date != null) {
+    titleBuffer.write('${_formatMonthDay(date)} ');
+  }
+  if (timeLabel.isNotEmpty && timeLabel != '--:--') {
+    titleBuffer.write('$timeLabel ');
+  }
+  titleBuffer.write(course.name);
+
+  final meta =
+      course.location.isNotEmpty
+          ? course.location
+          : '${course.startSection}-$endSection节';
+
+  return CourseWidgetCourseEntry(
+    name: titleBuffer.toString().trim(),
+    meta: meta,
+    location: course.location,
+    startSection: course.startSection,
+    endSection: endSection,
+    startTime: timeLabel,
+    sectionLabel: '${course.startSection}-$endSection节',
+  );
+}
+
+DateTime? _findNextCourseDateAfter(
+  DateTime currentDate,
+  Map<String, List<Course>> courseData,
+) {
+  final sortedDateKeys = courseData.keys.toList()..sort();
+  for (final dateKey in sortedDateKeys) {
+    final parsedDate = DateTime.tryParse(dateKey);
+    if (parsedDate == null) {
+      continue;
+    }
+    if (!parsedDate.isAfter(currentDate)) {
+      continue;
+    }
+    if ((courseData[dateKey] ?? const <Course>[]).isNotEmpty) {
+      return parsedDate;
+    }
+  }
+  return null;
+}
+
+CourseWidgetPayload _buildCourseWidgetPayloadForDate({
+  required DateTime date,
+  required Map<String, List<Course>> courseData,
+  required String firstDay,
+  required int maxWeek,
+  required String updatedAt,
+}) {
+  final dateKey = _dateKey(date);
+  final weekIndex = _resolveCourseWidgetWeekIndex(
+    firstDay: firstDay,
+    maxWeek: maxWeek,
+    today: date,
+  );
+  final todayCourses = _sortedCoursesForDate(courseData, dateKey);
+  final tomorrow = date.add(const Duration(days: 1));
+  final tomorrowCourses = _sortedCoursesForDate(courseData, _dateKey(tomorrow));
+
+  if (todayCourses.isNotEmpty) {
+    return CourseWidgetPayload(
+      date: dateKey,
+      weekdayLabel: _weekdayLabel(date.weekday),
+      weekIndex: weekIndex,
+      status: 'today_courses',
+      headerTitle: '今天课程',
+      headerSubtitle: _composeWeekSubtitle(date: date, weekIndex: weekIndex),
+      emptyText: '今日暂无课程',
+      isEmpty: false,
+      updatedAt: updatedAt,
+      courses:
+          todayCourses
+              .take(2)
+              .map(
+                (course) =>
+                    _buildDisplayEntry(course, includeDatePrefix: false),
+              )
+              .toList(),
+    );
+  }
+
+  if (date.weekday == DateTime.sunday && tomorrowCourses.isNotEmpty) {
+    final mondayWeekIndex = _resolveCourseWidgetWeekIndex(
+      firstDay: firstDay,
+      maxWeek: maxWeek,
+      today: tomorrow,
+    );
+    return CourseWidgetPayload(
+      date: dateKey,
+      weekdayLabel: _weekdayLabel(date.weekday),
+      weekIndex: weekIndex,
+      status: 'next_monday',
+      headerTitle: '周一有课',
+      headerSubtitle: mondayWeekIndex > 0 ? '下周第$mondayWeekIndex周' : '明天上午别睡过',
+      emptyText: '周一有课',
+      isEmpty: false,
+      updatedAt: updatedAt,
+      courses:
+          tomorrowCourses
+              .take(2)
+              .map(
+                (course) =>
+                    _buildDisplayEntry(course, includeDatePrefix: false),
+              )
+              .toList(),
+    );
+  }
+
+  if (tomorrowCourses.isNotEmpty) {
+    final tomorrowWeekIndex = _resolveCourseWidgetWeekIndex(
+      firstDay: firstDay,
+      maxWeek: maxWeek,
+      today: tomorrow,
+    );
+    return CourseWidgetPayload(
+      date: dateKey,
+      weekdayLabel: _weekdayLabel(date.weekday),
+      weekIndex: weekIndex,
+      status: 'tomorrow_courses',
+      headerTitle: '明天有课',
+      headerSubtitle: _composeWeekSubtitle(
+        date: tomorrow,
+        weekIndex: tomorrowWeekIndex,
+      ),
+      emptyText: '明天有课',
+      isEmpty: false,
+      updatedAt: updatedAt,
+      courses:
+          tomorrowCourses
+              .take(2)
+              .map(
+                (course) =>
+                    _buildDisplayEntry(course, includeDatePrefix: false),
+              )
+              .toList(),
+    );
+  }
+
+  final nextCourseDate = _findNextCourseDateAfter(date, courseData);
+  if (nextCourseDate != null) {
+    final nextCourses = _sortedCoursesForDate(
+      courseData,
+      _dateKey(nextCourseDate),
+    );
+    final nextWeekIndex = _resolveCourseWidgetWeekIndex(
+      firstDay: firstDay,
+      maxWeek: maxWeek,
+      today: nextCourseDate,
+    );
+    final sameWeek = _startOfMonday(nextCourseDate) == _startOfMonday(date);
+    return CourseWidgetPayload(
+      date: dateKey,
+      weekdayLabel: _weekdayLabel(date.weekday),
+      weekIndex: weekIndex,
+      status: 'next_course',
+      headerTitle: '下次课程',
+      headerSubtitle:
+          sameWeek
+              ? _composeWeekSubtitle(
+                date: nextCourseDate,
+                weekIndex: nextWeekIndex,
+              )
+              : _composeWeekSubtitle(
+                date: nextCourseDate,
+                weekIndex: nextWeekIndex,
+                prefix: '本周无课',
+              ),
+      emptyText: '下次课程',
+      isEmpty: false,
+      updatedAt: updatedAt,
+      courses:
+          nextCourses
+              .take(2)
+              .map(
+                (course) => _buildDisplayEntry(
+                  course,
+                  includeDatePrefix: true,
+                  date: nextCourseDate,
+                ),
+              )
+              .toList(),
+    );
+  }
 
   return CourseWidgetPayload(
-    date: todayKey,
-    weekdayLabel: _weekdayLabel(today.weekday),
-    weekIndex:
-        schedule == null
-            ? 0
-            : _resolveCourseWidgetWeekIndex(
-              firstDay: schedule.firstDay,
-              maxWeek: schedule.maxWeek,
-              today: today,
-            ),
-    isEmpty: visibleCourses.isEmpty,
-    updatedAt: schedule?.updatedAt ?? resolvedNow.toIso8601String(),
-    courses: visibleCourses,
+    date: dateKey,
+    weekdayLabel: _weekdayLabel(date.weekday),
+    weekIndex: weekIndex,
+    status: 'empty',
+    headerTitle: '当前暂无课表',
+    headerSubtitle: '同步或导入后显示课程',
+    emptyText: '同步或导入后显示课程',
+    isEmpty: true,
+    updatedAt: updatedAt,
+    courses: const [],
+  );
+}
+
+CourseWidgetStore buildCourseWidgetStoreFromRawData({
+  required String firstDay,
+  required int maxWeek,
+  required String updatedAt,
+  required Map<String, List<Course>> courseData,
+}) {
+  final normalizedUpdatedAt =
+      updatedAt.isEmpty ? DateTime.now().toIso8601String() : updatedAt;
+  final days = <String, CourseWidgetPayload>{};
+  final dayCourses = <String, List<CourseWidgetCourseEntry>>{};
+
+  final sortedActualDateKeys = courseData.keys.toList()..sort();
+  for (final dateKey in sortedActualDateKeys) {
+    final courses = _sortedCoursesForDate(courseData, dateKey);
+    if (courses.isEmpty) {
+      continue;
+    }
+    dayCourses[dateKey] =
+        courses
+            .map(
+              (course) => _buildDisplayEntry(course, includeDatePrefix: false),
+            )
+            .toList();
+  }
+
+  final parsedFirstDay = DateTime.tryParse(firstDay);
+  if (parsedFirstDay != null && maxWeek > 0) {
+    final firstMonday = _startOfMonday(parsedFirstDay);
+    for (var index = 0; index < maxWeek * 7; index++) {
+      final date = firstMonday.add(Duration(days: index));
+      final dateKey = _dateKey(date);
+      days[dateKey] = _buildCourseWidgetPayloadForDate(
+        date: date,
+        courseData: courseData,
+        firstDay: firstDay,
+        maxWeek: maxWeek,
+        updatedAt: normalizedUpdatedAt,
+      );
+    }
+  } else {
+    final sortedDateKeys = courseData.keys.toList()..sort();
+    for (final dateKey in sortedDateKeys) {
+      final parsedDate = DateTime.tryParse(dateKey);
+      if (parsedDate == null) {
+        continue;
+      }
+      days[dateKey] = _buildCourseWidgetPayloadForDate(
+        date: parsedDate,
+        courseData: courseData,
+        firstDay: firstDay,
+        maxWeek: maxWeek,
+        updatedAt: normalizedUpdatedAt,
+      );
+    }
+  }
+
+  return CourseWidgetStore(
+    schemaVersion: _courseWidgetStoreSchemaVersion,
+    updatedAt: normalizedUpdatedAt,
+    days: days,
+    dayCourses: dayCourses,
+  );
+}
+
+CourseWidgetStore buildCourseWidgetStore(SavedCourseSchedule? schedule) {
+  if (schedule == null) {
+    return CourseWidgetStore(
+      schemaVersion: _courseWidgetStoreSchemaVersion,
+      updatedAt: DateTime.now().toIso8601String(),
+      days: const <String, CourseWidgetPayload>{},
+      dayCourses: const <String, List<CourseWidgetCourseEntry>>{},
+    );
+  }
+
+  return buildCourseWidgetStoreFromRawData(
+    firstDay: schedule.firstDay,
+    maxWeek: schedule.maxWeek,
+    updatedAt: schedule.updatedAt,
+    courseData: schedule.courseData,
   );
 }
 
@@ -562,11 +1295,167 @@ Future<File> _courseWidgetPayloadCacheFile() async {
   return File('${appDocumentsDir.path}/$_courseWidgetPayloadFileName');
 }
 
+Future<File> _courseWidgetStoreCacheFile() async {
+  final appDocumentsDir = await getApplicationDocumentsDirectory();
+  return File('${appDocumentsDir.path}/$_courseWidgetStoreFileName');
+}
+
 DateTime? _tryParseIsoTime(String value) {
   if (value.isEmpty) {
     return null;
   }
   return DateTime.tryParse(value);
+}
+
+String _normalizeCourseAccountId(String value) {
+  return value.trim().toLowerCase();
+}
+
+Future<String> _readCurrentCourseAccountId() async {
+  final storage = AppAuthStorage.instance;
+  final jwxtUsername = _normalizeCourseAccountId(
+    await storage.readJwxtUsername(),
+  );
+  if (jwxtUsername.isNotEmpty) {
+    return jwxtUsername;
+  }
+
+  return _normalizeCourseAccountId(await storage.readHutUsername());
+}
+
+Future<void> _markCourseSilentRefreshAttempt({
+  required String accountId,
+  required DateTime attemptedAt,
+}) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(
+    _courseSilentRefreshAttemptAtKey,
+    attemptedAt.toIso8601String(),
+  );
+  await prefs.setString(_courseSilentRefreshAttemptAccountKey, accountId);
+}
+
+Future<void> _clearCourseSilentRefreshAttempt() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove(_courseSilentRefreshAttemptAtKey);
+  await prefs.remove(_courseSilentRefreshAttemptAccountKey);
+}
+
+Future<CourseSilentRefreshPlan> buildCourseSilentRefreshPlan({
+  DateTime? now,
+  Duration staleAfter = const Duration(hours: 6),
+  Duration attemptCooldown = const Duration(minutes: 30),
+}) async {
+  final currentTime = now ?? DateTime.now();
+  final storage = AppAuthStorage.instance;
+  final accountId = await _readCurrentCourseAccountId();
+  if (!(await storage.hasAnyCampusSession()) || accountId.isEmpty) {
+    return CourseSilentRefreshPlan(
+      shouldSync: false,
+      shouldClearSyncedSchedules: false,
+      reason: CourseSilentRefreshReason.noSession,
+      accountId: accountId,
+    );
+  }
+
+  final activeSchedule = await loadActiveCourseSchedule();
+  if (activeSchedule == null) {
+    return CourseSilentRefreshPlan(
+      shouldSync: true,
+      shouldClearSyncedSchedules: false,
+      reason: CourseSilentRefreshReason.noActiveSchedule,
+      accountId: accountId,
+    );
+  }
+
+  if (activeSchedule.sourceType == CourseScheduleSourceType.manual ||
+      activeSchedule.sourceType == CourseScheduleSourceType.shareImport) {
+    return CourseSilentRefreshPlan(
+      shouldSync: false,
+      shouldClearSyncedSchedules: false,
+      reason: CourseSilentRefreshReason.userManaged,
+      accountId: accountId,
+    );
+  }
+
+  if (activeSchedule.sourceType == CourseScheduleSourceType.selfSync &&
+      activeSchedule.ownerAccount.isNotEmpty &&
+      _normalizeCourseAccountId(activeSchedule.ownerAccount) != accountId) {
+    return CourseSilentRefreshPlan(
+      shouldSync: true,
+      shouldClearSyncedSchedules: true,
+      reason: CourseSilentRefreshReason.accountChanged,
+      accountId: accountId,
+    );
+  }
+
+  final prefs = await SharedPreferences.getInstance();
+  final lastAttemptAt = _tryParseIsoTime(
+    prefs.getString(_courseSilentRefreshAttemptAtKey) ?? '',
+  );
+  final lastAttemptAccount = _normalizeCourseAccountId(
+    prefs.getString(_courseSilentRefreshAttemptAccountKey) ?? '',
+  );
+  if (lastAttemptAt != null &&
+      lastAttemptAccount == accountId &&
+      currentTime.difference(lastAttemptAt) < attemptCooldown) {
+    return CourseSilentRefreshPlan(
+      shouldSync: false,
+      shouldClearSyncedSchedules: false,
+      reason: CourseSilentRefreshReason.cooldown,
+      accountId: accountId,
+    );
+  }
+
+  if (activeSchedule.sourceType == CourseScheduleSourceType.migratedLegacy) {
+    return CourseSilentRefreshPlan(
+      shouldSync: true,
+      shouldClearSyncedSchedules: false,
+      reason: CourseSilentRefreshReason.migratedLegacy,
+      accountId: accountId,
+    );
+  }
+
+  if (activeSchedule.ownerAccount.isEmpty) {
+    return CourseSilentRefreshPlan(
+      shouldSync: true,
+      shouldClearSyncedSchedules: false,
+      reason: CourseSilentRefreshReason.missingOwnerAccount,
+      accountId: accountId,
+    );
+  }
+
+  final updatedAt = _tryParseIsoTime(activeSchedule.updatedAt);
+  if (updatedAt == null || currentTime.difference(updatedAt) >= staleAfter) {
+    return CourseSilentRefreshPlan(
+      shouldSync: true,
+      shouldClearSyncedSchedules: false,
+      reason: CourseSilentRefreshReason.staleSchedule,
+      accountId: accountId,
+    );
+  }
+
+  return CourseSilentRefreshPlan(
+    shouldSync: false,
+    shouldClearSyncedSchedules: false,
+    reason: CourseSilentRefreshReason.cacheFresh,
+    accountId: accountId,
+  );
+}
+
+Future<String> _renewCourseSyncTokenSilently() async {
+  final storage = AppAuthStorage.instance;
+  final username = await storage.readJwxtUsername();
+  final password = await storage.readJwxtPassword();
+  if (username.isEmpty || password.isEmpty) {
+    return '';
+  }
+
+  final loginSuccess = await loginHut(username, password);
+  if (!loginSuccess) {
+    return '';
+  }
+  return storage.readJwxtToken();
 }
 
 int _compareScheduleTimestamp(
@@ -630,6 +1519,17 @@ Future<void> _writeLegacyCourseDataCache(
   await widgetFile.writeAsString(jsonString);
 }
 
+Future<String> _writeCourseWidgetStore(CourseWidgetStore store) async {
+  final storeJson = jsonEncode(store.toJson());
+  final file = await _courseWidgetStoreCacheFile();
+  await file.writeAsString(storeJson);
+
+  final flutterDir = await _ensureCourseWidgetDirectory();
+  final widgetFile = File('${flutterDir.path}/$_courseWidgetStoreFileName');
+  await widgetFile.writeAsString(storeJson);
+  return storeJson;
+}
+
 Future<String> _writeCompactCourseWidgetPayload(
   CourseWidgetPayload payload,
 ) async {
@@ -655,11 +1555,79 @@ Future<void> _persistCourseScheduleArchive(
     activeSchedule?.courseData ?? const <String, List<Course>>{},
   );
 
+  final widgetStore = buildCourseWidgetStore(activeSchedule);
+  final storeJson = await _writeCourseWidgetStore(widgetStore);
   final widgetPayload = buildCompactCourseWidgetPayload(activeSchedule);
   final payloadJson = await _writeCompactCourseWidgetPayload(widgetPayload);
   if (refreshWidget) {
-    await WidgetRefreshService.syncCourseTableWidget(payloadJson: payloadJson);
+    await WidgetRefreshService.syncCourseTableWidget(
+      payloadJson: payloadJson,
+      storeJson: storeJson,
+    );
   }
+}
+
+Future<void> syncActiveCourseWidgetState() async {
+  final activeSchedule = await loadActiveCourseSchedule();
+  final widgetStore = buildCourseWidgetStore(activeSchedule);
+  final storeJson = await _writeCourseWidgetStore(widgetStore);
+  final widgetPayload = buildCompactCourseWidgetPayload(activeSchedule);
+  final payloadJson = await _writeCompactCourseWidgetPayload(widgetPayload);
+  await WidgetRefreshService.syncCourseTableWidget(
+    payloadJson: payloadJson,
+    storeJson: storeJson,
+  );
+}
+
+Future<CourseSyncResult> ensureCourseScheduleFreshness({
+  DateTime? now,
+  Duration staleAfter = const Duration(hours: 6),
+  Duration attemptCooldown = const Duration(minutes: 30),
+}) async {
+  final currentTime = now ?? DateTime.now();
+  final plan = await buildCourseSilentRefreshPlan(
+    now: currentTime,
+    staleAfter: staleAfter,
+    attemptCooldown: attemptCooldown,
+  );
+  if (!plan.shouldSync) {
+    return CourseSyncResult.success(plan.reason);
+  }
+
+  await _markCourseSilentRefreshAttempt(
+    accountId: plan.accountId,
+    attemptedAt: currentTime,
+  );
+
+  if (plan.shouldClearSyncedSchedules) {
+    await clearCourseSchedules(
+      sourceTypes: {
+        CourseScheduleSourceType.selfSync,
+        CourseScheduleSourceType.migratedLegacy,
+      },
+    );
+  }
+
+  final storage = AppAuthStorage.instance;
+  final cachedToken = await storage.readJwxtToken();
+  if (cachedToken.isNotEmpty) {
+    final cachedResult = await saveClassToLocal(cachedToken);
+    if (cachedResult.success) {
+      await _clearCourseSilentRefreshAttempt();
+      return cachedResult;
+    }
+  }
+
+  final renewedToken = await _renewCourseSyncTokenSilently();
+  if (renewedToken.isEmpty) {
+    return const CourseSyncResult.failure('当前登录态无法静默刷新课表');
+  }
+
+  final result = await saveClassToLocal(renewedToken);
+  if (result.success) {
+    await _clearCourseSilentRefreshAttempt();
+  }
+  return result;
 }
 
 Future<SavedCourseSchedule?> _migrateLegacyCourseCacheIfNeeded() async {
@@ -675,6 +1643,7 @@ Future<SavedCourseSchedule?> _migrateLegacyCourseCacheIfNeeded() async {
 
   final prefs = await SharedPreferences.getInstance();
   final ownerName = prefs.getString('name') ?? '';
+  final ownerAccount = await _readCurrentCourseAccountId();
   final firstDay =
       prefs.getString('firstDay') ?? _findFirstCourseDate(legacyCourseData);
   final maxWeek = prefs.getInt('maxWeek') ?? 20;
@@ -686,6 +1655,7 @@ Future<SavedCourseSchedule?> _migrateLegacyCourseCacheIfNeeded() async {
     id: _uuid.v4(),
     name: name,
     ownerName: ownerName,
+    ownerAccount: ownerAccount,
     termLabel: termLabel,
     semesterId: '',
     firstDay: firstDay,
@@ -856,6 +1826,37 @@ Future<bool> deleteCourseSchedule(String scheduleId) async {
   return true;
 }
 
+Future<void> clearCourseSchedules({
+  Set<String>? sourceTypes,
+  bool refreshWidget = true,
+}) async {
+  final archive = await loadCourseScheduleArchive();
+  final retainedSchedules =
+      sourceTypes == null
+          ? <SavedCourseSchedule>[]
+          : archive.schedules
+              .where((schedule) => !sourceTypes.contains(schedule.sourceType))
+              .toList();
+
+  final nextActiveId =
+      retainedSchedules.any(
+            (schedule) => schedule.id == archive.activeScheduleId,
+          )
+          ? archive.activeScheduleId
+          : retainedSchedules.isEmpty
+          ? ''
+          : retainedSchedules.first.id;
+
+  await _persistCourseScheduleArchive(
+    CourseScheduleArchive(
+      schemaVersion: archive.schemaVersion,
+      activeScheduleId: nextActiveId,
+      schedules: _sortSchedulesForArchive(retainedSchedules, nextActiveId),
+    ),
+    refreshWidget: refreshWidget,
+  );
+}
+
 Map<String, dynamic> _buildCourseScheduleTransferPayload({
   required SavedCourseSchedule schedule,
   required int schemaVersion,
@@ -997,6 +1998,7 @@ Future<void> saveCourseDataToJson(Map<String, List<Course>> courseData) async {
   final archive = await loadCourseScheduleArchive();
   final activeSchedule = _resolveArchiveActiveSchedule(archive);
   final prefs = await SharedPreferences.getInstance();
+  final currentAccountId = await _readCurrentCourseAccountId();
   final ownerName =
       activeSchedule?.ownerName ?? (prefs.getString('name') ?? '');
   final firstDay =
@@ -1008,6 +2010,10 @@ Future<void> saveCourseDataToJson(Map<String, List<Course>> courseData) async {
 
   final schedule =
       activeSchedule?.copyWith(
+        ownerAccount:
+            activeSchedule.ownerAccount.isNotEmpty
+                ? activeSchedule.ownerAccount
+                : currentAccountId,
         firstDay: firstDay,
         maxWeek: maxWeek,
         updatedAt: now,
@@ -1017,6 +2023,7 @@ Future<void> saveCourseDataToJson(Map<String, List<Course>> courseData) async {
         id: _uuid.v4(),
         name: ownerName.isEmpty ? '本地课表' : '$ownerName的课表',
         ownerName: ownerName,
+        ownerAccount: currentAccountId,
         termLabel: firstDay.isEmpty ? '本地课表' : '$firstDay 开始',
         semesterId: '',
         firstDay: firstDay,
@@ -1096,6 +2103,25 @@ Future<CourseWidgetPayload?> loadCourseWidgetPayloadFromLocal() async {
   }
 }
 
+Future<CourseWidgetStore?> loadCourseWidgetStoreFromLocal() async {
+  try {
+    final storeFile = await _courseWidgetStoreCacheFile();
+    if (!storeFile.existsSync()) {
+      return null;
+    }
+    final storeJson =
+        jsonDecode(await storeFile.readAsString()) as Map<String, dynamic>;
+    return CourseWidgetStore.fromJson(storeJson);
+  } catch (error, stackTrace) {
+    AppLogger.error(
+      'Error reading course widget store',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    return null;
+  }
+}
+
 String _weekdayLabel(int weekday) {
   const labels = <int, String>{
     DateTime.monday: '周一',
@@ -1110,42 +2136,37 @@ String _weekdayLabel(int weekday) {
 }
 
 String _sectionStartTime(int startSection) {
-  switch (startSection) {
-    case 1:
-      return '08:00';
-    case 3:
-      return '10:00';
-    case 5:
-      return '14:00';
-    case 7:
-      return '16:00';
-    case 9:
-      return '19:00';
-    default:
-      return '--:--';
-  }
+  return _courseSectionStartTimes[startSection] ?? '--:--';
+}
+
+String _sectionEndTime(int endSection) {
+  return _courseSectionEndTimes[endSection] ?? '';
 }
 
 Future<CourseSyncResult> saveClassToLocal(
-  String token,
-  BuildContext context,
-) async {
+  String token, {
+  BuildContext? context,
+}) async {
   if (token.isEmpty) {
     return const CourseSyncResult.failure('登录信息已失效，请重新登录后再试');
   }
 
-  if (!context.mounted) {
+  if (context != null && !context.mounted) {
     return const CourseSyncResult.failure('课表加载已取消');
   }
 
   try {
-    final snapshot = await loadCourseSyncSnapshotFromUrl(token, context);
+    final snapshot = await loadCourseSyncSnapshotFromUrl(
+      token,
+      context: context,
+    );
     if (snapshot.courseData.isEmpty) {
       return const CourseSyncResult.failure('未获取到任何课表数据，请确认当前学期已有课表');
     }
 
     final prefs = await SharedPreferences.getInstance();
     final ownerName = prefs.getString('name') ?? '';
+    final ownerAccount = await _readCurrentCourseAccountId();
     final archive = await loadCourseScheduleArchive();
     SavedCourseSchedule? matchedSchedule;
     for (final schedule in archive.schedules) {
@@ -1177,6 +2198,7 @@ Future<CourseSyncResult> saveClassToLocal(
                   ? scheduleName
                   : matchedSchedule.name,
           ownerName: ownerName,
+          ownerAccount: ownerAccount,
           termLabel: termLabel,
           semesterId: snapshot.semesterId,
           firstDay: snapshot.firstDay,
@@ -1190,6 +2212,7 @@ Future<CourseSyncResult> saveClassToLocal(
           id: _uuid.v4(),
           name: scheduleName,
           ownerName: ownerName,
+          ownerAccount: ownerAccount,
           termLabel: termLabel,
           semesterId: snapshot.semesterId,
           firstDay: snapshot.firstDay,
@@ -1231,13 +2254,13 @@ Future<Map<String, List<Course>>> testc() async {
 }
 
 Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
-  String token,
-  BuildContext context,
-) async {
+  String token, {
+  BuildContext? context,
+}) async {
   final GetOrgDataWeb getOrgDataWeb = GetOrgDataWeb(token: token);
   getOrgDataWeb.initData();
   await getOrgDataWeb.getCurrentSemesterId();
-  if (!context.mounted) {
+  if (context != null && !context.mounted) {
     return const CourseSyncSnapshot(
       courseData: <String, List<Course>>{},
       semesterId: '',
@@ -1247,7 +2270,7 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
   }
   final Map<String, List<Course>> courseData = await getOrgDataWeb
       .getAllWeekClass(context);
-  if (!context.mounted) {
+  if (context != null && !context.mounted) {
     return CourseSyncSnapshot(
       courseData: courseData,
       semesterId: getOrgDataWeb.semesterId ?? '',
@@ -1285,6 +2308,6 @@ Future<Map<String, List<Course>>> loadClassFormUrl(
   String token,
   BuildContext context,
 ) async {
-  final snapshot = await loadCourseSyncSnapshotFromUrl(token, context);
+  final snapshot = await loadCourseSyncSnapshotFromUrl(token, context: context);
   return snapshot.courseData;
 }

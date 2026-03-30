@@ -12,6 +12,7 @@ import '../../core/ui/apple_glass.dart';
 import '../../login/unified_login_page.dart';
 import '../../pages/score/logic.dart';
 import '../../pages/score/scorepage.dart';
+import '../../utils/course/coursemain.dart';
 import '../../utils/hut_user_api.dart';
 import '../../utils/token.dart';
 import '../about/view.dart';
@@ -236,6 +237,12 @@ class _UserPageState extends State<UserPage> {
   Future<void> _logout() async {
     final storage = AppAuthStorage.instance;
     final prefs = await SharedPreferences.getInstance();
+    await clearCourseSchedules(
+      sourceTypes: {
+        CourseScheduleSourceType.selfSync,
+        CourseScheduleSourceType.migratedLegacy,
+      },
+    );
     await storage.clearAllAuthData();
     await storage.setFirstOpen(false);
     await prefs.remove(_cachedBalanceKey);

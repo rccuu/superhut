@@ -37,6 +37,29 @@ void main() {
   );
 
   test(
+    'syncCourseTableWidget passes payload and store to the platform channel',
+    () async {
+      dynamic invokedArguments;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            invokedArguments = call.arguments;
+            return true;
+          });
+
+      final result = await WidgetRefreshService.syncCourseTableWidget(
+        payloadJson: '{"date":"2026-03-27"}',
+        storeJson: '{"firstDay":"2026-03-16"}',
+      );
+
+      expect(result, isTrue);
+      expect(invokedArguments, {
+        'payloadJson': '{"date":"2026-03-27"}',
+        'storeJson': '{"firstDay":"2026-03-16"}',
+      });
+    },
+  );
+
+  test(
     'syncCourseTableWidget returns false when the platform call fails',
     () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

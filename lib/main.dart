@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -277,10 +279,11 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _hasSession = false;
   bool _hasLocalCourseCache = false;
   bool _isLoading = true;
+  bool _isCourseSilentRefreshRunning = false;
   String? _initialWidgetAction;
   static const platform = MethodChannel(
     'com.superhut.rice.superhut/widget_actions',
@@ -290,8 +293,37 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _resolveStartupState();
     _setupWidgetActionHandler();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshCourseDataInBackground());
+    }
+  }
+
+  Future<void> _refreshCourseDataInBackground() async {
+    if (kIsWeb || _isCourseSilentRefreshRunning) {
+      return;
+    }
+
+    _isCourseSilentRefreshRunning = true;
+    try {
+      await ensureCourseScheduleFreshness();
+    } catch (_) {
+      // 静默刷新失败不阻断主流程。
+    } finally {
+      _isCourseSilentRefreshRunning = false;
+    }
   }
 
   void _setupWidgetActionHandler() {
@@ -362,6 +394,16 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _resolveStartupState() async {
     final storage = AppAuthStorage.instance;
+    final isFirstOpen = await storage.isFirstOpen();
+    if (isFirstOpen && !kIsWeb) {
+      await clearCourseSchedules(
+        sourceTypes: {
+          CourseScheduleSourceType.selfSync,
+          CourseScheduleSourceType.migratedLegacy,
+        },
+      );
+      await storage.setFirstOpen(false);
+    }
     final results = await Future.wait<Object?>([
       storage.hasAnyCampusSession(),
       loadClassFromLocal().then((courseData) => courseData.isNotEmpty),
@@ -370,6 +412,16 @@ class _MyAppState extends State<MyApp> {
     final hasSession = results[0] as bool;
     final hasLocalCourseCache = results[1] as bool;
     final initialWidgetAction = results[2] as String?;
+
+    if (!kIsWeb) {
+      try {
+        await syncActiveCourseWidgetState();
+      } catch (_) {
+        // 启动时同步小组件失败不阻断主流程。
+      }
+      unawaited(_refreshCourseDataInBackground());
+    }
+
     if (!mounted) {
       return;
     }

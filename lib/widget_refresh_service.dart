@@ -10,13 +10,21 @@ class WidgetRefreshService {
   );
 
   /// 同步课程表小组件所需数据，并触发系统刷新
-  static Future<bool> syncCourseTableWidget({String? payloadJson}) async {
+  static Future<bool> syncCourseTableWidget({
+    String? payloadJson,
+    String? storeJson,
+  }) async {
     try {
+      final arguments = <String, dynamic>{};
+      if (payloadJson != null) {
+        arguments['payloadJson'] = payloadJson;
+      }
+      if (storeJson != null) {
+        arguments['storeJson'] = storeJson;
+      }
       final bool? result = await _channel.invokeMethod<bool>(
         'syncCourseTableWidget',
-        payloadJson == null
-            ? null
-            : <String, dynamic>{'payloadJson': payloadJson},
+        arguments.isEmpty ? null : arguments,
       );
       return result ?? false;
     } on MissingPluginException catch (_) {

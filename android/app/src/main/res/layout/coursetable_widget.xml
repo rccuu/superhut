@@ -16,7 +16,7 @@
         android:paddingTop="5dp"
         android:paddingRight="10dp"
         android:paddingBottom="5dp"
-        android:text="第3周"
+        android:text="明天有课"
         android:textColor="#204FC9"
         android:textSize="13sp"
         android:textStyle="bold" />
@@ -26,7 +26,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:text="周五 · 03/27"
+        android:text="周二 · 第8周"
         android:textColor="#6B7A99"
         android:textSize="11sp" />
 
@@ -45,7 +45,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="课程名称"
+            android:text="08:00 高等数学"
             android:textColor="#16233C"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -57,7 +57,7 @@
             android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="08:00 · 1-2节 · 公共201"
+            android:text="公教101"
             android:textColor="#6B7A99"
             android:textSize="11sp" />
     </LinearLayout>
@@ -77,7 +77,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="课程名称"
+            android:text="10:00 大学英语"
             android:textColor="#16233C"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -89,7 +89,7 @@
             android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="10:00 · 3-4节 · 公共202"
+            android:text="公教102"
             android:textColor="#6B7A99"
             android:textSize="11sp" />
     </LinearLayout>
@@ -109,7 +109,7 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="课程名称"
+            android:text="下次课程"
             android:textColor="#16233C"
             android:textSize="13sp"
             android:textStyle="bold" />
@@ -121,7 +121,7 @@
             android:layout_marginTop="2dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="14:00 · 5-6节 · 公共203"
+            android:text="本周无课"
             android:textColor="#6B7A99"
             android:textSize="11sp" />
     </LinearLayout>

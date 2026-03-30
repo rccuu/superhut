@@ -1,10 +1,5 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:path_provider/path_provider.dart';
-import 'package:superhut/widget_refresh_service.dart';
-
 import '../core/services/app_logger.dart';
+import 'course/coursemain.dart';
 
 /// 小组件数据助手类
 /// 用于保存和管理桌面小组件所需的数据
@@ -18,24 +13,25 @@ class WidgetDataHelper {
     Map<String, List<Map<String, dynamic>>> courseData,
   ) async {
     try {
-      // 获取应用文档目录
-      final appDir = await getApplicationDocumentsDirectory();
-      final flutterDir = Directory('${appDir.path}/app_flutter');
+      final normalizedCourseData = <String, List<Course>>{};
+      courseData.forEach((date, courses) {
+        normalizedCourseData[date] =
+            courses.map((course) {
+              final courseJson = Map<String, dynamic>.from(course);
+              return Course.fromJson({
+                'name': courseJson['name'],
+                'teacherName': courseJson['teacherName'] ?? '',
+                'weekDuration': courseJson['weekDuration'] ?? '',
+                'location': courseJson['location'],
+                'startSection': courseJson['startSection'],
+                'duration': courseJson['duration'],
+                'isExp': courseJson['isExp'] ?? false,
+                'pcid': courseJson['pcid'] ?? '',
+              });
+            }).toList();
+      });
 
-      // 确保目录存在
-      if (!flutterDir.existsSync()) {
-        flutterDir.createSync(recursive: true);
-      }
-
-      // 创建数据文件
-      final file = File('${flutterDir.path}/course_data.json');
-
-      // 将数据转换为 JSON 并保存到文件
-      await file.writeAsString(jsonEncode(courseData));
-
-      // 刷新桌面小组件
-      await WidgetRefreshService.refreshCourseTableWidget();
-
+      await saveCourseDataToJson(normalizedCourseData);
       return true;
     } catch (error, stackTrace) {
       AppLogger.error('保存课程数据失败', error: error, stackTrace: stackTrace);
