@@ -284,6 +284,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _hasLocalCourseCache = false;
   bool _isLoading = true;
   bool _isCourseSilentRefreshRunning = false;
+  bool _showInitialTrustNotice = false;
   String? _initialWidgetAction;
   static const platform = MethodChannel(
     'com.superhut.rice.superhut/widget_actions',
@@ -395,6 +396,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> _resolveStartupState() async {
     final storage = AppAuthStorage.instance;
     final isFirstOpen = await storage.isFirstOpen();
+    final hasSeenTrustNotice = await storage.hasSeenTrustNotice();
+    final hasTrustNoticePreference = await storage.hasTrustNoticePreference();
     if (isFirstOpen && !kIsWeb) {
       await clearCourseSchedules(
         sourceTypes: {
@@ -403,6 +406,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         },
       );
       await storage.setFirstOpen(false);
+    } else if (!kIsWeb && !hasTrustNoticePreference) {
+      await storage.setHasSeenTrustNotice(true);
     }
     final results = await Future.wait<Object?>([
       storage.hasAnyCampusSession(),
@@ -429,6 +434,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _hasSession = hasSession;
       _hasLocalCourseCache = hasLocalCourseCache;
       _initialWidgetAction = initialWidgetAction;
+      _showInitialTrustNotice = !kIsWeb && isFirstOpen && !hasSeenTrustNotice;
       _isLoading = false;
     });
   }
@@ -457,6 +463,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       home: HomeviewPage(
+        showInitialTrustNotice: _showInitialTrustNotice,
         initialIndex:
             _initialWidgetAction == 'course'
                 ? 0

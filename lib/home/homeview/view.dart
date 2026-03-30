@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
@@ -11,17 +12,25 @@ import 'package:superhut/home/coursetable/view.dart';
 import 'package:superhut/home/userpage/view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/services/app_update_service.dart';
 import '../../core/services/course_sync_service.dart';
 import '../../core/ui/apple_glass.dart';
+import '../about/first_open_trust_dialog.dart';
+import '../about/trust_page.dart';
 import '../../pages/Electricitybill/electricity_api.dart';
 import '../../pages/Electricitybill/electricity_page.dart';
 
 class HomeviewPage extends StatefulWidget {
-  const HomeviewPage({super.key, this.initialIndex = 0});
+  const HomeviewPage({
+    super.key,
+    this.initialIndex = 0,
+    this.showInitialTrustNotice = false,
+  });
 
   final int initialIndex;
+  final bool showInitialTrustNotice;
 
   @override
   State<HomeviewPage> createState() => _HomeviewPageState();
@@ -43,6 +52,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
   int _tabAnimationSeed = 0;
   int _tabAnimationDirection = 1;
   int _handledCourseSyncEventId = 0;
+  bool _hasHandledStartupDialogs = false;
 
   @override
   void initState() {
@@ -59,13 +69,12 @@ class _HomeviewPageState extends State<HomeviewPage> {
     if (_selectedIndex != _courseTabIndex) {
       _loadedPages[_courseTabIndex] = true;
     }
-    _getCurrentVersion().then((_) {
-      _checkVersion();
-    });
     CourseSyncService.instance.stateListenable.addListener(
       _handleCourseSyncStateChanged,
     );
-    checkAlert();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_runStartupDialogs());
+    });
   }
 
   @override
@@ -107,7 +116,35 @@ class _HomeviewPageState extends State<HomeviewPage> {
     });
   }
 
-  void checkAlert() async {
+  Future<void> _runStartupDialogs() async {
+    if (_hasHandledStartupDialogs || !mounted) {
+      return;
+    }
+    _hasHandledStartupDialogs = true;
+
+    if (widget.showInitialTrustNotice) {
+      final action = await showFirstOpenTrustDialog(context);
+      await AppAuthStorage.instance.setHasSeenTrustNotice(true);
+      if (!mounted) {
+        return;
+      }
+      if (action == FirstOpenTrustDialogAction.viewDetails) {
+        await Navigator.of(context).push(TrustCenterPage.route());
+      }
+    }
+
+    await _getCurrentVersion();
+    if (!mounted) {
+      return;
+    }
+    await _checkVersion();
+    if (!mounted) {
+      return;
+    }
+    await checkAlert();
+  }
+
+  Future<void> checkAlert() async {
     try {
       final electricityApi = ElectricityApi();
       final prefs = await SharedPreferences.getInstance();
@@ -180,13 +217,13 @@ class _HomeviewPageState extends State<HomeviewPage> {
       return;
     }
 
-    _showUpdateDialog(update);
+    await _showUpdateDialog(update);
   }
 
-  void _showUpdateDialog(AppUpdateInfo update) {
+  Future<void> _showUpdateDialog(AppUpdateInfo update) {
     final updateDescription = _buildUpdateDescription(update.notes);
 
-    showDialog(
+    return showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (BuildContext context) {

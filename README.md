@@ -17,9 +17,6 @@
 
 仓库名与 Dart/包名目前仍沿用 `superhut`，应用对外显示名称为 `工大盒子`。
 
-此项目是基于上游完全 Vibe coding 出来的，我完全不懂代码都能做出来，你也能行
-
-
 ## ✨ 主要功能
 
 ### 🎓 学习服务
@@ -46,7 +43,7 @@
 - **框架**: Flutter 3.7.0+
 - **状态管理**: GetX
 - **网络请求**: Dio
-- **本地存储**: SharedPreferences
+- **本地存储**: SharedPreferences + flutter_secure_storage
 - **WebView**: flutter_inappwebview
 - **UI组件**: Material Design 3
 - **主题**: FlexColorScheme
@@ -110,6 +107,19 @@ bash scripts/build_ios_quick.sh
 - 遵循 Flutter 官方代码规范
 - 使用有意义的方法和变量命名
 - 添加适当的注释和文档
+
+## 🔒 为什么可以相对放心使用
+
+如果你不熟悉 GitHub，也不想先读源码，可以先看这几条：
+
+- 当前仓库、上游仓库和版本发布页都是公开的
+- 应用内更新检查直接读取 GitHub Releases
+- 当前公开代码中可见的业务域名主要是学校系统、校园生活服务提供方和 GitHub
+- 密码优先保存在系统安全存储中，登录态和缓存默认保存在本机
+
+更完整的说明见：
+
+- [工大盒子的信任与隐私说明](docs/trust-and-privacy.md)
 
 ## 🤝 贡献指南
 
