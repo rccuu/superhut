@@ -805,6 +805,78 @@ class _CourseTableViewState extends State<CourseTableView> {
     ].join('\n');
   }
 
+  bool get _canEditActiveSchedule {
+    final schedule = _activeSchedule;
+    return schedule != null && !schedule.isReadOnly;
+  }
+
+  Future<void> _confirmDeleteCourse(
+    _PlacedCourse placement, {
+    BuildContext? sheetContext,
+    required CourseDeleteScope scope,
+  }) async {
+    if (!_canEditActiveSchedule) {
+      _showSnackBar('当前课表不支持删除课程');
+      return;
+    }
+
+    if (sheetContext != null && Navigator.of(sheetContext).canPop()) {
+      Navigator.of(sheetContext).pop();
+    }
+
+    final title =
+        scope == CourseDeleteScope.currentOccurrence ? '删除当前课程' : '删除整学期课程';
+    final content =
+        scope == CourseDeleteScope.currentOccurrence
+            ? '确认只删除当前这次“${placement.course.name}”吗？其他周的同一课程会保留。'
+            : '确认从当前活动课表的整学期中删除“${placement.course.name}”吗？';
+    final successMessage =
+        scope == CourseDeleteScope.currentOccurrence ? '已删除当前课程' : '已删除整学期课程';
+
+    final shouldDelete =
+        await showDialog<bool>(
+          context: context,
+          builder:
+              (dialogContext) => AlertDialog(
+                title: Text(title),
+                content: Text(content),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(false),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(true),
+                    child: const Text('删除'),
+                  ),
+                ],
+              ),
+        ) ??
+        false;
+    if (!shouldDelete) {
+      return;
+    }
+
+    final deleted = await deleteCourseFromActiveSchedule(
+      dateKey: _dateKey(placement.day),
+      targetCourse: placement.course,
+      scope: scope,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!deleted) {
+      _showSnackBar('删除失败，请稍后重试');
+      return;
+    }
+
+    await _reloadScheduleState();
+    if (!mounted) {
+      return;
+    }
+    _showSnackBar('$successMessage：${placement.course.name}');
+  }
+
   void _showCourseDetails(_PlacedCourse placement) {
     final course = placement.course;
     _showAdaptiveBottomSheet<void>(
@@ -824,6 +896,22 @@ class _CourseTableViewState extends State<CourseTableView> {
                       Navigator.of(sheetContext).pop();
                       _showExpStudents(course.pcid);
                     }
+                    : null,
+            onDeleteCurrentCourse:
+                _canEditActiveSchedule
+                    ? () => _confirmDeleteCourse(
+                      placement,
+                      sheetContext: sheetContext,
+                      scope: CourseDeleteScope.currentOccurrence,
+                    )
+                    : null,
+            onDeleteWholeScheduleCourse:
+                _canEditActiveSchedule
+                    ? () => _confirmDeleteCourse(
+                      placement,
+                      sheetContext: sheetContext,
+                      scope: CourseDeleteScope.wholeSchedule,
+                    )
                     : null,
           ),
     );

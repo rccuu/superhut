@@ -362,12 +362,16 @@ class CourseDetailSheet extends StatelessWidget {
     required this.scheduleText,
     required this.copyText,
     this.onViewStudents,
+    this.onDeleteCurrentCourse,
+    this.onDeleteWholeScheduleCourse,
   });
 
   final Course course;
   final String scheduleText;
   final String copyText;
   final VoidCallback? onViewStudents;
+  final VoidCallback? onDeleteCurrentCourse;
+  final VoidCallback? onDeleteWholeScheduleCourse;
 
   @override
   Widget build(BuildContext context) {
@@ -416,6 +420,20 @@ class CourseDetailSheet extends StatelessWidget {
           icon: Ionicons.people_outline,
           text: '查看实验人员名单',
           onTap: onViewStudents,
+        ),
+      if (onDeleteCurrentCourse != null)
+        _CourseActionItem(
+          icon: Ionicons.trash_outline,
+          text: '删除当前课程',
+          accentColor: colorScheme.error,
+          onTap: onDeleteCurrentCourse,
+        ),
+      if (onDeleteWholeScheduleCourse != null)
+        _CourseActionItem(
+          icon: Ionicons.trash_bin_outline,
+          text: '删除整学期该课程',
+          accentColor: colorScheme.error,
+          onTap: onDeleteWholeScheduleCourse,
         ),
     ];
 
@@ -499,7 +517,7 @@ class CourseDetailSheet extends StatelessWidget {
                         (item) => _CourseDetailRow(
                           icon: item.icon,
                           text: item.text,
-                          accentColor: colorScheme.primary,
+                          accentColor: item.accentColor ?? colorScheme.primary,
                           trailing: Icon(
                             Ionicons.chevron_forward_outline,
                             size: 18,
@@ -730,11 +748,13 @@ class _CourseActionItem {
     required this.icon,
     required this.text,
     required this.onTap,
+    this.accentColor,
   });
 
   final IconData icon;
   final String text;
   final VoidCallback? onTap;
+  final Color? accentColor;
 }
 
 class _CourseDetailGroup extends StatelessWidget {

@@ -808,6 +808,159 @@ void main() {
   });
 
   test(
+    'deleteCourseFromActiveSchedule removes target course and persists',
+    () async {
+      final targetCourse = Course(
+        name: '数据库原理',
+        teacherName: '周老师',
+        weekDuration: '1-16',
+        location: '信工楼201',
+        startSection: 1,
+        duration: 2,
+      );
+      final retainedCourse = Course(
+        name: '操作系统',
+        teacherName: '李老师',
+        weekDuration: '1-16',
+        location: '信工楼301',
+        startSection: 3,
+        duration: 2,
+      );
+      final schedule = SavedCourseSchedule(
+        id: 'schedule-delete-course-1',
+        name: '可编辑课表',
+        ownerName: '测试用户',
+        termLabel: '2025-2026-2',
+        semesterId: '2025-2026-2',
+        firstDay: '2026-03-16',
+        maxWeek: 20,
+        sourceType: CourseScheduleSourceType.manual,
+        isReadOnly: false,
+        createdAt: '2026-03-16T08:00:00.000',
+        updatedAt: '2026-03-16T08:00:00.000',
+        courseData: {
+          '2026-03-17': [targetCourse, retainedCourse],
+        },
+      );
+
+      await saveCourseSchedule(schedule, setActive: true);
+
+      final deleted = await deleteCourseFromActiveSchedule(
+        dateKey: '2026-03-17',
+        targetCourse: targetCourse,
+      );
+
+      final activeSchedule = await loadActiveCourseSchedule();
+      expect(deleted, isTrue);
+      expect(activeSchedule, isNotNull);
+      expect(activeSchedule!.courseData['2026-03-17'], hasLength(1));
+      expect(activeSchedule.courseData['2026-03-17']!.single.name, '操作系统');
+    },
+  );
+
+  test(
+    'deleteCourseFromActiveSchedule removes matching course across whole schedule',
+    () async {
+      final targetCourse = Course(
+        name: '高等数学',
+        teacherName: '李老师',
+        weekDuration: '1-16',
+        location: '公共101',
+        startSection: 1,
+        duration: 2,
+      );
+      final anotherCourse = Course(
+        name: '大学英语',
+        teacherName: '王老师',
+        weekDuration: '1-16',
+        location: '公共202',
+        startSection: 3,
+        duration: 2,
+      );
+      final schedule = SavedCourseSchedule(
+        id: 'schedule-delete-course-all',
+        name: '可编辑课表',
+        ownerName: '测试用户',
+        termLabel: '2025-2026-2',
+        semesterId: '2025-2026-2',
+        firstDay: '2026-03-16',
+        maxWeek: 20,
+        sourceType: CourseScheduleSourceType.manual,
+        isReadOnly: false,
+        createdAt: '2026-03-16T08:00:00.000',
+        updatedAt: '2026-03-16T08:00:00.000',
+        courseData: {
+          '2026-03-17': [targetCourse, anotherCourse],
+          '2026-03-24': [
+            Course(
+              name: '高等数学',
+              teacherName: '李老师',
+              weekDuration: '9-16',
+              location: '公共305',
+              startSection: 5,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      await saveCourseSchedule(schedule, setActive: true);
+
+      final deleted = await deleteCourseFromActiveSchedule(
+        dateKey: '2026-03-17',
+        targetCourse: targetCourse,
+        scope: CourseDeleteScope.wholeSchedule,
+      );
+
+      final activeSchedule = await loadActiveCourseSchedule();
+      expect(deleted, isTrue);
+      expect(activeSchedule, isNotNull);
+      expect(activeSchedule!.courseData['2026-03-17'], hasLength(1));
+      expect(activeSchedule.courseData['2026-03-17']!.single.name, '大学英语');
+      expect(activeSchedule.courseData.containsKey('2026-03-24'), isFalse);
+    },
+  );
+
+  test('deleteCourseFromActiveSchedule rejects read-only schedule', () async {
+    final targetCourse = Course(
+      name: '朋友分享课',
+      teacherName: '王老师',
+      weekDuration: '1-16',
+      location: '公共101',
+      startSection: 1,
+      duration: 2,
+    );
+    final schedule = SavedCourseSchedule(
+      id: 'schedule-delete-course-readonly',
+      name: '分享课表',
+      ownerName: '朋友',
+      termLabel: '2025-2026-2',
+      semesterId: '2025-2026-2',
+      firstDay: '2026-03-16',
+      maxWeek: 20,
+      sourceType: CourseScheduleSourceType.shareImport,
+      isReadOnly: true,
+      createdAt: '2026-03-16T08:00:00.000',
+      updatedAt: '2026-03-16T08:00:00.000',
+      courseData: {
+        '2026-03-17': [targetCourse],
+      },
+    );
+
+    await saveCourseSchedule(schedule, setActive: true);
+
+    final deleted = await deleteCourseFromActiveSchedule(
+      dateKey: '2026-03-17',
+      targetCourse: targetCourse,
+    );
+
+    final activeSchedule = await loadActiveCourseSchedule();
+    expect(deleted, isFalse);
+    expect(activeSchedule, isNotNull);
+    expect(activeSchedule!.courseData['2026-03-17'], hasLength(1));
+  });
+
+  test(
     'clearCourseSchedules removes synced schedules and rewrites empty widget state',
     () async {
       final schedule = SavedCourseSchedule(
