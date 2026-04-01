@@ -121,6 +121,19 @@ bash scripts/build_ios_quick.sh
 
 - [工大盒子的信任与隐私说明](docs/trust-and-privacy.md)
 
+## ❤️ 支持项目
+
+想支持的话，可以在 App 内查看方式。
+
+- App 内入口：`我的 -> 关于工大盒子 -> 支持项目`
+- 页面内支持查看二维码大图和一键复制当前网络地址
+- 转账前请务必确认网络一致，转错链无法找回
+
+当前支持的网络与地址：
+
+- `TRC20`：`TNvVV3XgpDbnfT8kAVB5Pwe7UYVCfqekDT`
+- `BSC (BEP-20)`：`0xca48641aad9c37f74d2999686799deaee95b6105`
+
 ## 🤝 贡献指南
 
 我们欢迎所有形式的贡献！
