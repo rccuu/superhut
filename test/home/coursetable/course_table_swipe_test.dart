@@ -37,7 +37,7 @@ void main() {
     return '${dateKey(day)}-${course.startSection}-$endSection-${course.name}';
   }
 
-  SavedCourseSchedule buildTestSchedule() {
+  SavedCourseSchedule buildTestSchedule({bool isReadOnly = false}) {
     final monday = currentMonday();
     final nextMonday = monday.add(const Duration(days: 7));
 
@@ -50,7 +50,7 @@ void main() {
       firstDay: dateKey(monday),
       maxWeek: 3,
       sourceType: CourseScheduleSourceType.manual,
-      isReadOnly: false,
+      isReadOnly: isReadOnly,
       createdAt: '2026-03-24T16:00:00.000',
       updatedAt: '2026-03-24T16:00:00.000',
       courseData: {
@@ -200,6 +200,54 @@ void main() {
 
     expect(find.text('当前周课程'), findsOneWidget);
     expect(find.text('公共101'), findsOneWidget);
+  });
+
+  testWidgets('shows both delete actions for editable active schedule', (
+    tester,
+  ) async {
+    final schedule = buildTestSchedule();
+    final monday = currentMonday();
+    final course = schedule.courseData[dateKey(monday)]!.single;
+
+    await tester.pumpWidget(
+      MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final hitTarget = find.byKey(
+      ValueKey<String>('course-card-hit-${courseCardHitKey(monday, course)}'),
+    );
+
+    await tester.tap(hitTarget);
+    await tester.pumpAndSettle();
+
+    expect(find.text('删除当前课程'), findsOneWidget);
+    expect(find.text('删除整学期该课程'), findsOneWidget);
+  });
+
+  testWidgets('hides delete actions for read-only active schedule', (
+    tester,
+  ) async {
+    final schedule = buildTestSchedule(isReadOnly: true);
+    final monday = currentMonday();
+    final course = schedule.courseData[dateKey(monday)]!.single;
+
+    await tester.pumpWidget(
+      MaterialApp(home: CourseTableView(debugScheduleOverride: schedule)),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final hitTarget = find.byKey(
+      ValueKey<String>('course-card-hit-${courseCardHitKey(monday, course)}'),
+    );
+
+    await tester.tap(hitTarget);
+    await tester.pumpAndSettle();
+
+    expect(find.text('删除当前课程'), findsNothing);
+    expect(find.text('删除整学期该课程'), findsNothing);
   });
 
   testWidgets('switches toolbar to lite style during tab transition', (

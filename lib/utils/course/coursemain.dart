@@ -138,6 +138,39 @@ class Course {
   }
 }
 
+bool _isSameCourse(Course left, Course right) {
+  return left.name == right.name &&
+      left.teacherName == right.teacherName &&
+      left.weekDuration == right.weekDuration &&
+      left.location == right.location &&
+      left.startSection == right.startSection &&
+      left.duration == right.duration &&
+      left.isExp == right.isExp &&
+      left.pcid == right.pcid;
+}
+
+bool _isSameWholeScheduleCourse(Course left, Course right) {
+  if (left.name != right.name) {
+    return false;
+  }
+  if (left.isExp != right.isExp) {
+    return false;
+  }
+  if (left.teacherName.isNotEmpty &&
+      right.teacherName.isNotEmpty &&
+      left.teacherName != right.teacherName) {
+    return false;
+  }
+  if (left.pcid.isNotEmpty &&
+      right.pcid.isNotEmpty &&
+      left.pcid != right.pcid) {
+    return false;
+  }
+  return true;
+}
+
+enum CourseDeleteScope { currentOccurrence, wholeSchedule }
+
 class SavedCourseSchedule {
   const SavedCourseSchedule({
     required this.id,
@@ -2037,6 +2070,79 @@ Future<void> saveCourseDataToJson(Map<String, List<Course>> courseData) async {
       );
 
   await saveCourseSchedule(schedule, setActive: true);
+}
+
+Future<bool> deleteCourseFromActiveSchedule({
+  required String dateKey,
+  required Course targetCourse,
+  CourseDeleteScope scope = CourseDeleteScope.currentOccurrence,
+}) async {
+  final activeSchedule = await loadActiveCourseSchedule();
+  if (activeSchedule == null || activeSchedule.isReadOnly) {
+    return false;
+  }
+
+  final updatedCourseData = <String, List<Course>>{};
+  activeSchedule.courseData.forEach((key, courses) {
+    updatedCourseData[key] = List<Course>.from(courses);
+  });
+
+  final coursesForDate = updatedCourseData[dateKey];
+  if (coursesForDate == null || coursesForDate.isEmpty) {
+    return false;
+  }
+
+  switch (scope) {
+    case CourseDeleteScope.currentOccurrence:
+      final targetIndex = coursesForDate.indexWhere(
+        (course) => _isSameCourse(course, targetCourse),
+      );
+      if (targetIndex < 0) {
+        return false;
+      }
+
+      coursesForDate.removeAt(targetIndex);
+      if (coursesForDate.isEmpty) {
+        updatedCourseData.remove(dateKey);
+      }
+      break;
+    case CourseDeleteScope.wholeSchedule:
+      var removedAny = false;
+      final keys = updatedCourseData.keys.toList(growable: false);
+      for (final key in keys) {
+        final sourceCourses = updatedCourseData[key];
+        if (sourceCourses == null || sourceCourses.isEmpty) {
+          continue;
+        }
+        final filteredCourses =
+            sourceCourses
+                .where(
+                  (course) => !_isSameWholeScheduleCourse(course, targetCourse),
+                )
+                .toList();
+        if (filteredCourses.length != sourceCourses.length) {
+          removedAny = true;
+        }
+        if (filteredCourses.isEmpty) {
+          updatedCourseData.remove(key);
+        } else {
+          updatedCourseData[key] = filteredCourses;
+        }
+      }
+      if (!removedAny) {
+        return false;
+      }
+      break;
+  }
+
+  await saveCourseSchedule(
+    activeSchedule.copyWith(
+      updatedAt: DateTime.now().toIso8601String(),
+      courseData: updatedCourseData,
+    ),
+    setActive: true,
+  );
+  return true;
 }
 
 // 从 JSON 文件读取并转换为 Map<String, List<Course>>
