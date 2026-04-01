@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_update_service.dart';
 import '../../core/ui/apple_glass.dart';
+import 'support_page.dart';
 import 'trust_page.dart';
 
 class AboutPage extends StatefulWidget {
@@ -182,6 +183,10 @@ class _AboutPageState extends State<AboutPage> {
     await Navigator.of(context).push(TrustCenterPage.route());
   }
 
+  Future<void> _openSupportPage() async {
+    await Navigator.of(context).push(SupportPage.route());
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -251,6 +256,29 @@ class _AboutPageState extends State<AboutPage> {
                               label: const Text('打开版本发布'),
                             ),
                           ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                RepaintBoundary(
+                  child: _AboutSectionPanel(
+                    icon: Ionicons.heart_outline,
+                    title: '支持项目',
+                    tint: const Color(0xFF199A7A),
+                    useLiteEffects: useLiteLayout,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _AboutFactLine(
+                          text: '想支持的话，这里有个入口。',
+                        ),
+                        const SizedBox(height: 18),
+                        FilledButton.tonalIcon(
+                          onPressed: _openSupportPage,
+                          icon: const Icon(Ionicons.heart_outline, size: 18),
+                          label: const Text('查看支持方式'),
                         ),
                       ],
                     ),
