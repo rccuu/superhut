@@ -670,6 +670,17 @@ class _CourseSheetShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDarkMode;
+    final mediaPadding = MediaQuery.paddingOf(context);
+    final shellColor =
+        isDark
+            ? Color.alphaBlend(
+              colorScheme.primary.withValues(alpha: 0.02),
+              colorScheme.surface,
+            )
+            : Colors.white;
+
     Widget content = child;
     if (maxHeightFactor != null) {
       content = ConstrainedBox(
@@ -681,12 +692,40 @@ class _CourseSheetShell extends StatelessWidget {
     }
 
     return Material(
-      color: Colors.transparent,
+      color: shellColor,
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: Padding(padding: panelPadding, child: content),
+        bottom: false,
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(38)),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(38),
+              ),
+              color: shellColor,
+              border: Border(
+                top: BorderSide(
+                  color: colorScheme.primary.withValues(
+                    alpha: isDark ? 0.08 : 0.05,
+                  ),
+                ),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: colorScheme.shadow.withValues(
+                    alpha: isDark ? 0.08 : 0.025,
+                  ),
+                  blurRadius: 14,
+                  offset: const Offset(0, -1),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 12 + mediaPadding.bottom),
+              child: Padding(padding: panelPadding, child: content),
+            ),
+          ),
         ),
       ),
     );
@@ -701,6 +740,7 @@ class _CourseSheetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDarkMode;
 
     return GlassPanel(
       style: GlassPanelStyle.solid,
@@ -708,26 +748,22 @@ class _CourseSheetCard extends StatelessWidget {
       blur: 0,
       borderRadius: BorderRadius.circular(32),
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 18),
-      borderColor: colorScheme.primary.withValues(
-        alpha: colorScheme.isDarkMode ? 0.14 : 0.08,
-      ),
+      borderColor: colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.10),
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          colorScheme.surfaceContainerHighest.withValues(
-            alpha: colorScheme.isDarkMode ? 0.90 : 0.92,
+          Color.alphaBlend(
+            colorScheme.primary.withValues(alpha: isDark ? 0.18 : 0.10),
+            colorScheme.surface.withValues(alpha: isDark ? 0.98 : 0.99),
           ),
           Color.alphaBlend(
-            colorScheme.primary.withValues(
-              alpha: colorScheme.isDarkMode ? 0.10 : 0.05,
-            ),
-            colorScheme.surfaceContainerHigh.withValues(
-              alpha: colorScheme.isDarkMode ? 0.86 : 0.88,
-            ),
+            colorScheme.secondary.withValues(alpha: isDark ? 0.14 : 0.08),
+            colorScheme.surface.withValues(alpha: isDark ? 0.96 : 0.98),
           ),
-          colorScheme.primary.withValues(
-            alpha: colorScheme.isDarkMode ? 0.05 : 0.02,
+          Color.alphaBlend(
+            colorScheme.tertiary.withValues(alpha: isDark ? 0.10 : 0.04),
+            colorScheme.surface.withValues(alpha: isDark ? 0.93 : 0.97),
           ),
         ],
       ),
@@ -765,6 +801,7 @@ class _CourseDetailGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.isDarkMode;
 
     return GlassPanel(
       style: GlassPanelStyle.list,
@@ -772,22 +809,19 @@ class _CourseDetailGroup extends StatelessWidget {
       useBackdropFilter: false,
       borderRadius: BorderRadius.circular(24),
       borderColor: colorScheme.outlineVariant.withValues(
-        alpha: colorScheme.isDarkMode ? 0.20 : 0.24,
+        alpha: isDark ? 0.20 : 0.18,
       ),
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          colorScheme.surfaceContainerHighest.withValues(
-            alpha: colorScheme.isDarkMode ? 0.88 : 0.90,
+          Color.alphaBlend(
+            colorScheme.primary.withValues(alpha: isDark ? 0.12 : 0.06),
+            colorScheme.surface.withValues(alpha: isDark ? 0.96 : 0.98),
           ),
           Color.alphaBlend(
-            colorScheme.primary.withValues(
-              alpha: colorScheme.isDarkMode ? 0.08 : 0.04,
-            ),
-            colorScheme.surfaceContainerHigh.withValues(
-              alpha: colorScheme.isDarkMode ? 0.82 : 0.86,
-            ),
+            colorScheme.secondary.withValues(alpha: isDark ? 0.10 : 0.05),
+            colorScheme.surface.withValues(alpha: isDark ? 0.94 : 0.97),
           ),
         ],
       ),
