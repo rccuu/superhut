@@ -54,7 +54,7 @@ Map<String, dynamic> _buildJwxtHeaders(
   };
 }
 
-Dio _buildRequestDio({
+Dio buildRequestDio({
   required String token,
   String? cookieHeader,
   Duration connectTimeout = const Duration(seconds: 20),
@@ -70,6 +70,42 @@ Dio _buildRequestDio({
   );
   requestDio.httpClientAdapter = dio.httpClientAdapter;
   return requestDio;
+}
+
+Future<Dio> buildRequestDioFromStorage({
+  Duration connectTimeout = const Duration(seconds: 20),
+  Duration receiveTimeout = const Duration(seconds: 20),
+  String? customCookie,
+}) async {
+  final storage = AppAuthStorage.instance;
+  final token = await storage.readJwxtToken();
+  final myClientTicket = await storage.readJwxtCookie();
+  final defaultCookie =
+      myClientTicket.isNotEmpty ? 'my_client_ticket=$myClientTicket' : null;
+  return buildRequestDio(
+    token: token,
+    cookieHeader:
+        customCookie != null && customCookie.isNotEmpty
+            ? customCookie
+            : defaultCookie,
+    connectTimeout: connectTimeout,
+    receiveTimeout: receiveTimeout,
+  );
+}
+
+Future<Response<dynamic>> postWithRequestDio(
+  Dio requestDio,
+  String path,
+  Map<String, dynamic> postData,
+) {
+  return requestDio.post(
+    path,
+    data: postData,
+    options: Options(
+      followRedirects: false,
+      validateStatus: (status) => status != null && status < 600,
+    ),
+  );
 }
 
 void configureDio(String token) {
@@ -108,21 +144,14 @@ Future<Response<dynamic>> postDio(
 ) async {
   final token = dio.options.headers['Token']?.toString() ?? '';
   final cookieHeader = dio.options.headers['Cookie']?.toString();
-  final requestDio = _buildRequestDio(
+  final requestDio = buildRequestDio(
     token: token,
     cookieHeader: cookieHeader,
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
   );
 
-  return requestDio.post(
-    path,
-    data: postData,
-    options: Options(
-      followRedirects: false,
-      validateStatus: (status) => status != null && status < 600,
-    ),
-  );
+  return postWithRequestDio(requestDio, path, postData);
 }
 
 Future<Response<dynamic>> postDioWithCookie(
@@ -130,25 +159,9 @@ Future<Response<dynamic>> postDioWithCookie(
   Map<String, dynamic> postData, {
   String? customCookie,
 }) async {
-  final storage = AppAuthStorage.instance;
-  final token = await storage.readJwxtToken();
-  final myClientTicket = await storage.readJwxtCookie();
-  final defaultCookie =
-      myClientTicket.isNotEmpty ? 'my_client_ticket=$myClientTicket' : null;
-  final requestDio = _buildRequestDio(
-    token: token,
-    cookieHeader:
-        customCookie != null && customCookie.isNotEmpty
-            ? customCookie
-            : defaultCookie,
+  final requestDio = await buildRequestDioFromStorage(
+    customCookie: customCookie,
   );
 
-  return requestDio.post(
-    path,
-    data: postData,
-    options: Options(
-      followRedirects: false,
-      validateStatus: (status) => status != null && status < 600,
-    ),
-  );
+  return postWithRequestDio(requestDio, path, postData);
 }
