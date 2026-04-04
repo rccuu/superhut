@@ -42,6 +42,38 @@ ResponseBody _jsonResponse(Map<String, dynamic> body, {int statusCode = 200}) {
   );
 }
 
+int _extractRequestedWeek(String path) {
+  final uri = Uri.parse(path);
+  return int.tryParse(uri.queryParameters['week'] ?? '') ?? -1;
+}
+
+Map<String, dynamic> _buildCurriculumWeekResponse({
+  required String date,
+  required String courseName,
+  String teacherName = '张老师',
+  String location = '公共201',
+}) {
+  return {
+    'code': '1',
+    'data': [
+      {
+        'date': [
+          {'xqid': 1, 'mxrq': date},
+        ],
+        'item': [
+          {
+            'classTime': '10102',
+            'courseName': courseName,
+            'teacherName': teacherName,
+            'classWeek': '1-16',
+            'location': location,
+          },
+        ],
+      },
+    ],
+  };
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -269,6 +301,366 @@ void main() {
       expect(tuesdayPayload.headerTitle, '明天有课');
       expect(tuesdayPayload.courses.first.name, '08:00 高数');
       expect(tuesdayPayload.courses.last.name, '10:00 英语');
+    },
+  );
+
+  test('GetSingleWeekClass only parses returned week payload', () {
+    final parser = GetSingleWeekClass(
+      orgdata: {
+        'code': '1',
+        'data': [
+          {
+            'week': 2,
+            'date': [
+              {'xqid': 1, 'mxrq': '2026-03-16'},
+            ],
+            'item': [
+              {
+                'classTime': '10102',
+                'courseName': '软件工程',
+                'teacherName': '张老师',
+                'classWeek': '1-2,4',
+                'classWeekDetails': ',1,2,4,',
+                'location': '公共201',
+              },
+            ],
+          },
+        ],
+      },
+    );
+
+    parser.initData();
+    parser.getWeekDate();
+    final weekData = parser.getSingleClass();
+
+    expect(weekData.keys, ['2026-03-16']);
+    expect(weekData['2026-03-16']?.single.name, '软件工程');
+    expect(weekData['2026-03-16']?.single.location, '公共201');
+    expect(weekData['2026-03-16']?.single.teacherName, '张老师');
+  });
+
+  test(
+    'GetSingleWeekExpClass falls back to maxClassTime and coursesNote when weekNoteDetail is missing',
+    () {
+      final parser = GetSingleWeekExpClass(
+        orgdata: {
+          'code': '1',
+          'data': [
+            {
+              'date': [
+                {'xqid': 6, 'mxrq': '2026-03-21'},
+              ],
+              'courses': [
+                {
+                  'teacherName': '李老师',
+                  'syxmName': '网络实验',
+                  'weekNoteDetail': '',
+                  'maxClassTime': '第六大节',
+                  'coursesNote': 2,
+                  'courseName': '软件工程',
+                  'classroomName': '实验楼101',
+                  'weekDay': 6,
+                  'pcid': 'pcid-1',
+                  'kkzc': '1',
+                },
+              ],
+            },
+          ],
+          'jcdatalist': [
+            {'XJMC': '01,02', 'DJMC': '第一大节'},
+            {'XJMC': '03,04', 'DJMC': '第二大节'},
+            {'XJMC': '05,06', 'DJMC': '第三大节'},
+            {'XJMC': '07,08', 'DJMC': '第四大节'},
+            {'XJMC': '09,10', 'DJMC': '第五大节'},
+            {'XJMC': '11,12', 'DJMC': '第六大节'},
+          ],
+        },
+      );
+
+      parser.initData();
+      parser.getWeekDate();
+      final weekData = parser.getSingleClass();
+      final course = weekData['2026-03-21']?.single;
+
+      expect(course, isNotNull);
+      expect(course?.name, '软件工程 实验：网络实验');
+      expect(course?.startSection, 11);
+      expect(course?.duration, 2);
+      expect(course?.location, '实验楼101');
+    },
+  );
+
+  test(
+    'GetSingleWeekExpClass falls back to startTime and endTIme when section detail is missing',
+    () {
+      final parser = GetSingleWeekExpClass(
+        orgdata: {
+          'code': '1',
+          'data': [
+            {
+              'date': [
+                {'xqid': 4, 'mxrq': '2026-03-19'},
+              ],
+              'courses': [
+                {
+                  'teacherName': '李老师',
+                  'syxmName': '网络实验',
+                  'weekNoteDetail': '',
+                  'maxClassTime': '',
+                  'coursesNote': 2,
+                  'startTime': '14:00',
+                  'endTIme': '15:40',
+                  'courseName': '软件工程',
+                  'classroomName': '实验楼101',
+                  'weekDay': 4,
+                  'pcid': 'pcid-2',
+                  'kkzc': '1',
+                },
+              ],
+            },
+          ],
+        },
+      );
+
+      parser.initData();
+      parser.getWeekDate();
+      final weekData = parser.getSingleClass();
+      final course = weekData['2026-03-19']?.single;
+
+      expect(course, isNotNull);
+      expect(course?.startSection, 5);
+      expect(course?.duration, 2);
+      expect(course?.name, '软件工程 实验：网络实验');
+    },
+  );
+
+  test(
+    'GetOrgDataWeb.getAllWeekClass uses weekly truth instead of inferring from week 1',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'token': 'jwxt-token',
+        'my_client_ticket': '',
+      });
+
+      final originalAdapter = dio.httpClientAdapter;
+      final requestedPaths = <String>[];
+      dio.httpClientAdapter = _FakeCourseHttpClientAdapter((options) {
+        final path = options.path;
+        if (!path.startsWith('/njwhd/student/curriculum?week=')) {
+          throw StateError('Unexpected request path: $path');
+        }
+        requestedPaths.add(path);
+        final week = _extractRequestedWeek(path);
+        if (week == 4) {
+          return _jsonResponse(
+            _buildCurriculumWeekResponse(date: '2026-04-06', courseName: '概率论'),
+          );
+        }
+        return _jsonResponse({'code': '1', 'data': []});
+      });
+      addTearDown(() {
+        dio.httpClientAdapter = originalAdapter;
+      });
+
+      final getOrgDataWeb = GetOrgDataWeb(token: 'jwxt-token')..maxWeek = 4;
+      final courseData = await getOrgDataWeb.getAllWeekClass(
+        null,
+        completedUnitsOffset: 0,
+        totalUnits: 4,
+      );
+      final prefs = await SharedPreferences.getInstance();
+
+      expect(requestedPaths.toSet(), {
+        '/njwhd/student/curriculum?week=1',
+        '/njwhd/student/curriculum?week=2',
+        '/njwhd/student/curriculum?week=3',
+        '/njwhd/student/curriculum?week=4',
+      });
+      expect(courseData['2026-04-06']?.single.name, '概率论');
+      expect(prefs.getString('firstDay'), '2026-04-06');
+    },
+  );
+
+  test(
+    'GetOrgDataWeb.getAllWeekClass fails instead of returning partial data when a week keeps failing',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'token': 'jwxt-token',
+        'my_client_ticket': '',
+      });
+
+      final originalAdapter = dio.httpClientAdapter;
+      final requestAttempts = <int, int>{};
+      dio.httpClientAdapter = _FakeCourseHttpClientAdapter((options) {
+        final path = options.path;
+        if (!path.startsWith('/njwhd/student/curriculum?week=')) {
+          throw StateError('Unexpected request path: $path');
+        }
+        final week = _extractRequestedWeek(path);
+        requestAttempts[week] = (requestAttempts[week] ?? 0) + 1;
+        if (week == 1) {
+          return _jsonResponse(
+            _buildCurriculumWeekResponse(
+              date: '2026-03-16',
+              courseName: '软件工程',
+            ),
+          );
+        }
+        if (week == 3) {
+          return _jsonResponse({'code': '0', 'Msg': '系统繁忙'});
+        }
+        return _jsonResponse({'code': '1', 'data': []});
+      });
+      addTearDown(() {
+        dio.httpClientAdapter = originalAdapter;
+      });
+
+      final getOrgDataWeb = GetOrgDataWeb(token: 'jwxt-token')..maxWeek = 3;
+
+      await expectLater(
+        getOrgDataWeb.getAllWeekClass(
+          null,
+          completedUnitsOffset: 0,
+          totalUnits: 3,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message.toString(),
+            'message',
+            contains('第3周'),
+          ),
+        ),
+      );
+      expect(requestAttempts[3], 2);
+      expect(getOrgDataWeb.courseData, isEmpty);
+    },
+  );
+
+  test(
+    'GetOrgDataWeb.getAllWeekExpClass fails instead of returning partial data when a week keeps failing',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'token': 'jwxt-token',
+        'my_client_ticket': '',
+      });
+
+      final originalAdapter = dio.httpClientAdapter;
+      final requestAttempts = <int, int>{};
+      dio.httpClientAdapter = _FakeCourseHttpClientAdapter((options) {
+        final path = options.path;
+        if (!path.startsWith('/njwhd/teacher/courseScheduleExp?')) {
+          throw StateError('Unexpected request path: $path');
+        }
+        final week = _extractRequestedWeek(path);
+        requestAttempts[week] = (requestAttempts[week] ?? 0) + 1;
+        if (week == 1) {
+          return _jsonResponse({
+            'code': '1',
+            'data': [
+              {
+                'date': [
+                  {'xqid': 1, 'mxrq': '2026-03-16'},
+                ],
+                'courses': [
+                  {
+                    'teacherName': '李老师',
+                    'syxmName': '网络实验',
+                    'weekNoteDetail': '105,106',
+                    'courseName': '软件工程',
+                    'classroomName': '实验楼101',
+                    'weekDay': 1,
+                    'pcid': 'pcid-1',
+                    'kkzc': '1',
+                  },
+                ],
+              },
+            ],
+          });
+        }
+        if (week == 3) {
+          return _jsonResponse({'code': '0', 'Msg': '系统繁忙'});
+        }
+        return _jsonResponse({'code': '1', 'data': []});
+      });
+      addTearDown(() {
+        dio.httpClientAdapter = originalAdapter;
+      });
+
+      final getOrgDataWeb =
+          GetOrgDataWeb(token: 'jwxt-token')
+            ..semesterId = '2025-2026-2'
+            ..maxWeek = 3;
+
+      await expectLater(
+        getOrgDataWeb.getAllWeekExpClass(
+          null,
+          completedUnitsOffset: 0,
+          totalUnits: 3,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message.toString(),
+            'message',
+            contains('第3周'),
+          ),
+        ),
+      );
+      expect(requestAttempts[3], 2);
+    },
+  );
+
+  test(
+    'loadCourseSyncSnapshotFromUrl overlaps ordinary and experiment requests',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'token': 'jwxt-token',
+        'my_client_ticket': '',
+      });
+
+      final originalAdapter = dio.httpClientAdapter;
+      int activeRequests = 0;
+      int maxActiveRequests = 0;
+      dio.httpClientAdapter = _FakeCourseHttpClientAdapter((options) async {
+        final path = options.path;
+        if (path == '/njwhd/semesterList') {
+          return _jsonResponse({
+            'code': '1',
+            'data': [
+              {'nowXq': '1', 'semesterId': '2025-2026-2'},
+            ],
+          });
+        }
+
+        if (path.startsWith('/njwhd/student/curriculum?week=') ||
+            path.startsWith('/njwhd/teacher/courseScheduleExp?')) {
+          activeRequests += 1;
+          if (activeRequests > maxActiveRequests) {
+            maxActiveRequests = activeRequests;
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+          activeRequests -= 1;
+
+          if (path == '/njwhd/student/curriculum?week=1') {
+            return _jsonResponse(
+              _buildCurriculumWeekResponse(
+                date: '2026-03-16',
+                courseName: '软件工程',
+              ),
+            );
+          }
+          return _jsonResponse({'code': '1', 'data': []});
+        }
+
+        throw StateError('Unexpected request path: $path');
+      });
+      addTearDown(() {
+        dio.httpClientAdapter = originalAdapter;
+      });
+
+      final snapshot = await loadCourseSyncSnapshotFromUrl('jwxt-token');
+
+      expect(snapshot.courseData['2026-03-16']?.single.name, '软件工程');
+      expect(maxActiveRequests, greaterThan(4));
     },
   );
 
@@ -1303,6 +1695,7 @@ void main() {
       });
 
       final originalAdapter = dio.httpClientAdapter;
+      final curriculumRequestPaths = <String>[];
       dio.httpClientAdapter = _FakeCourseHttpClientAdapter((options) {
         final path = options.path;
         if (path == '/njwhd/noticeTab') {
@@ -1310,6 +1703,9 @@ void main() {
             requestOptions: options,
             reason: 'noticeTab should not be called during course sync',
           );
+        }
+        if (path.startsWith('/njwhd/student/curriculum?week=')) {
+          curriculumRequestPaths.add(path);
         }
         if (path == '/njwhd/student/curriculum?week=1') {
           return _jsonResponse({
@@ -1382,6 +1778,11 @@ void main() {
       );
       expect(savedSchedules.single.ownerAccount, '20230001');
       expect(savedSchedules.single.semesterId, '2025-2026-2');
+      expect(curriculumRequestPaths, hasLength(20));
+      expect(curriculumRequestPaths.toSet(), {
+        for (int week = 1; week <= 20; week++)
+          '/njwhd/student/curriculum?week=$week',
+      });
       expect(widgetRefreshCalls.map((call) => call.method), [
         'syncCourseTableWidget',
       ]);

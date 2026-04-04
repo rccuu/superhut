@@ -2417,13 +2417,57 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
       maxWeek: 20,
     );
   }
-  final Map<String, List<Course>> courseData = await getOrgDataWeb
-      .getAllWeekClass(
-        context,
-        onProgress: onProgress,
-        completedUnitsOffset: 1,
+  int completedCourseWeeks = 0;
+  int completedExperimentWeeks = 0;
+
+  void emitAggregatedProgress(
+    CourseSyncProgress progress, {
+    required bool isExperiment,
+  }) {
+    if (isExperiment) {
+      completedExperimentWeeks = progress.completedUnits;
+    } else {
+      completedCourseWeeks = progress.completedUnits;
+    }
+
+    onProgress?.call(
+      CourseSyncProgress(
+        phase: progress.phase,
+        completedUnits: 1 + completedCourseWeeks + completedExperimentWeeks,
         totalUnits: totalUnits,
-      );
+        message: progress.message,
+        currentWeek: progress.currentWeek,
+        totalWeeks: progress.totalWeeks,
+      ),
+    );
+  }
+
+  final results = await Future.wait<Map<String, List<Course>>>([
+    getOrgDataWeb.getAllWeekClass(
+      context,
+      onProgress:
+          onProgress == null
+              ? null
+              : (progress) =>
+                  emitAggregatedProgress(progress, isExperiment: false),
+      completedUnitsOffset: 0,
+      totalUnits: totalWeeks,
+    ),
+    getOrgDataWeb.getAllWeekExpClass(
+      context,
+      onProgress:
+          onProgress == null
+              ? null
+              : (progress) =>
+                  emitAggregatedProgress(progress, isExperiment: true),
+      completedUnitsOffset: 0,
+      totalUnits: totalWeeks,
+    ),
+  ]);
+
+  final courseData = results[0];
+  final expCourseData = results[1];
+
   if (context != null && !context.mounted) {
     return CourseSyncSnapshot(
       courseData: courseData,
@@ -2432,13 +2476,6 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
       maxWeek: getOrgDataWeb.maxWeek,
     );
   }
-  final Map<String, List<Course>> expCourseData = await getOrgDataWeb
-      .getAllWeekExpClass(
-        context,
-        onProgress: onProgress,
-        completedUnitsOffset: 1 + totalWeeks,
-        totalUnits: totalUnits,
-      );
   try {
     await saveExperimentRawDataToJson(getOrgDataWeb.expRawWeeklyResponses);
   } catch (error, stackTrace) {
