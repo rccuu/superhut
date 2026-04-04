@@ -129,6 +129,7 @@ abstract final class AppTheme {
           color: colorScheme.onSurface,
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        elevation: 0,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,

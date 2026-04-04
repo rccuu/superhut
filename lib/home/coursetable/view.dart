@@ -729,9 +729,27 @@ class _CourseTableViewState extends State<CourseTableView> {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    final colorScheme = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(
+                CupertinoIcons.info_circle_fill,
+                size: 18,
+                color: colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text(message)),
+            ],
+          ),
+          margin: const EdgeInsets.fromLTRB(20, 0, 20, 68),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   bool get _useLiteAndroidEffects =>

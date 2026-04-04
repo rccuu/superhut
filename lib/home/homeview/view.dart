@@ -100,9 +100,30 @@ class _HomeviewPageState extends State<HomeviewPage> {
 
     if (snapshot.status == CourseSyncTaskStatus.success ||
         snapshot.status == CourseSyncTaskStatus.failure) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(snapshot.message)));
+      final colorScheme = Theme.of(context).colorScheme;
+      final isSuccess = snapshot.status == CourseSyncTaskStatus.success;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  isSuccess
+                      ? CupertinoIcons.check_mark_circled_solid
+                      : CupertinoIcons.exclamationmark_circle_fill,
+                  size: 18,
+                  color: isSuccess ? colorScheme.primary : colorScheme.error,
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(snapshot.message)),
+              ],
+            ),
+            margin: const EdgeInsets.fromLTRB(20, 0, 20, 68),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            duration: const Duration(seconds: 2),
+          ),
+        );
     }
   }
 
@@ -275,9 +296,27 @@ class _HomeviewPageState extends State<HomeviewPage> {
       mode: LaunchMode.externalApplication,
     );
     if (!opened && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('无法打开更新链接：$releaseUrl')));
+      final colorScheme = Theme.of(context).colorScheme;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  CupertinoIcons.exclamationmark_circle_fill,
+                  size: 18,
+                  color: colorScheme.error,
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text('无法打开更新链接：$releaseUrl')),
+              ],
+            ),
+            margin: const EdgeInsets.fromLTRB(20, 0, 20, 68),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            duration: const Duration(seconds: 2),
+          ),
+        );
     }
   }
 
