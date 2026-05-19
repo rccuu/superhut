@@ -53,6 +53,12 @@ const List<_BigLessonBlock> _bigLessonBlocks = [
   ),
 ];
 
+const double _roomGridWideScreenBreakpoint = 760;
+const double _roomGridDefaultSpacing = 6;
+const double _roomGridCompactSpacing = 4;
+// Sliver constraints already exclude outer horizontal padding.
+const double _roomGridThreeColumnMinWidth = 288;
+
 class FreeRoomPage extends StatefulWidget {
   const FreeRoomPage({
     super.key,
@@ -494,23 +500,27 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
               builder: (context, constraints) {
                 final width = constraints.crossAxisExtent;
                 final crossAxisCount =
-                    width >= 760
+                    width >= _roomGridWideScreenBreakpoint
                         ? 4
-                        : width >= 360
+                        : width >= _roomGridThreeColumnMinWidth
                         ? 3
                         : 2;
+                final spacing =
+                    crossAxisCount == 3 && width < 312
+                        ? _roomGridCompactSpacing
+                        : _roomGridDefaultSpacing;
                 final childAspectRatio =
-                    width >= 760
+                    crossAxisCount == 4
                         ? 1.36
-                        : width >= 360
-                        ? 1.00
-                        : 1.18;
+                        : crossAxisCount == 3
+                        ? (width < 312 ? 0.84 : 0.90)
+                        : 1.12;
 
                 return SliverGrid(
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
-                    mainAxisSpacing: 6,
-                    crossAxisSpacing: 6,
+                    mainAxisSpacing: spacing,
+                    crossAxisSpacing: spacing,
                     childAspectRatio: childAspectRatio,
                   ),
                   delegate: SliverChildBuilderDelegate(
