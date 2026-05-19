@@ -12,6 +12,16 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
+## v1.5.4
+
+## v1.5.3
+
+## v1.5.2
+
+## v1.4.9
+
+## v1.4.8
+
 ## 2026-03-25 · `待提交` · chore(release): prepare v1.4.8
 - 作者：rccuu
 - 这次发版不再继续沿着上一轮那种更激进的课表自定义吸附方案往前推，而是收口回“更接近系统原生分页，但把真正影响手感的触发条件继续打磨顺手”的方向。目标很明确：优先把课表左右切周做得自然、稳、可预期，而不是为了更早翻页引入新的顿挫和反向抽动。
@@ -22,6 +32,8 @@
 - 本次提交同时把版本号提升到 `1.4.8+1`，用于对应这一轮课表横滑手感打磨后的正式发版整理。
 - 关键文件：`pubspec.yaml`、`changelog.md`、`lib/home/coursetable/view.dart`、`test/home/coursetable/course_table_swipe_test.dart`
 - 代码统计：4 files changed, 150 insertions(+), 25 deletions(-)
+
+## v1.4.7
 
 ## 2026-03-24 · `17c95a7` · chore(release): prepare v1.4.7
 - 作者：rccuu
@@ -34,6 +46,8 @@
 - 关键文件：`pubspec.yaml`、`changelog.md`、`lib/home/coursetable/view.dart`、`test/home/coursetable/course_table_swipe_test.dart`、`.gitignore`
 - 代码统计（待提交时回填）：5 files changed, version bump + release notes update + smoother course table paging + regression test + local ignore cleanup
 
+## v1.4.6
+
 ## 2026-03-24 · `831bd0a` · chore(release): prepare v1.4.6
 - 作者：rccuu
 - 这次发版整理不是继续扩需求，而是把当前工作区里已经确认保留的一轮 UI 减重与交互收口正式整理成 `1.4.6`。总体方向很明确：尽量保留现有玻璃主题的质感，但降低 blur、阴影和过度透明带来的性能与廉价感问题，重点覆盖空教室、课表、成绩页和几个高频入口页。
@@ -43,6 +57,8 @@
 - 这次提交同时把版本号提升到 `1.4.6+1`，并把这一轮确认保留的 UI 减重与交互收口整理成可发布的正式变更说明。
 - 关键文件：`lib/core/ui/apple_glass.dart`、`lib/home/coursetable/view.dart`、`lib/home/coursetable/widgets/course_table_widgets.dart`、`lib/pages/freeroom/room.dart`、`lib/pages/score/scorepage.dart`、`pubspec.yaml`、`changelog.md`
 - 代码统计：14 files changed, 809 insertions(+), 422 deletions(-)
+
+## v1.4.5
 
 ## 2026-03-23 · `38bf9ef` · chore(release): prepare v1.4.5
 - 作者：rccuu
@@ -77,6 +93,8 @@
 - 热水页这轮还修了几个明显穿帮点。`当前设备` 卡片去掉了偏黑的底色，改成更纯的粉白到浅粉渐变；设备选择、设备管理和新增设备三个底部弹层统一成 28 圆角，并把 `modal_bottom_sheet` 默认黑色阴影替换成粉调阴影，解决了“选择设备”边缘露黑的问题。这样热水页里从主界面到弹层，终于不再有那种半旧半新的割裂感。
 - 关键文件：`lib/pages/freeroom/building.dart`、`lib/pages/freeroom/room.dart`、`lib/pages/score/scorepage.dart`、`lib/pages/score/jump_to_score_page.dart`、`lib/pages/water/view.dart`、`lib/pages/water/widgets/water_page_widgets.dart`
 - 代码统计（不含 `changelog.md`）：6 files changed, 4938 insertions(+), 1127 deletions(-)
+
+## v1.4.2
 
 ## 2026-03-22 · `919f042` · chore(release): prepare v1.4.2
 - 作者：rccuu
@@ -163,6 +181,8 @@
 - 关键文件：`lib/core/services/app_update_service.dart`、`lib/home/about/view.dart`、`android/app/src/main/res/values/strings.xml`、`ios/Runner/Info.plist`、`web/manifest.json`
 - 统计：130 files changed, 811 insertions(+), 1317 deletions(-)
 
+## v1.3.0
+
 ## 2026-03-20 · `a21e025` · feat: improve score and free room browsing
 - 作者：Tune
 - 这次提交主要优化“成绩查询”和“空教室查询”两条用户路径，同时顺手精简了 README。
@@ -226,6 +246,8 @@
 - 测试侧扩展了课表分享码、导入/导出、归档持久化等能力的覆盖。
 - 关键文件：`lib/utils/course/coursemain.dart`、`lib/home/coursetable/view.dart`、`lib/home/about/view.dart`、`pubspec.yaml`
 - 统计：12 files changed, 3750 insertions(+), 404 deletions(-)
+
+## v1.4.0
 
 ## 2026-03-21 · `f719a4e` · chore: prepare v1.4.0 release
 - 作者：rccuu

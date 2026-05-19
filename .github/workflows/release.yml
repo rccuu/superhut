@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g., v1.5.5)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.9"
+          channel: stable
+
+      - name: Verify tag matches pubspec version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG_VERSION="${TAG#v}"
+          PUBSPEC_VERSION=$(grep "version:" pubspec.yaml | awk '{print $2}' | cut -d'+' -f1)
+          if [ "$TAG_VERSION" != "$PUBSPEC_VERSION" ]; then
+            echo "ERROR: Tag version '$TAG_VERSION' does not match pubspec.yaml version '$PUBSPEC_VERSION'"
+            exit 1
+          fi
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$TAG_VERSION" >> "$GITHUB_ENV"
+
+      - name: Build Android APK (arm64-v8a)
+        run: bash scripts/build_android_release.sh
+
+      - name: Build iOS unsigned IPA
+        run: bash scripts/build_ios_quick.sh
+
+      - name: Generate release notes
+        run: |
+          python3 scripts/generate_release_notes.py \
+            --current-tag "$RELEASE_TAG" \
+            --repo "rccuu/superhut" \
+            --output release-notes.md
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" &>/dev/null; then
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file release-notes.md
+          else
+            gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" releases/superhut-*-arm64-v8a-*.apk --clobber
+          gh release upload "$RELEASE_TAG" releases/superhut-*-trollstore-*.ipa --clobber
