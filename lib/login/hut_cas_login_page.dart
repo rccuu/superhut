@@ -50,18 +50,17 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
   // 获取用于CAS登录的idToken
   Future<void> _getIdToken() async {
     try {
-      _idToken = await _api.getToken();
-      /*
-      _api.checkTokenValidity().then((isValid) async {
-        if (!isValid) {
-          await _api.refreshToken();
-          _idToken = await _api.getToken();
+      final isValid = await _api.checkTokenValidity();
+      if (!isValid) {
+        final refreshed = await _api.refreshToken();
+        if (!refreshed) {
+          throw StateError('智慧工大登录状态已失效，请重新登录一次。');
         }
-      });
-
-      */
-      await _api.refreshToken();
+      }
       _idToken = await _api.getToken();
+      if (_idToken.trim().isEmpty) {
+        throw StateError('未获取到智慧工大登录令牌，请重新登录后再试。');
+      }
       if (!mounted) {
         return;
       }

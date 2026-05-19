@@ -63,17 +63,23 @@ mixin _HutAuthMixin on _HutUserApiCore {
     }
 
     final data = response.data;
-    if (data.keys.first != 'code') {
+    if (data is! Map ||
+        data['code']?.toString() != '0' ||
+        data['data'] is! Map) {
       return false;
     }
 
-    final tokenData = data['data'];
-    final idToken = tokenData['idToken'];
-    final refreshToken = tokenData['refreshToken'];
+    final tokenData = data['data'] as Map;
+    final session = HutPortalSession.fromLoginData(tokenData);
+    final refreshToken = tokenData['refreshToken']?.toString() ?? '';
+    if (session.token.isEmpty) {
+      return false;
+    }
     await _storage.saveHutSession(
-      token: idToken,
+      token: session.token,
       refreshToken: refreshToken,
       deviceId: deviceId,
+      ticket: session.ticket,
     );
     await _storage.saveHutCredentials(username: username, password: password);
     await _storage.saveLoginType('hut');
@@ -85,31 +91,80 @@ mixin _HutAuthMixin on _HutUserApiCore {
   Future<String> getToken() async {
     final storedToken = await _storage.readHutToken();
     if (storedToken.isNotEmpty) {
-      _token['idToken'] = storedToken;
+      final session = HutPortalSession.fromTicketCandidate(storedToken);
+      _token['idToken'] = session.token;
+      if (session.hasTicket && session.token != storedToken) {
+        await _storage.saveHutSession(
+          token: session.token,
+          refreshToken: await _storage.readHutRefreshToken(),
+          deviceId: await _storage.readHutDeviceId(),
+          ticket: session.ticket,
+        );
+      }
     }
     return _token['idToken'];
   }
 
   @override
-  Future<bool> checkTokenValidity() async {
-    final token = await getToken();
-    final deviceId = await _storage.readHutDeviceId();
-    final username = await _storage.readHutUsername();
-    final url =
-        '/token/login/userOnlineDetect?appId=com.supwisdom.hut'
-        '&deviceId=${deviceId.isEmpty ? 'null' : deviceId}&username=$username';
-    final dio = _createConfiguredDio(
-      baseUrl: _kMyCasBaseUrl,
-      headers: {
-        'User-Agent': _kBrowserUserAgent,
-        'Accept': '*/*',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'X-Id-Token': token,
-      },
+  Future<String> getPortalTicket() async {
+    final storedTicket = await _storage.readHutTicket();
+    if (storedTicket.isNotEmpty) {
+      return storedTicket;
+    }
+
+    final storedToken = await _storage.readHutToken();
+    if (storedToken.isEmpty) {
+      return '';
+    }
+
+    final session = HutPortalSession.fromTicketCandidate(storedToken);
+    if (!session.hasTicket) {
+      return '';
+    }
+
+    await _storage.saveHutSession(
+      token: session.token,
+      refreshToken: await _storage.readHutRefreshToken(),
+      deviceId: await _storage.readHutDeviceId(),
+      ticket: session.ticket,
     );
-    final response = await dio.post(url, data: {});
-    final data = response.data;
-    return data['code'] == 0;
+    _token['idToken'] = session.token;
+    return session.ticket;
+  }
+
+  @override
+  Future<bool> checkTokenValidity() async {
+    try {
+      final token = await getToken();
+      if (token.isEmpty) {
+        return false;
+      }
+
+      final deviceId = await _storage.readHutDeviceId();
+      final username = await _storage.readHutUsername();
+      final url =
+          '/token/login/userOnlineDetect?appId=com.supwisdom.hut'
+          '&deviceId=${deviceId.isEmpty ? 'null' : deviceId}&username=$username';
+      final dio = _createConfiguredDio(
+        baseUrl: _kMyCasBaseUrl,
+        headers: {
+          'User-Agent': _kHutLoginUserAgent,
+          'Accept': '*/*',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'X-Id-Token': token,
+        },
+      );
+      final response = await dio.post(url, data: {});
+      final data = response.data;
+      return data is Map && data['code']?.toString() == '0';
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'HUT token validation failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
   }
 
   Future<bool> refreshToken() async {
@@ -118,7 +173,6 @@ mixin _HutAuthMixin on _HutUserApiCore {
     if (userName.isEmpty || orgPassword.isEmpty) {
       return false;
     }
-    await userLogin(username: userName, password: orgPassword);
-    return true;
+    return userLogin(username: userName, password: orgPassword);
   }
 }

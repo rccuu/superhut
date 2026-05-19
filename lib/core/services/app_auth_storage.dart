@@ -9,6 +9,7 @@ class AppAuthStorage {
   static final AppAuthStorage instance = AppAuthStorage._();
 
   static const _hasSeenTrustNoticeKey = 'hasSeenTrustNotice';
+  static const _ignoredUpdateVersionKey = 'ignoredUpdateVersion';
   static const _jwxtPasswordKey = 'secure_jwxt_password';
   static const _hutPasswordKey = 'secure_hut_password';
 
@@ -99,6 +100,21 @@ class AppAuthStorage {
     return prefs.getString('loginType') ?? '';
   }
 
+  Future<void> saveIgnoredUpdateVersion(String value) async {
+    final prefs = await _prefs;
+    await prefs.setString(_ignoredUpdateVersionKey, value);
+  }
+
+  Future<String> readIgnoredUpdateVersion() async {
+    final prefs = await _prefs;
+    return prefs.getString(_ignoredUpdateVersionKey) ?? '';
+  }
+
+  Future<void> clearIgnoredUpdateVersion() async {
+    final prefs = await _prefs;
+    await prefs.remove(_ignoredUpdateVersionKey);
+  }
+
   Future<void> saveJwxtCredentials({
     required String username,
     required String password,
@@ -155,11 +171,17 @@ class AppAuthStorage {
     required String token,
     required String refreshToken,
     required String deviceId,
+    String ticket = '',
   }) async {
     final prefs = await _prefs;
     await prefs.setString('hutToken', token);
     await prefs.setString('hutRefreshToken', refreshToken);
     await prefs.setString('deviceId', deviceId);
+    if (ticket.isEmpty) {
+      await prefs.remove('hutTicket');
+    } else {
+      await prefs.setString('hutTicket', ticket);
+    }
     await prefs.setBool('hutIsLogin', true);
   }
 
@@ -171,6 +193,11 @@ class AppAuthStorage {
   Future<String> readHutRefreshToken() async {
     final prefs = await _prefs;
     return prefs.getString('hutRefreshToken') ?? '';
+  }
+
+  Future<String> readHutTicket() async {
+    final prefs = await _prefs;
+    return prefs.getString('hutTicket') ?? '';
   }
 
   Future<String> readHutDeviceId() async {
@@ -199,6 +226,7 @@ class AppAuthStorage {
       'my_client_ticket',
       'hutToken',
       'hutRefreshToken',
+      'hutTicket',
       'deviceId',
       'loginType',
       'hutIsLogin',
@@ -234,6 +262,7 @@ class AppAuthStorage {
     await prefs.remove('hutPassword');
     await prefs.remove('hutToken');
     await prefs.remove('hutRefreshToken');
+    await prefs.remove('hutTicket');
     await prefs.remove('deviceId');
     await prefs.remove('hutIsLogin');
     await _deleteSecurePassword(_hutPasswordKey, label: 'HUT');

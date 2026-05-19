@@ -27,10 +27,12 @@ class HomeviewPage extends StatefulWidget {
     super.key,
     this.initialIndex = 0,
     this.showInitialTrustNotice = false,
+    this.checkUpdatesOnStartup = true,
   });
 
   final int initialIndex;
   final bool showInitialTrustNotice;
+  final bool checkUpdatesOnStartup;
 
   @override
   State<HomeviewPage> createState() => _HomeviewPageState();
@@ -154,13 +156,15 @@ class _HomeviewPageState extends State<HomeviewPage> {
       }
     }
 
-    await _getCurrentVersion();
-    if (!mounted) {
-      return;
-    }
-    await _checkVersion();
-    if (!mounted) {
-      return;
+    if (widget.checkUpdatesOnStartup) {
+      await _getCurrentVersion();
+      if (!mounted) {
+        return;
+      }
+      await _checkVersion();
+      if (!mounted) {
+        return;
+      }
     }
     await checkAlert();
   }
@@ -238,6 +242,12 @@ class _HomeviewPageState extends State<HomeviewPage> {
       return;
     }
 
+    final ignoredVersion =
+        await AppAuthStorage.instance.readIgnoredUpdateVersion();
+    if (!mounted || ignoredVersion == update.tagName) {
+      return;
+    }
+
     await _showUpdateDialog(update);
   }
 
@@ -260,6 +270,18 @@ class _HomeviewPageState extends State<HomeviewPage> {
             TextButton(
               child: Text('稍后再说'),
               onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('忽略此版本'),
+              onPressed: () async {
+                await AppAuthStorage.instance.saveIgnoredUpdateVersion(
+                  update.tagName,
+                );
+                if (!context.mounted) {
+                  return;
+                }
                 Navigator.of(context).pop();
               },
             ),

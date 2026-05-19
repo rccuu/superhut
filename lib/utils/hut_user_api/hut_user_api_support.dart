@@ -3,6 +3,9 @@ part of '../hut_user_api.dart';
 const _kMyCasBaseUrl = 'https://mycas.hut.edu.cn';
 const _kV8MobileBaseUrl = 'https://v8mobile.hut.edu.cn';
 const _kPortalBaseUrl = 'https://portal.hut.edu.cn';
+const _kPortalHomeUrl = 'https://portal.hut.edu.cn/';
+const _kPortalMainPath = '/main.html';
+const _kLegacyPortalIndexPath = '/portal_dist/portal_index.html';
 
 const _kHutLoginUserAgent = 'SWSuperApp/1.1.3(XiaomidadaXiaomi15)';
 const _kBrowserUserAgent =
@@ -18,6 +21,243 @@ const _kPortalUserAgent =
     'Mobile Safari/537.36 uni-app Html5Plus/1.0 (Immersed/36.923077)';
 
 bool _defaultValidateStatus(int? status) => status != null && status < 500;
+
+String _readString(Map data, List<String> keys, {String defaultValue = ''}) {
+  for (final key in keys) {
+    final value = data[key];
+    if (value == null) {
+      continue;
+    }
+    final text = value.toString().trim();
+    if (text.isNotEmpty && text != 'null') {
+      return text;
+    }
+  }
+  return defaultValue;
+}
+
+String _readJsonString(
+  Map data,
+  List<String> keys, {
+  String defaultValue = '',
+}) {
+  for (final key in keys) {
+    final value = data[key];
+    if (value == null) {
+      continue;
+    }
+    if (value is List || value is Map) {
+      return jsonEncode(value);
+    }
+    final text = value.toString().trim();
+    if (text.isNotEmpty && text != 'null') {
+      return text;
+    }
+  }
+  return defaultValue;
+}
+
+Map<String, dynamic>? decodeHutJwtPayload(String token) {
+  final parts = token.trim().split('.');
+  if (parts.length < 2 || parts[1].isEmpty) {
+    return null;
+  }
+
+  try {
+    final normalized = base64Url.normalize(Uri.decodeComponent(parts[1]));
+    final payload = utf8.decode(base64Url.decode(normalized));
+    final decoded = jsonDecode(payload);
+    if (decoded is Map) {
+      return Map<String, dynamic>.from(decoded);
+    }
+  } catch (_) {
+    return null;
+  }
+  return null;
+}
+
+class HutPortalSession {
+  final String token;
+  final String ticket;
+
+  const HutPortalSession({required this.token, required this.ticket});
+
+  bool get hasTicket => ticket.trim().isNotEmpty;
+
+  factory HutPortalSession.fromLoginData(Map tokenData) {
+    final idToken = _readString(tokenData, const [
+      'idToken',
+      'id_token',
+      'token',
+      'accessToken',
+      'access_token',
+    ]);
+    final ticket = _readString(tokenData, const [
+      'ticket',
+      'portalTicket',
+      'portal_ticket',
+      'casTicket',
+      'cas_ticket',
+    ]);
+
+    if (ticket.isNotEmpty) {
+      final payload = decodeHutJwtPayload(ticket);
+      final embeddedToken = _readString(payload ?? const {}, const [
+        'idToken',
+        'id_token',
+      ]);
+      return HutPortalSession(
+        token:
+            embeddedToken.isNotEmpty
+                ? embeddedToken
+                : idToken.isNotEmpty
+                ? idToken
+                : ticket,
+        ticket: ticket,
+      );
+    }
+    return HutPortalSession.fromTicketCandidate(idToken);
+  }
+
+  factory HutPortalSession.fromTicketCandidate(
+    String candidate, {
+    String fallbackToken = '',
+  }) {
+    final trimmedCandidate = candidate.trim();
+    final trimmedFallback = fallbackToken.trim();
+    if (trimmedCandidate.isEmpty) {
+      return HutPortalSession(token: trimmedFallback, ticket: '');
+    }
+
+    final payload = decodeHutJwtPayload(trimmedCandidate);
+    final embeddedToken = _readString(payload ?? const {}, const [
+      'idToken',
+      'id_token',
+    ]);
+    if (embeddedToken.isNotEmpty) {
+      return HutPortalSession(token: embeddedToken, ticket: trimmedCandidate);
+    }
+
+    return HutPortalSession(
+      token: trimmedFallback.isNotEmpty ? trimmedFallback : trimmedCandidate,
+      ticket: '',
+    );
+  }
+}
+
+String buildHutPortalServiceDetailUrl({
+  required String serviceId,
+  required String serviceName,
+  String servicePicUrl = '',
+  int activeS = 0,
+  int activeSS = 0,
+}) {
+  final encodedName = Uri.encodeComponent(Uri.encodeComponent(serviceName));
+  return '$_kPortalBaseUrl$_kPortalMainPath#/ServiceDetail'
+      '?portalUrl=${Uri.encodeComponent(_kPortalHomeUrl)}'
+      '&parentImgUrl=${Uri.encodeComponent(servicePicUrl)}'
+      '&parentMenuList=${Uri.encodeComponent(serviceId)}'
+      '&parentName=$encodedName'
+      '&activeS=$activeS'
+      '&activeSS=$activeSS';
+}
+
+String buildHutPortalAuthenticatedEntryUrl({
+  required String targetUrl,
+  required String ticket,
+  String entryOrigin = _kPortalBaseUrl,
+}) {
+  final normalizedTargetUrl = normalizeHutPortalUrl(targetUrl);
+  return '$entryOrigin$_kPortalMainPath'
+      '?path=${Uri.encodeComponent(normalizedTargetUrl)}'
+      '&redirect=true'
+      '&ticket=${Uri.encodeComponent(ticket)}';
+}
+
+String buildHutPortalCasLoginEntryUrl({
+  required String targetUrl,
+  String entryOrigin = _kPortalBaseUrl,
+  String idToken = '',
+}) {
+  final normalizedTargetUrl = normalizeHutPortalUrl(targetUrl);
+  final serviceUrl =
+      '$entryOrigin$_kPortalMainPath'
+      '?path=${Uri.encodeComponent(normalizedTargetUrl)}'
+      '&redirect=true';
+  final uri = Uri.parse('$_kMyCasBaseUrl/cas/login');
+  final queryParameters = <String, String>{'service': serviceUrl};
+  if (idToken.trim().isNotEmpty) {
+    queryParameters['idToken'] = idToken.trim();
+  }
+  return uri.replace(queryParameters: queryParameters).toString();
+}
+
+String buildHutCasLoginUrl({required String serviceUrl, String idToken = ''}) {
+  final uri = Uri.parse('$_kMyCasBaseUrl/cas/login');
+  final queryParameters = <String, String>{
+    'service': normalizeHutPortalUrl(serviceUrl),
+  };
+  if (idToken.trim().isNotEmpty) {
+    queryParameters['idToken'] = idToken.trim();
+  }
+  return uri.replace(queryParameters: queryParameters).toString();
+}
+
+String buildHutPortalServiceEntryUrl({
+  required String targetUrl,
+  required String token,
+  String ticket = '',
+  String entryOrigin = _kPortalBaseUrl,
+}) {
+  if (ticket.trim().isNotEmpty) {
+    return buildHutPortalAuthenticatedEntryUrl(
+      targetUrl: targetUrl,
+      ticket: ticket.trim(),
+      entryOrigin: entryOrigin,
+    );
+  }
+  return buildHutPortalCasLoginEntryUrl(
+    targetUrl: targetUrl,
+    entryOrigin: entryOrigin,
+    idToken: token,
+  );
+}
+
+String normalizeHutPortalUrl(String url) {
+  final directUrl = _replaceLegacyPortalIndexPath(url.trim());
+  final uri = Uri.tryParse(directUrl);
+  if (uri == null || uri.queryParameters.isEmpty) {
+    return directUrl;
+  }
+
+  var changed = false;
+  final normalizedQueryParameters = <String, String>{};
+  uri.queryParameters.forEach((key, value) {
+    final normalizedValue = _replaceLegacyPortalIndexPath(value);
+    normalizedQueryParameters[key] = normalizedValue;
+    changed = changed || normalizedValue != value;
+  });
+
+  if (!changed) {
+    return directUrl;
+  }
+  return uri.replace(queryParameters: normalizedQueryParameters).toString();
+}
+
+String _replaceLegacyPortalIndexPath(String value) {
+  return value.replaceAll(_kLegacyPortalIndexPath, _kPortalMainPath);
+}
+
+String describeHutUrlForLog(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    return 'invalid-url';
+  }
+  final keys = uri.queryParameters.keys.toList()..sort();
+  final fragmentPath =
+      uri.fragment.isEmpty ? '' : ' fragment=${uri.fragment.split('?').first}';
+  return '${uri.host}${uri.path} queryKeys=$keys$fragmentPath';
+}
 
 /// Utility for transforming response data.
 class ResponseUtils {
@@ -106,6 +346,81 @@ class FunctionItem {
     required this.tokenAccept,
     required this.iconUrl,
   });
+
+  factory FunctionItem.fromJson(Map data) {
+    final servicePicUrl = _readString(data, const [
+      'servicePicUrl',
+      'service_pic_url',
+      'SERVICE_PIC_URL',
+      'servicePic',
+      'picUrl',
+      'pic_url',
+      'iconUrl',
+      'icon_url',
+      'ICON_URL',
+      'logoUrl',
+      'logo_url',
+      'LOGO_URL',
+    ]);
+
+    return FunctionItem(
+      id: _readString(data, const [
+        'id',
+        'ID',
+        'serviceId',
+        'service_id',
+        'SERVICE_ID',
+        'code',
+        'CODE',
+      ]),
+      serviceName: _readString(data, const [
+        'serviceName',
+        'service_name',
+        'SERVICE_NAME',
+        'name',
+        'NAME',
+        'title',
+        'TITLE',
+        'appName',
+        'app_name',
+        'APP_NAME',
+      ]),
+      servicePicUrl: servicePicUrl,
+      serviceUrl: _readString(data, const [
+        'serviceUrl',
+        'service_url',
+        'SERVICE_URL',
+        'url',
+        'URL',
+        'appUrl',
+        'app_url',
+        'APP_URL',
+        'linkUrl',
+        'link_url',
+        'LINK_URL',
+      ]),
+      serviceType: _readString(data, const [
+        'serviceType',
+        'service_type',
+        'SERVICE_TYPE',
+        'type',
+        'TYPE',
+      ], defaultValue: '2'),
+      tokenAccept: _readJsonString(data, const [
+        'tokenAccept',
+        'token_accept',
+        'TOKEN_ACCEPT',
+      ], defaultValue: '[]'),
+      iconUrl: _readString(data, const [
+        'iconUrl',
+        'icon_url',
+        'ICON_URL',
+        'logoUrl',
+        'logo_url',
+        'LOGO_URL',
+      ], defaultValue: servicePicUrl),
+    );
+  }
 }
 
 class _HutOpenIdSession {

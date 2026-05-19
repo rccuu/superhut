@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
+import 'package:flutter/foundation.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
 import 'package:uuid/uuid.dart';
@@ -25,6 +25,8 @@ abstract class _HutUserApiCore {
   Future<bool> userLogin({required String username, required String password});
 
   Future<String> getToken();
+
+  Future<String> getPortalTicket();
 
   Future<bool> checkTokenValidity();
 

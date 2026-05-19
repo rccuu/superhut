@@ -208,7 +208,6 @@ class _UserPageState extends State<UserPage> {
       return;
     }
     if (!renewed) {
-      await _openLoginPage();
       return;
     }
 
@@ -234,7 +233,6 @@ class _UserPageState extends State<UserPage> {
       return;
     }
     if (!renewed) {
-      await _openLoginPage();
       return;
     }
     final token = await getToken();
