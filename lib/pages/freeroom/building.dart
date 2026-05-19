@@ -83,17 +83,20 @@ class _BuildingPageState extends State<BuildingPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppGlassBackground(
-        style: AppGlassBackgroundStyle.soft,
-        lightBottomColor: const Color(0xFFF0F5FF),
-        darkBottomColor: const Color(0xFF0F1826),
-        child: EnhancedFutureBuilder(
-          future: _buildingFuture,
-          rememberFutureResult: true,
-          whenDone: (List<Building> data) => _buildContent(context, data),
-          whenNotDone: _buildLoadingView(context),
+    return AppGlassPerformanceScope(
+      isLite: true,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AppGlassBackground(
+          style: AppGlassBackgroundStyle.soft,
+          lightBottomColor: const Color(0xFFF0F5FF),
+          darkBottomColor: const Color(0xFF0F1826),
+          child: EnhancedFutureBuilder(
+            future: _buildingFuture,
+            rememberFutureResult: true,
+            whenDone: (List<Building> data) => _buildContent(context, data),
+            whenNotDone: _buildLoadingView(context),
+          ),
         ),
       ),
     );

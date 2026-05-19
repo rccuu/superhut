@@ -3462,24 +3462,27 @@ class _CourseTableViewState extends State<CourseTableView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: ValueListenableBuilder<bool>(
-        valueListenable: _transitionLiteModeNotifier,
-        child: SafeArea(
-          bottom: false,
-          child: _buildCourseTableContent(context),
+      body: AppGlassPerformanceScope(
+        isLite: true,
+        child: ValueListenableBuilder<bool>(
+          valueListenable: _transitionLiteModeNotifier,
+          child: SafeArea(
+            bottom: false,
+            child: _buildCourseTableContent(context),
+          ),
+          builder: (context, useLiteStyle, child) {
+            return AppGlassBackground(
+              style:
+                  _isInitialLoadComplete && !useLiteStyle
+                      ? AppGlassBackgroundStyle.soft
+                      : AppGlassBackgroundStyle.flat,
+              bottomHighlightOpacity: 0,
+              lightBottomColor: const Color(0xFFEAF0FA),
+              darkBottomColor: const Color(0xFF101826),
+              child: child!,
+            );
+          },
         ),
-        builder: (context, useLiteStyle, child) {
-          return AppGlassBackground(
-            style:
-                _isInitialLoadComplete && !useLiteStyle
-                    ? AppGlassBackgroundStyle.soft
-                    : AppGlassBackgroundStyle.flat,
-            bottomHighlightOpacity: 0,
-            lightBottomColor: const Color(0xFFEAF0FA),
-            darkBottomColor: const Color(0xFF101826),
-            child: child!,
-          );
-        },
       ),
     );
   }

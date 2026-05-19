@@ -266,85 +266,88 @@ class _UserPageState extends State<UserPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppGlassBackground(
-        style: AppGlassBackgroundStyle.soft,
-        bottomHighlightOpacity: 0,
-        lightBottomColor: const Color(0xFFEAF0FA),
-        darkBottomColor: const Color(0xFF101826),
-        child: SafeArea(
-          bottom: false,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 88),
-            children: [
-              if (!_isInitialized)
-                _buildLoadingShell(theme)
-              else if (!_hasLinkedCampusAccount) ...[
-                _buildGuestCard(theme),
-                const SizedBox(height: 16),
-                _buildActionPanel(
-                  children: [
-                    _buildActionTile(
-                      icon: Ionicons.information_circle_outline,
-                      title: '关于工大盒子',
-                      subtitle: '查看版本信息、开源说明与更新入口',
-                      onTap: _openAboutPage,
-                    ),
-                  ],
-                ),
-              ] else ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatCard(
-                        title: '已修学分',
-                        value: _profile['yxzxf'] ?? '-',
-                        accent: const Color(0xFF1E8A6F),
-                        icon: Ionicons.ribbon_outline,
-                        onTap: _openScorePage,
+    return AppGlassPerformanceScope(
+      isLite: true,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AppGlassBackground(
+          style: AppGlassBackgroundStyle.soft,
+          bottomHighlightOpacity: 0,
+          lightBottomColor: const Color(0xFFEAF0FA),
+          darkBottomColor: const Color(0xFF101826),
+          child: SafeArea(
+            bottom: false,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 88),
+              children: [
+                if (!_isInitialized)
+                  _buildLoadingShell(theme)
+                else if (!_hasLinkedCampusAccount) ...[
+                  _buildGuestCard(theme),
+                  const SizedBox(height: 16),
+                  _buildActionPanel(
+                    children: [
+                      _buildActionTile(
+                        icon: Ionicons.information_circle_outline,
+                        title: '关于工大盒子',
+                        subtitle: '查看版本信息、开源说明与更新入口',
+                        onTap: _openAboutPage,
                       ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _buildStatCard(
-                        title: '平均绩点',
-                        value: _profile['pjxfjd'] ?? '-',
-                        accent: const Color(0xFFE28A2E),
-                        icon: Ionicons.stats_chart_outline,
-                        onTap: _openScorePage,
+                    ],
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          title: '已修学分',
+                          value: _profile['yxzxf'] ?? '-',
+                          accent: const Color(0xFF1E8A6F),
+                          icon: Ionicons.ribbon_outline,
+                          onTap: _openScorePage,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildBalanceCard(
-                  theme,
-                  _balance,
-                  isLoading: _isLoadingBalance,
-                ),
-                const SizedBox(height: 16),
-                _buildActionPanel(
-                  children: [
-                    _buildActionTile(
-                      icon: Ionicons.refresh_outline,
-                      title: '刷新课表',
-                      subtitle: '需要时再手动同步本地课表',
-                      onTap: _refreshCourse,
-                    ),
-                    _buildDivider(),
-                    _buildActionTile(
-                      icon: Ionicons.information_circle_outline,
-                      title: '关于工大盒子',
-                      subtitle: '查看版本信息、开源说明与更新入口',
-                      onTap: _openAboutPage,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildDangerTile(),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: '平均绩点',
+                          value: _profile['pjxfjd'] ?? '-',
+                          accent: const Color(0xFFE28A2E),
+                          icon: Ionicons.stats_chart_outline,
+                          onTap: _openScorePage,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildBalanceCard(
+                    theme,
+                    _balance,
+                    isLoading: _isLoadingBalance,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildActionPanel(
+                    children: [
+                      _buildActionTile(
+                        icon: Ionicons.refresh_outline,
+                        title: '刷新课表',
+                        subtitle: '需要时再手动同步本地课表',
+                        onTap: _refreshCourse,
+                      ),
+                      _buildDivider(),
+                      _buildActionTile(
+                        icon: Ionicons.information_circle_outline,
+                        title: '关于工大盒子',
+                        subtitle: '查看版本信息、开源说明与更新入口',
+                        onTap: _openAboutPage,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDangerTile(),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

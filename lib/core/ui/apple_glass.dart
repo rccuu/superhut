@@ -7,6 +7,40 @@ enum AppGlassBackgroundStyle { rich, soft, flat }
 
 enum GlassPanelStyle { hero, floating, card, list, solid }
 
+class AppGlassPerformanceScope extends InheritedWidget {
+  const AppGlassPerformanceScope({
+    super.key,
+    required this.isLite,
+    required super.child,
+  });
+
+  final bool? isLite;
+
+  static AppGlassPerformanceScope? maybeOf(BuildContext context) {
+    return context
+        .dependOnInheritedWidgetOfExactType<AppGlassPerformanceScope>();
+  }
+
+  static bool isLiteOf(BuildContext context) {
+    final mediaQuery = MediaQuery.maybeOf(context);
+    if (mediaQuery?.disableAnimations == true) {
+      return true;
+    }
+
+    final scope = maybeOf(context);
+    if (scope?.isLite != null) {
+      return scope!.isLite!;
+    }
+
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  }
+
+  @override
+  bool updateShouldNotify(covariant AppGlassPerformanceScope oldWidget) {
+    return isLite != oldWidget.isLite;
+  }
+}
+
 class AppGlassBackground extends StatelessWidget {
   const AppGlassBackground({
     super.key,
@@ -28,11 +62,14 @@ class AppGlassBackground extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final useLiteEffects =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
     final effectiveStyle =
-        useLiteEffects && style == AppGlassBackgroundStyle.rich
-            ? AppGlassBackgroundStyle.soft
+        useLiteEffects
+            ? switch (style) {
+              AppGlassBackgroundStyle.rich => AppGlassBackgroundStyle.soft,
+              AppGlassBackgroundStyle.soft => AppGlassBackgroundStyle.soft,
+              AppGlassBackgroundStyle.flat => AppGlassBackgroundStyle.flat,
+            }
             : style;
     final orbBlurSigma = switch (effectiveStyle) {
       AppGlassBackgroundStyle.rich => useLiteEffects ? 34.0 : 56.0,
@@ -90,7 +127,7 @@ class AppGlassBackground extends StatelessWidget {
                 colorScheme.primary.withValues(alpha: 0),
               ],
             ),
-          if (effectiveStyle == AppGlassBackgroundStyle.rich)
+          if (effectiveStyle == AppGlassBackgroundStyle.rich && orbOpacity > 0)
             _AmbientOrb(
               alignment: const Alignment(1.08, -0.78),
               width: 250 * orbScale,
@@ -180,8 +217,7 @@ class GlassPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final useLiteEffects =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
     final canUseBackdrop = switch (style) {
       GlassPanelStyle.hero => !useLiteEffects,
       GlassPanelStyle.floating => !useLiteEffects,
@@ -194,21 +230,21 @@ class GlassPanel extends StatelessWidget {
             ? (useLiteEffects ? blur.clamp(0.0, 12.0) : blur)
             : 0.0;
     final effectiveShadowBlur = switch (style) {
-      GlassPanelStyle.hero => useLiteEffects ? 20.0 : 30.0,
-      GlassPanelStyle.floating => useLiteEffects ? 18.0 : 24.0,
-      GlassPanelStyle.card => useLiteEffects ? 14.0 : 18.0,
-      GlassPanelStyle.list => useLiteEffects ? 8.0 : 12.0,
+      GlassPanelStyle.hero => useLiteEffects ? 16.0 : 30.0,
+      GlassPanelStyle.floating => useLiteEffects ? 14.0 : 24.0,
+      GlassPanelStyle.card => useLiteEffects ? 10.0 : 18.0,
+      GlassPanelStyle.list => useLiteEffects ? 6.0 : 12.0,
       GlassPanelStyle.solid => 0.0,
     };
     final effectiveShadowOffset = switch (style) {
       GlassPanelStyle.hero =>
-        useLiteEffects ? const Offset(0, 10) : const Offset(0, 16),
+        useLiteEffects ? const Offset(0, 8) : const Offset(0, 16),
       GlassPanelStyle.floating =>
-        useLiteEffects ? const Offset(0, 9) : const Offset(0, 12),
+        useLiteEffects ? const Offset(0, 7) : const Offset(0, 12),
       GlassPanelStyle.card =>
-        useLiteEffects ? const Offset(0, 7) : const Offset(0, 10),
+        useLiteEffects ? const Offset(0, 5) : const Offset(0, 10),
       GlassPanelStyle.list =>
-        useLiteEffects ? const Offset(0, 4) : const Offset(0, 6),
+        useLiteEffects ? const Offset(0, 3) : const Offset(0, 6),
       GlassPanelStyle.solid => Offset.zero,
     };
     final effectiveSurfaceOpacity = switch (style) {

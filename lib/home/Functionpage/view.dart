@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
@@ -161,41 +160,44 @@ class _FunctionPageState extends State<FunctionPage> {
       ),
     ];
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppGlassBackground(
-        style: AppGlassBackgroundStyle.soft,
-        bottomHighlightOpacity: 0,
-        lightBottomColor: const Color(0xFFEAF0FA),
-        darkBottomColor: const Color(0xFF101826),
-        child: SafeArea(
-          bottom: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final double width = constraints.maxWidth;
-              final bool isWide = width >= 700;
-              final int crossAxisCount = isWide ? 3 : 2;
-              final double childAspectRatio =
-                  isWide
-                      ? 1.14
-                      : width >= 430
-                      ? 1.10
-                      : 1.04;
+    return AppGlassPerformanceScope(
+      isLite: true,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AppGlassBackground(
+          style: AppGlassBackgroundStyle.soft,
+          bottomHighlightOpacity: 0,
+          lightBottomColor: const Color(0xFFEAF0FA),
+          darkBottomColor: const Color(0xFF101826),
+          child: SafeArea(
+            bottom: false,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final double width = constraints.maxWidth;
+                final bool isWide = width >= 700;
+                final int crossAxisCount = isWide ? 3 : 2;
+                final double childAspectRatio =
+                    isWide
+                        ? 1.14
+                        : width >= 430
+                        ? 1.10
+                        : 1.04;
 
-              return GridView.builder(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 88),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: childAspectRatio,
-                ),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  return _buildFeatureCard(items[index]);
-                },
-              );
-            },
+                return GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 88),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 14,
+                    childAspectRatio: childAspectRatio,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    return _buildFeatureCard(items[index]);
+                  },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -206,8 +208,7 @@ class _FunctionPageState extends State<FunctionPage> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final isLoading = _isLoading(item.id);
-    final useLiteCards =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final useLiteCards = AppGlassPerformanceScope.isLiteOf(context);
     final lightColor = _shiftAccent(item.accent, lightnessDelta: 0.10);
     final deepColor = _shiftAccent(item.accent, lightnessDelta: -0.05);
     const foreground = Colors.white;

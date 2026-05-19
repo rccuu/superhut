@@ -50,9 +50,12 @@ class _HomeviewPageState extends State<HomeviewPage> {
   late int _selectedIndex;
   late final List<bool> _loadedPages;
   late final ValueNotifier<bool> _courseTransitionLiteMode;
+  late final ValueNotifier<bool> _tabTransitionLiteMode;
   late final List<Widget> _pages;
+  Timer? _tabTransitionLiteTimer;
   int _tabAnimationSeed = 0;
   int _tabAnimationDirection = 1;
+  int _tabTransitionLiteRequestId = 0;
   int _handledCourseSyncEventId = 0;
   bool _hasHandledStartupDialogs = false;
 
@@ -60,6 +63,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
   void initState() {
     super.initState();
     _courseTransitionLiteMode = ValueNotifier<bool>(false);
+    _tabTransitionLiteMode = ValueNotifier<bool>(false);
     _pages = <Widget>[
       CourseTableView(transitionLiteModeListenable: _courseTransitionLiteMode),
       const FunctionPage(),
@@ -85,6 +89,8 @@ class _HomeviewPageState extends State<HomeviewPage> {
       _handleCourseSyncStateChanged,
     );
     _courseTransitionLiteMode.dispose();
+    _tabTransitionLiteTimer?.cancel();
+    _tabTransitionLiteMode.dispose();
     super.dispose();
   }
 
@@ -351,42 +357,50 @@ class _HomeviewPageState extends State<HomeviewPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBody: true,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          IndexedStack(
-            sizing: StackFit.expand,
-            index: _selectedIndex,
-            children: List.generate(_pages.length, _buildPageSlot),
-          ),
-          Positioned(
-            top: topInset + 10,
-            left: 16,
-            right: 16,
-            child: const IgnorePointer(child: _CourseSyncOverlay()),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: dockBottom,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              heightFactor: 1,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 390),
-                  child: _ClassicTabBar(
-                    key: const ValueKey<String>('home-bottom-nav'),
-                    items: _dockItems,
-                    selectedIndex: _selectedIndex,
-                    onSelected: _onTabChange,
+      body: ValueListenableBuilder<bool>(
+        valueListenable: _tabTransitionLiteMode,
+        builder: (context, useLiteEffects, _) {
+          return AppGlassPerformanceScope(
+            isLite: useLiteEffects ? true : null,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                IndexedStack(
+                  sizing: StackFit.expand,
+                  index: _selectedIndex,
+                  children: List.generate(_pages.length, _buildPageSlot),
+                ),
+                Positioned(
+                  top: topInset + 10,
+                  left: 16,
+                  right: 16,
+                  child: const IgnorePointer(child: _CourseSyncOverlay()),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: dockBottom,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    heightFactor: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 390),
+                        child: _ClassicTabBar(
+                          key: const ValueKey<String>('home-bottom-nav'),
+                          items: _dockItems,
+                          selectedIndex: _selectedIndex,
+                          onSelected: _onTabChange,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -422,12 +436,41 @@ class _HomeviewPageState extends State<HomeviewPage> {
     }
 
     final previousIndex = _selectedIndex;
+    _setTabTransitionLiteMode(true);
     setState(() {
       _tabAnimationDirection = index > previousIndex ? 1 : -1;
       _selectedIndex = index;
       _loadedPages[index] = true;
       _tabAnimationSeed++;
     });
+  }
+
+  void _setTabTransitionLiteMode(bool value) {
+    _tabTransitionLiteRequestId++;
+    final requestId = _tabTransitionLiteRequestId;
+    _tabTransitionLiteTimer?.cancel();
+
+    if (value) {
+      if (!_tabTransitionLiteMode.value) {
+        _tabTransitionLiteMode.value = true;
+      }
+      _tabTransitionLiteTimer = Timer(
+        _tabAnimationDuration + const Duration(milliseconds: 36),
+        () {
+          if (!mounted || requestId != _tabTransitionLiteRequestId) {
+            return;
+          }
+          if (_tabTransitionLiteMode.value) {
+            _tabTransitionLiteMode.value = false;
+          }
+        },
+      );
+      return;
+    }
+
+    if (_tabTransitionLiteMode.value) {
+      _tabTransitionLiteMode.value = false;
+    }
   }
 }
 
@@ -717,14 +760,14 @@ class _ClassicTabBar extends StatelessWidget {
       alpha: isDark ? 0.22 : 0.12,
     );
     final panelBorder = Colors.white.withValues(alpha: isDark ? 0.10 : 0.24);
-    final panelShadow = <_OuterShadowLayer>[
-      _OuterShadowLayer(
+    final panelShadow = <BoxShadow>[
+      BoxShadow(
         color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.18),
         blurRadius: isDark ? 32 : 27,
         offset: Offset(0, isDark ? 14 : 11),
         spreadRadius: -10,
       ),
-      _OuterShadowLayer(
+      BoxShadow(
         color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.10),
         blurRadius: isDark ? 12 : 10,
         offset: const Offset(0, 3),
@@ -733,185 +776,88 @@ class _ClassicTabBar extends StatelessWidget {
     ];
 
     return RepaintBoundary(
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: _OuterOnlyShadowPainter(
-                  borderRadius: panelRadius,
-                  shadows: panelShadow,
+      child: GlassPanel(
+        key: const ValueKey<String>('home-bottom-nav-panel-stable'),
+        style: GlassPanelStyle.floating,
+        blur: isDark ? 18 : 24,
+        useBackdropFilter: true,
+        borderRadius: panelRadius,
+        gradient: panelGradient,
+        borderColor: panelBorder,
+        boxShadow: panelShadow,
+        padding: EdgeInsets.zero,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              child: ExcludeSemantics(
+                child: IgnorePointer(
+                  child: GNav(
+                    selectedIndex: selectedIndex,
+                    onTabChange: onSelected,
+                    gap: 8,
+                    rippleColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
+                    haptic: true,
+                    backgroundColor: Colors.transparent,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    color: colorScheme.onSurfaceVariant.withValues(
+                      alpha: isDark ? 0.86 : 0.78,
+                    ),
+                    activeColor: colorScheme.primary,
+                    tabBackgroundColor: activeBackground,
+                    tabBorderRadius: 18,
+                    iconSize: 20,
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    textStyle: theme.textTheme.labelMedium?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                    tabs: items
+                        .map(
+                          (item) => GButton(
+                            key: ValueKey<String>('home-tab-${item.label}'),
+                            icon: item.icon,
+                            text: item.label,
+                          ),
+                        )
+                        .toList(growable: false),
+                  ),
                 ),
               ),
             ),
-          ),
-          GlassPanel(
-            key: const ValueKey<String>('home-bottom-nav-panel-stable'),
-            style: GlassPanelStyle.floating,
-            blur: isDark ? 18 : 24,
-            useBackdropFilter: true,
-            borderRadius: panelRadius,
-            gradient: panelGradient,
-            borderColor: panelBorder,
-            boxShadow: const [],
-            padding: EdgeInsets.zero,
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 10,
-                  ),
-                  child: ExcludeSemantics(
-                    child: IgnorePointer(
-                      child: GNav(
-                        selectedIndex: selectedIndex,
-                        onTabChange: onSelected,
-                        gap: 8,
-                        rippleColor: Colors.transparent,
-                        hoverColor: Colors.transparent,
-                        haptic: true,
-                        backgroundColor: Colors.transparent,
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        color: colorScheme.onSurfaceVariant.withValues(
-                          alpha: isDark ? 0.86 : 0.78,
-                        ),
-                        activeColor: colorScheme.primary,
-                        tabBackgroundColor: activeBackground,
-                        tabBorderRadius: 18,
-                        iconSize: 20,
-                        duration: const Duration(milliseconds: 280),
-                        curve: Curves.easeOutCubic,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 10,
-                        ),
-                        textStyle: theme.textTheme.labelMedium?.copyWith(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
-                        ),
-                        tabs: items
-                            .map(
-                              (item) => GButton(
-                                key: ValueKey<String>('home-tab-${item.label}'),
-                                icon: item.icon,
-                                text: item.label,
-                              ),
-                            )
-                            .toList(growable: false),
+            Positioned.fill(
+              child: Row(
+                children: List.generate(items.length, (index) {
+                  final item = items[index];
+                  return Expanded(
+                    child: Semantics(
+                      button: true,
+                      selected: index == selectedIndex,
+                      label: item.label,
+                      child: GestureDetector(
+                        key: ValueKey<String>('home-hit-zone-${item.label}'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          onSelected(index);
+                        },
+                        child: const SizedBox.expand(),
                       ),
                     ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: Row(
-                    children: List.generate(items.length, (index) {
-                      final item = items[index];
-                      return Expanded(
-                        child: Semantics(
-                          button: true,
-                          selected: index == selectedIndex,
-                          label: item.label,
-                          child: GestureDetector(
-                            key: ValueKey<String>(
-                              'home-hit-zone-${item.label}',
-                            ),
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              onSelected(index);
-                            },
-                            child: const SizedBox.expand(),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-              ],
+                  );
+                }),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
-  }
-}
-
-class _OuterShadowLayer {
-  const _OuterShadowLayer({
-    required this.color,
-    required this.blurRadius,
-    required this.offset,
-    required this.spreadRadius,
-  });
-
-  final Color color;
-  final double blurRadius;
-  final Offset offset;
-  final double spreadRadius;
-}
-
-class _OuterOnlyShadowPainter extends CustomPainter {
-  const _OuterOnlyShadowPainter({
-    required this.borderRadius,
-    required this.shadows,
-  });
-
-  final BorderRadius borderRadius;
-  final List<_OuterShadowLayer> shadows;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final panelRect = Offset.zero & size;
-    final panelPath = Path()..addRRect(borderRadius.toRRect(panelRect));
-    final layerBounds = Rect.fromLTWH(
-      -80,
-      -80,
-      size.width + 160,
-      size.height + 160,
-    );
-
-    for (final shadow in shadows) {
-      final shadowRect = panelRect
-          .inflate(shadow.spreadRadius)
-          .shift(shadow.offset);
-      final shadowPath = Path()..addRRect(borderRadius.toRRect(shadowRect));
-      final shadowPaint =
-          Paint()
-            ..color = shadow.color
-            ..maskFilter = ui.MaskFilter.blur(
-              ui.BlurStyle.normal,
-              ui.Shadow.convertRadiusToSigma(shadow.blurRadius),
-            );
-      final clearPaint = Paint()..blendMode = BlendMode.clear;
-
-      canvas.saveLayer(layerBounds, Paint());
-      canvas.drawPath(shadowPath, shadowPaint);
-      canvas.drawPath(panelPath, clearPaint);
-      canvas.restore();
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _OuterOnlyShadowPainter oldDelegate) {
-    if (oldDelegate.borderRadius != borderRadius) {
-      return true;
-    }
-    if (oldDelegate.shadows.length != shadows.length) {
-      return true;
-    }
-    for (var i = 0; i < shadows.length; i++) {
-      final current = shadows[i];
-      final previous = oldDelegate.shadows[i];
-      if (current.color != previous.color ||
-          current.blurRadius != previous.blurRadius ||
-          current.offset != previous.offset ||
-          current.spreadRadius != previous.spreadRadius) {
-        return true;
-      }
-    }
-    return false;
   }
 }
