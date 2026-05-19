@@ -12,6 +12,22 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
+## v1.5.5
+
+## 2026-05-19 · `3a7a828` · ci(release): 添加自动发布流水线，支持 Android arm64-v8a 与 iOS 未签名 IPA 构建发布
+- 更新可以设置为不再提醒
+- 代码统计：5 files changed, 462 insertions(+), 14 deletions(-)
+
+## 2026-05-19 · `b61a035` · feat(hut): 重构智慧工大门户认证与会话管理，修复服务加载失败
+- 这次提交把智慧工大门户的整套认证与 WebView 会话管理推倒重做了一遍。用户之前频繁遇到"功能页点了没反应""HUT 服务加载失败""切到后台回来又要重新登录"这类问题，根因基本上都落在旧认证链的临时 token 存不下、WebView 注入时机不稳定、以及在多步 CAS 重定向场景里 cookie 跟 token 不同步这几个老地方。
+- 认证链路的核心变化在 `lib/utils/hut_user_api/hut_user_api_auth.dart` 和 `lib/login/hut_cas_login_page.dart`：不再只依赖单次 CAS 回调取到的 token，而是把整个登录流程拆成 CAS 重定向 → 门户票据 → 设备绑定 → 令牌刷新的完整闭环，每一步的状态都有明确落盘（`AppAuthStorage` 里的 `hutToken` / `hutRefreshToken` / `deviceId`）。这样一来，进程被杀或后台切回后，认证状态可以从存储直接恢复，而不是每次都重新走一遍 WebView 登录。
+- WebView 服务加载侧也做了比较彻底的重写。`lib/pages/hutpages/type1webview.dart` 和 `type2webview.dart` 现在共享同一套会话接管逻辑，`lib/pages/hutpages/hut_service_auth.dart` 负责在 WebView 每个关键生命周期节点（`onPageStarted`、`onPageFinished`、`onLoadError`）注入 token / cookie 和校验回跳状态。服务类型 "2"、"4"、"5" 之前各自的认证差异现在收敛到了统一的注入策略里，不再需要每个类型写一套特殊处理。
+- `lib/pages/hutpages/hutmain.dart` 的加载状态机也重新梳理了：登录前先做凭证完整性检查，登录中按阶段推进、失败可重试，登录后同步恢复缓存的服务列表，避免之前"登录成功了但服务列表还是空的"这种半成品态直接展示给用户。
+- 支撑这整套改动的是 `lib/utils/hut_user_api/hut_user_api_support.dart`（全新拆分出来的 315 行支撑模块）和 `lib/utils/token.dart` 的大幅扩展。`RequestManager` 接管了 Dio 拦截器的统一配置、token 过期检测与自动刷新、以及多线程/多 Tab 并发刷新时的互斥逻辑，避免多个页面同时发现 token 过期后各刷各的、最后拿到的还是无效 token。
+- 认证凭据的持久化也补了对应的测试覆盖：`test/utils/auth_token_helpers_test.dart` 和 `test/core/services/app_auth_storage_test.dart` 覆盖了双登录系统凭据的写入、清理、降级迁移，以及 HUT 专有字段（token 与 refresh token 配对、deviceId 独立存储）的完整读写路径。
+- 关键文件：`lib/pages/hutpages/hut_service_auth.dart`、`lib/pages/hutpages/hutmain.dart`、`lib/pages/hutpages/type1/type1webview.dart`、`lib/pages/hutpages/type2/type2webview.dart`、`lib/utils/hut_user_api/hut_user_api_support.dart`、`lib/utils/hut_user_api/hut_user_api_auth.dart`、`lib/utils/hut_user_api/hut_user_api_portal.dart`、`lib/utils/token.dart`、`lib/core/services/app_auth_storage.dart`、`test/utils/auth_token_helpers_test.dart`、`test/core/services/app_auth_storage_test.dart`
+- 代码统计：20 files changed, 1526 insertions(+), 242 deletions(-)
+
 ## v1.5.4
 
 ## v1.5.3
