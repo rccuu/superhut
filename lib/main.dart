@@ -274,7 +274,14 @@ Future<void> main() async {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  const MyApp({
+    super.key,
+    this.checkUpdatesOnStartup = true,
+    this.resolveCourseStateOnStartup = true,
+  });
+
+  final bool checkUpdatesOnStartup;
+  final bool resolveCourseStateOnStartup;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -399,7 +406,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final isFirstOpen = await storage.isFirstOpen();
     final hasSeenTrustNotice = await storage.hasSeenTrustNotice();
     final hasTrustNoticePreference = await storage.hasTrustNoticePreference();
-    if (isFirstOpen && !kIsWeb) {
+    if (isFirstOpen && !kIsWeb && widget.resolveCourseStateOnStartup) {
       await clearCourseSchedules(
         sourceTypes: {
           CourseScheduleSourceType.selfSync,
@@ -412,14 +419,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
     final results = await Future.wait<Object?>([
       storage.hasAnyCampusSession(),
-      loadClassFromLocal().then((courseData) => courseData.isNotEmpty),
+      widget.resolveCourseStateOnStartup
+          ? loadClassFromLocal().then((courseData) => courseData.isNotEmpty)
+          : Future<bool>.value(false),
       _consumeInitialWidgetAction(),
     ]);
     final hasSession = results[0] as bool;
     final hasLocalCourseCache = results[1] as bool;
     final initialWidgetAction = results[2] as String?;
 
-    if (!kIsWeb) {
+    if (!kIsWeb && widget.resolveCourseStateOnStartup) {
       try {
         await syncActiveCourseWidgetState();
       } catch (_) {
@@ -465,6 +474,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       themeMode: ThemeMode.system,
       home: HomeviewPage(
         showInitialTrustNotice: _showInitialTrustNotice,
+        checkUpdatesOnStartup: widget.checkUpdatesOnStartup,
         initialIndex:
             _initialWidgetAction == 'course'
                 ? 0

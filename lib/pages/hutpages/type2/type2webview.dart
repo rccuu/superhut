@@ -9,17 +9,26 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/ui/color_scheme_ext.dart';
 import '../../../core/services/app_logger.dart';
+import '../../../core/ui/color_scheme_ext.dart';
+import '../hut_service_auth.dart';
 
 class Type2Webview extends StatefulWidget {
-  final String serviceUrl, serviceName, tokenAccept;
+  final String serviceId;
+  final String serviceUrl;
+  final String serviceName;
+  final String serviceType;
+  final String tokenAccept;
+  final String servicePicUrl;
 
   const Type2Webview({
     super.key,
+    required this.serviceId,
     required this.serviceUrl,
     required this.serviceName,
+    required this.serviceType,
     required this.tokenAccept,
+    this.servicePicUrl = '',
   });
 
   @override
@@ -33,39 +42,41 @@ class _Type2WebviewState extends State<Type2Webview> {
   bool _isPageLoading = false;
   bool _isRequestingPermission = false;
   bool _permissionRequested = false; // 添加标志，表示权限已请求过
+  bool _hasWarnedLoginRedirect = false;
   late Future<bool> _initialSetupFuture;
+  String? _setupErrorMessage;
 
-  Map<String, String> headerMap = {
-    "User-Agent":
-        "Mozilla/5.0 (Linux; Android 15; 24129PN74C Build/AQ3A.240812.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/134.0.6998.39 Mobile Safari/537.36 SuperApp",
-    "Connection": "keep-alive",
-    "Accept":
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br, zstd",
-    "sec-ch-ua":
-        "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Android WebView\";v=\"134\"",
-    "sec-ch-ua-mobile": "?1",
-    "sec-ch-ua-platform": "\"Android\"",
-    "upgrade-insecure-requests": "1",
-    "x-requested-with": "com.supwisdom.hut",
-    "sec-fetch-site": "none",
-    "sec-fetch-mode": "navigate",
-    "sec-fetch-user": "?1",
-    "sec-fetch-dest": "document",
-    "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-    "cookie": "userToken=; Domain=xzhngydx.hut.edu.cn; Path=/",
-    "priority": "u=0, i",
-  };
+  Map<String, String> headerMap = {};
   String resultUrl = '';
   String token = '';
 
-  String enCodeUrl(String url) {
-    String encoded = Uri.encodeComponent(url);
-    AppLogger.debug('Type2 encoded service url: $encoded');
-    return encoded;
+  Map<String, String> _baseHeaders(String token) {
+    return {
+      "User-Agent":
+          "Mozilla/5.0 (Linux; Android 15; 24129PN74C Build/AQ3A.240812.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/134.0.6998.39 Mobile Safari/537.36 SuperApp",
+      "Connection": "keep-alive",
+      "Accept":
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "Accept-Encoding": "gzip, deflate, br, zstd",
+      "sec-ch-ua":
+          "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Android WebView\";v=\"134\"",
+      "sec-ch-ua-mobile": "?1",
+      "sec-ch-ua-platform": "\"Android\"",
+      "upgrade-insecure-requests": "1",
+      "X-Id-Token": token,
+      "x-id-token": token,
+      "x-requested-with": "com.supwisdom.hut",
+      "sec-fetch-site": "none",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-user": "?1",
+      "sec-fetch-dest": "document",
+      "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+      "cookie": "userToken=$token; Domain=xzhngydx.hut.edu.cn; Path=/",
+      "priority": "u=0, i",
+    };
   }
 
-  List<Map<String, dynamic>> getTokenAccept(String tokenAccept) {
+  List<Map<String, dynamic>> _parseTokenAccept(String tokenAccept) {
     try {
       final parsedList = json.decode(tokenAccept);
       if (parsedList is! List) {
@@ -76,42 +87,69 @@ class _Type2WebviewState extends State<Type2Webview> {
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList();
-    } catch (e) {
-      AppLogger.debug('Failed to parse tokenAccept: $e');
+    } catch (error) {
+      AppLogger.debug('Failed to parse tokenAccept: $error');
       return <Map<String, dynamic>>[];
     }
   }
 
-  bool doWithAccept() {
-    List<Map<String, dynamic>> tokenAcceptList = getTokenAccept(
-      widget.tokenAccept,
-    );
-    AppLogger.debug('Type2 token accept list: $tokenAcceptList');
-    for (var item in tokenAcceptList) {
-      AppLogger.debug('Type2 token accept item: $item');
-      if (item['tokenType'] == 'header') {
-        headerMap.addAll({item['tokenKey'].toString(): token});
-      } else if (item['tokenType'] == 'url') {
-        Uri uri = Uri.parse(resultUrl);
+  void _applyTokenAccept() {
+    final tokenAcceptList = _parseTokenAccept(widget.tokenAccept);
+    for (final item in tokenAcceptList) {
+      final tokenType = item['tokenType']?.toString();
+      final tokenKey = item['tokenKey']?.toString();
+      if (tokenKey == null || tokenKey.isEmpty) {
+        continue;
+      }
 
-        // 2. 获取现有查询参数并添加新参数
-        Map<String, String> queryParams = Map.from(uri.queryParameters);
-        queryParams[item['tokenKey'].toString()] = token; // 添加新参数
-        // 3. 构建新 URL（保留路径和其他部分）
-        Uri newUri = uri.replace(queryParameters: queryParams);
-        resultUrl = newUri.toString();
+      if (tokenType == 'header') {
+        headerMap[tokenKey] = token;
+      } else if (tokenType == 'url') {
+        final uri = Uri.tryParse(resultUrl);
+        if (uri == null) {
+          continue;
+        }
+        final queryParams = Map<String, String>.from(uri.queryParameters);
+        queryParams[tokenKey] = token;
+        resultUrl = uri.replace(queryParameters: queryParams).toString();
       }
     }
-    AppLogger.debug('Type2 headers prepared: $headerMap');
-    return true;
   }
 
   Future<bool> getDetail() async {
-    token = await api.getToken();
-    resultUrl = widget.serviceUrl;
-    AppLogger.debug('Type2 result url prepared: $resultUrl');
-    doWithAccept();
-    return true;
+    try {
+      _setupErrorMessage = null;
+      final session = await loadValidHutPortalSession(api);
+      token = session.token;
+      headerMap = _baseHeaders(token);
+      if (widget.serviceType == '5' && widget.serviceId.isNotEmpty) {
+        final detailUrl = buildHutPortalServiceDetailUrl(
+          serviceId: widget.serviceId,
+          serviceName: widget.serviceName,
+          servicePicUrl: widget.servicePicUrl,
+        );
+        resultUrl = buildHutPortalServiceEntryUrl(
+          targetUrl: detailUrl,
+          token: session.token,
+          ticket: session.ticket,
+        );
+      } else {
+        resultUrl = normalizeHutPortalUrl(widget.serviceUrl);
+        _applyTokenAccept();
+      }
+      AppLogger.debug(
+        'Type2 result url prepared: ${describeHutUrlForLog(resultUrl)}',
+      );
+      return true;
+    } catch (error, stackTrace) {
+      _setupErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+      AppLogger.error(
+        'Failed to prepare HUT type2 service',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
   }
 
   @override
@@ -125,6 +163,52 @@ class _Type2WebviewState extends State<Type2Webview> {
   Future<bool> _performInitialSetup() async {
     await _handleLocationPermission();
     return await getDetail();
+  }
+
+  Future<void> _openLoginAndRetry() async {
+    await openHutLoginPage(context);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _setupErrorMessage = null;
+      _hasWarnedLoginRedirect = false;
+      _initialSetupFuture = _performInitialSetup();
+    });
+  }
+
+  void _handlePossibleLoginRedirect(WebUri? url) {
+    if (_hasWarnedLoginRedirect || !isLikelyHutLoginUrl(url)) {
+      return;
+    }
+
+    _hasWarnedLoginRedirect = true;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('智慧工大登录状态可能已失效，请重新登录后再试')));
+  }
+
+  Future<NavigationActionPolicy> _rewriteLegacyPortalNavigation(
+    InAppWebViewController controller,
+    NavigationAction navigationAction,
+  ) async {
+    final url = navigationAction.request.url?.toString();
+    if (url == null) {
+      return NavigationActionPolicy.ALLOW;
+    }
+
+    final normalizedUrl = normalizeHutPortalUrl(url);
+    if (normalizedUrl == url) {
+      return NavigationActionPolicy.ALLOW;
+    }
+
+    AppLogger.debug(
+      'Type2 rewrite legacy portal url: ${describeHutUrlForLog(normalizedUrl)}',
+    );
+    await controller.loadUrl(
+      urlRequest: URLRequest(url: WebUri(normalizedUrl), headers: headerMap),
+    );
+    return NavigationActionPolicy.CANCEL;
   }
 
   // 处理位置权限一次性请求
@@ -385,6 +469,13 @@ class _Type2WebviewState extends State<Type2Webview> {
                   future: _initialSetupFuture,
                   rememberFutureResult: true,
                   whenDone: (v) {
+                    if (v != true) {
+                      return HutServiceAuthErrorPanel(
+                        message: _setupErrorMessage ?? '智慧工大登录状态已失效，请重新登录一次。',
+                        onLogin: _openLoginAndRetry,
+                      );
+                    }
+
                     return InAppWebView(
                       initialUrlRequest: URLRequest(
                         url: WebUri(resultUrl),
@@ -416,27 +507,35 @@ class _Type2WebviewState extends State<Type2Webview> {
                         setState(() {
                           _isPageLoading = true;
                         });
-                        AppLogger.debug('Type2 start loading: $url');
+                        AppLogger.debug(
+                          'Type2 start loading: ${describeHutUrlForLog(url.toString())}',
+                        );
                       },
                       onWebViewCreated: (controller) {
                         _webViewController = controller;
                       },
                       onLoadStop: (controller, url) {
+                        _handlePossibleLoginRedirect(url);
                         setState(() {
                           _isPageLoading = false;
                         });
                         _updateCanGoBackState();
                         _removeNavigationElement();
                         _setupAlipayLinkListener(); // 添加支付宝链接监听
-                        AppLogger.debug('Type2 stop loading: $url');
+                        AppLogger.debug(
+                          'Type2 stop loading: ${describeHutUrlForLog(url.toString())}',
+                        );
                       },
                       onUpdateVisitedHistory: (
                         controller,
                         url,
                         androidIsReload,
                       ) {
+                        _handlePossibleLoginRedirect(url);
                         _updateCanGoBackState();
-                        AppLogger.debug('Type2 history updated: $url');
+                        AppLogger.debug(
+                          'Type2 history updated: ${describeHutUrlForLog(url.toString())}',
+                        );
                       },
                       shouldOverrideUrlLoading: (
                         controller,
@@ -450,7 +549,10 @@ class _Type2WebviewState extends State<Type2Webview> {
                           return NavigationActionPolicy.CANCEL;
                         }
 
-                        return NavigationActionPolicy.ALLOW;
+                        return _rewriteLegacyPortalNavigation(
+                          controller,
+                          navigationAction,
+                        );
                       },
                     );
                   },

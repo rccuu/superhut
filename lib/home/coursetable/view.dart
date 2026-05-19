@@ -964,7 +964,6 @@ class _CourseTableViewState extends State<CourseTableView> {
         return;
       }
       if (!renewed) {
-        await _openCampusLogin();
         return;
       }
       final token = await getToken();

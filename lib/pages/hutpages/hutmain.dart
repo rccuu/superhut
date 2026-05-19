@@ -226,24 +226,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                                 _buildServiceCard(
                                   serviceName: service.serviceName,
                                   serviceType: service.serviceType,
-                                  onTap: () {
-                                    if (service.serviceType == "1") {
-                                      Get.to(
-                                        () => Type1Webview(
-                                          serviceUrl: service.serviceUrl,
-                                          serviceName: service.serviceName,
-                                        ),
-                                      );
-                                    } else if (service.serviceType == "2") {
-                                      Get.to(
-                                        () => Type2Webview(
-                                          serviceUrl: service.serviceUrl,
-                                          serviceName: service.serviceName,
-                                          tokenAccept: service.tokenAccept,
-                                        ),
-                                      );
-                                    }
-                                  },
+                                  onTap: () => _openService(service),
                                 ),
                               ],
                             ),
@@ -300,25 +283,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
                                 child: _buildServiceCard(
                                   serviceName: service.serviceName,
                                   serviceType: service.serviceType,
-                                  onTap: () {
-                                    if (service.serviceType == "1") {
-                                      Get.to(
-                                        () => Type1Webview(
-                                          serviceUrl: service.serviceUrl,
-                                          serviceName: service.serviceName,
-                                        ),
-                                      );
-                                    } else if (service.serviceType == "2" ||
-                                        service.serviceType == "4") {
-                                      Get.to(
-                                        () => Type2Webview(
-                                          serviceUrl: service.serviceUrl,
-                                          serviceName: service.serviceName,
-                                          tokenAccept: service.tokenAccept,
-                                        ),
-                                      );
-                                    }
-                                  },
+                                  onTap: () => _openService(service),
                                 ),
                               ),
                             ),
@@ -340,6 +305,39 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+  void _openService(FunctionItem service) {
+    final servicePicUrl =
+        service.servicePicUrl.isNotEmpty
+            ? service.servicePicUrl
+            : service.iconUrl;
+    if (service.serviceType == "1") {
+      Get.to(
+        () => Type1Webview(
+          serviceId: '',
+          serviceUrl: service.serviceUrl,
+          serviceName: service.serviceName,
+          servicePicUrl: servicePicUrl,
+        ),
+      );
+      return;
+    }
+
+    if (service.serviceType == "2" ||
+        service.serviceType == "4" ||
+        service.serviceType == "5") {
+      Get.to(
+        () => Type2Webview(
+          serviceId: service.serviceType == "5" ? service.id : '',
+          serviceUrl: service.serviceUrl,
+          serviceName: service.serviceName,
+          serviceType: service.serviceType,
+          tokenAccept: service.tokenAccept,
+          servicePicUrl: servicePicUrl,
+        ),
+      );
+    }
   }
 
   // Custom card widget similar to _buildActivityCard in FunctionPage

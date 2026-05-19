@@ -85,13 +85,30 @@ void main() {
       token: 'hut-token',
       refreshToken: 'hut-refresh-token',
       deviceId: 'device-123',
+      ticket: 'hut-ticket',
     );
 
     expect(await storage.readHutToken(), 'hut-token');
     expect(await storage.readHutRefreshToken(), 'hut-refresh-token');
+    expect(await storage.readHutTicket(), 'hut-ticket');
     expect(await storage.readHutDeviceId(), 'device-123');
     expect(await storage.isHutLoggedIn(), isTrue);
   });
+
+  test(
+    'persists ignored update version independently from auth data',
+    () async {
+      expect(await storage.readIgnoredUpdateVersion(), isEmpty);
+
+      await storage.saveIgnoredUpdateVersion('v1.6.0');
+
+      expect(await storage.readIgnoredUpdateVersion(), 'v1.6.0');
+
+      await storage.clearIgnoredUpdateVersion();
+
+      expect(await storage.readIgnoredUpdateVersion(), isEmpty);
+    },
+  );
 
   test(
     'clearAllAuthData removes auth state but preserves non-auth prefs',
@@ -103,6 +120,7 @@ void main() {
         token: 'hut-token',
         refreshToken: 'hut-refresh',
         deviceId: 'hut-device',
+        ticket: 'hut-ticket',
       );
       await storage.saveJwxtCredentials(
         username: 'jwxt-user',
@@ -118,6 +136,7 @@ void main() {
         academyName: 'CS',
         clsName: '1',
       );
+      await storage.saveIgnoredUpdateVersion('v1.6.0');
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('yxzxf', '1');
@@ -131,6 +150,7 @@ void main() {
       expect(await storage.readJwxtCookie(), isEmpty);
       expect(await storage.readHutToken(), isEmpty);
       expect(await storage.readHutRefreshToken(), isEmpty);
+      expect(await storage.readHutTicket(), isEmpty);
       expect(await storage.readHutDeviceId(), isEmpty);
       expect(await storage.readJwxtUsername(), isEmpty);
       expect(await storage.readHutUsername(), isEmpty);
@@ -147,6 +167,7 @@ void main() {
       expect(prefs.getString('zxfjd'), isNull);
       expect(prefs.getString('pjxfjd'), isNull);
       expect(prefs.getString('nonAuthKey'), 'keep-me');
+      expect(await storage.readIgnoredUpdateVersion(), 'v1.6.0');
       expect(SecureStorageMock.read('secure_jwxt_password'), isNull);
       expect(SecureStorageMock.read('secure_hut_password'), isNull);
     },

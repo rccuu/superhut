@@ -11,7 +11,6 @@ import 'package:superhut/pages/hutpages/hutmain.dart';
 import 'package:superhut/pages/water/view.dart';
 
 import '../../core/ui/apple_glass.dart';
-import '../../login/unified_login_page.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/token.dart';
 
@@ -47,9 +46,6 @@ class _FunctionPageState extends State<FunctionPage> {
     try {
       final isReady = await renewToken(context);
       if (!isReady || !mounted) {
-        if (mounted) {
-          await Navigator.of(context).push(UnifiedLoginPage.route());
-        }
         return;
       }
       await Navigator.of(

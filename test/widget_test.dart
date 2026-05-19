@@ -74,18 +74,34 @@ void main() {
     }
   });
 
+  Future<void> pumpUntilFound(WidgetTester tester, Finder finder) async {
+    for (var i = 0; i < 20 && finder.evaluate().isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
   testWidgets('opens the function page when there is no saved session', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const MyApp());
-    await tester.pumpAndSettle();
+    SharedPreferences.setMockInitialValues({
+      'isFirstOpen': false,
+      'hasSeenTrustNotice': true,
+    });
+
+    await tester.pumpWidget(
+      const MyApp(
+        checkUpdatesOnStartup: false,
+        resolveCourseStateOnStartup: false,
+      ),
+    );
+    await pumpUntilFound(tester, find.byType(IndexedStack));
 
     expect(find.byType(IndexedStack), findsOneWidget);
     expect(find.text('功能'), findsOneWidget);
     expect(find.byType(FunctionPage), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
-    await tester.pumpAndSettle();
+    await pumpUntilFound(tester, find.byType(UserPage));
 
     expect(find.byType(UserPage), findsOneWidget);
   });
@@ -94,9 +110,18 @@ void main() {
     WidgetTester tester,
   ) async {
     initialWidgetAction = 'course';
+    SharedPreferences.setMockInitialValues({
+      'isFirstOpen': false,
+      'hasSeenTrustNotice': true,
+    });
 
-    await tester.pumpWidget(const MyApp());
-    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      const MyApp(
+        checkUpdatesOnStartup: false,
+        resolveCourseStateOnStartup: false,
+      ),
+    );
+    await pumpUntilFound(tester, find.byType(CourseTableView));
 
     expect(find.byType(CourseTableView), findsOneWidget);
     expect(find.byType(FunctionPage), findsNothing);
@@ -113,7 +138,9 @@ void main() {
     });
 
     await tester.pumpWidget(
-      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+      const MaterialApp(
+        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -155,7 +182,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+      const MaterialApp(
+        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+      ),
     );
     await tester.pump();
     await tester.pump();
@@ -174,7 +203,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+      const MaterialApp(
+        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -203,7 +234,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+      const MaterialApp(
+        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -232,7 +265,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(home: HomeviewPage(initialIndex: 1)),
+      const MaterialApp(
+        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -274,7 +309,7 @@ void main() {
               data: MediaQuery.of(context).copyWith(disableAnimations: true),
               child: child!,
             ),
-        home: const HomeviewPage(initialIndex: 1),
+        home: const HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
       ),
     );
     await tester.pumpAndSettle();
