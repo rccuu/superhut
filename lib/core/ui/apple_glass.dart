@@ -71,9 +71,11 @@ class AppGlassBackground extends StatelessWidget {
               AppGlassBackgroundStyle.flat => AppGlassBackgroundStyle.flat,
             }
             : style;
+    // Perf: orb sigma 降到原值的 ~60%。半径 > 22 后视觉差异已不明显，
+    // 但 GPU 上模糊核大小是平方关系，对帧率影响显著。
     final orbBlurSigma = switch (effectiveStyle) {
-      AppGlassBackgroundStyle.rich => useLiteEffects ? 34.0 : 56.0,
-      AppGlassBackgroundStyle.soft => useLiteEffects ? 20.0 : 34.0,
+      AppGlassBackgroundStyle.rich => useLiteEffects ? 18.0 : 34.0,
+      AppGlassBackgroundStyle.soft => useLiteEffects ? 12.0 : 22.0,
       AppGlassBackgroundStyle.flat => 0.0,
     };
     final orbScale = switch (effectiveStyle) {
@@ -114,44 +116,57 @@ class AppGlassBackground extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // Perf: 把 3 个高斯模糊 orb 整体放进一层 RepaintBoundary。
+          // 它们的内容仅在主题/style 切换时变化，所以 raster 后可以被
+          // GPU 无限期复用，不会随上层课表/列表滚动而每帧重建。
           if (orbOpacity > 0)
-            _AmbientOrb(
-              alignment: const Alignment(-1.15, -0.92),
-              width: 280 * orbScale,
-              height: 280 * orbScale,
-              blurSigma: orbBlurSigma,
-              colors: [
-                colorScheme.primary.withValues(
-                  alpha: (isDark ? 0.18 : 0.18) * orbOpacity,
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: IgnorePointer(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _AmbientOrb(
+                        alignment: const Alignment(-1.15, -0.92),
+                        width: 280 * orbScale,
+                        height: 280 * orbScale,
+                        blurSigma: orbBlurSigma,
+                        colors: [
+                          colorScheme.primary.withValues(
+                            alpha: (isDark ? 0.18 : 0.18) * orbOpacity,
+                          ),
+                          colorScheme.primary.withValues(alpha: 0),
+                        ],
+                      ),
+                      if (effectiveStyle == AppGlassBackgroundStyle.rich)
+                        _AmbientOrb(
+                          alignment: const Alignment(1.08, -0.78),
+                          width: 250 * orbScale,
+                          height: 250 * orbScale,
+                          blurSigma: orbBlurSigma,
+                          colors: [
+                            colorScheme.secondary.withValues(
+                              alpha: (isDark ? 0.14 : 0.14) * orbOpacity,
+                            ),
+                            colorScheme.secondary.withValues(alpha: 0),
+                          ],
+                        ),
+                      _AmbientOrb(
+                        alignment: const Alignment(0.9, 0.78),
+                        width: 340 * orbScale,
+                        height: 340 * orbScale,
+                        blurSigma: orbBlurSigma,
+                        colors: [
+                          colorScheme.tertiary.withValues(
+                            alpha: (isDark ? 0.11 : 0.10) * orbOpacity,
+                          ),
+                          colorScheme.tertiary.withValues(alpha: 0),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                colorScheme.primary.withValues(alpha: 0),
-              ],
-            ),
-          if (effectiveStyle == AppGlassBackgroundStyle.rich && orbOpacity > 0)
-            _AmbientOrb(
-              alignment: const Alignment(1.08, -0.78),
-              width: 250 * orbScale,
-              height: 250 * orbScale,
-              blurSigma: orbBlurSigma,
-              colors: [
-                colorScheme.secondary.withValues(
-                  alpha: (isDark ? 0.14 : 0.14) * orbOpacity,
-                ),
-                colorScheme.secondary.withValues(alpha: 0),
-              ],
-            ),
-          if (orbOpacity > 0)
-            _AmbientOrb(
-              alignment: const Alignment(0.9, 0.78),
-              width: 340 * orbScale,
-              height: 340 * orbScale,
-              blurSigma: orbBlurSigma,
-              colors: [
-                colorScheme.tertiary.withValues(
-                  alpha: (isDark ? 0.11 : 0.10) * orbOpacity,
-                ),
-                colorScheme.tertiary.withValues(alpha: 0),
-              ],
+              ),
             ),
           Positioned.fill(
             child: DecoratedBox(
