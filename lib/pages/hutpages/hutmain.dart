@@ -1,60 +1,64 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/pages/hutpages/hutmain_logic.dart';
 import 'package:superhut/pages/hutpages/type1/type1webview.dart';
 import 'package:superhut/pages/hutpages/type2/type2webview.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
+import '../../core/ui/apple_glass.dart';
+import '../../core/ui/color_scheme_ext.dart';
+
+typedef HutFunctionListLoader = Future<List> Function();
+
 class HutMainPage extends StatefulWidget {
-  const HutMainPage({super.key});
+  const HutMainPage({
+    super.key,
+    this.loadFunctionList,
+    this.checkLoginOnInit = true,
+  });
+
+  final HutFunctionListLoader? loadFunctionList;
+  final bool checkLoginOnInit;
 
   @override
   State<HutMainPage> createState() => _HutMainPageState();
 }
 
 class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
-  final api = HutUserApi();
+  static const Color _hutAccent = Color(0xFFCC6D2C);
+  static const Set<String> _hiddenServiceIds = {
+    '8aaa866184af29a50185527fddf70dac',
+    '8aaa84f692e5ae560193f24790e76752',
+  };
+
   final logic = Get.put(HutMainLogic());
-  final state = Get.find<HutMainLogic>().state;
-
-  // Controller for search field
   final TextEditingController _searchController = TextEditingController();
-
-  // State for search text
-  String _searchText = '';
-
-  // Focus node for the search field
   final FocusNode _searchFocusNode = FocusNode();
+
+  late Future<List> _functionListFuture;
+  String _searchText = '';
 
   @override
   void initState() {
     super.initState();
-    logic.checkLogin();
-    // Register as observer to detect app lifecycle changes
+    _functionListFuture = _loadFunctionList();
+    if (widget.checkLoginOnInit) {
+      logic.checkLogin();
+    }
     WidgetsBinding.instance.addObserver(this);
-
-    // Add listener to search controller
     _searchController.addListener(() {
       setState(() {
-        _searchText = _searchController.text;
+        _searchText = _searchController.text.trim();
       });
-    });
-
-    // Ensure no automatic focus when the page loads
-    _searchFocusNode.addListener(() {
-      // Debug focus changes if needed
-      //print("Search focus: ${_searchFocusNode.hasFocus}");
     });
   }
 
   @override
   void dispose() {
-    // Remove observer
     WidgetsBinding.instance.removeObserver(this);
-
-    // Clean up controllers and focus nodes
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -62,13 +66,15 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // When app is resumed, unfocus to prevent keyboard from showing
     if (state == AppLifecycleState.resumed) {
       _unfocusSearchField();
     }
   }
 
-  // Method to clear focus when needed
+  Future<List> _loadFunctionList() {
+    return widget.loadFunctionList?.call() ?? logic.getFunList();
+  }
+
   void _unfocusSearchField() {
     if (_searchFocusNode.hasFocus) {
       _searchFocusNode.unfocus();
@@ -77,234 +83,241 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    // Add a listener to the route to detect when this page is navigated to
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Unfocus when the build is complete (which happens when returning to the page)
-      _unfocusSearchField();
-    });
-
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(title: Text("智慧工大"), elevation: 0),
-      body: GestureDetector(
-        // Unfocus when tapping outside of the text field
-        onTap: _unfocusSearchField,
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Search bar
-              Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.8),
-                    ),
-                  ),
-                  child: TextField(
-                    autofocus: false,
-                    controller: _searchController,
-                    //focusNode: _searchFocusNode,
-                    decoration: InputDecoration(
-                      filled: false,
-                      hintText: '搜索智慧工大服务',
-                      prefixIcon: Icon(Icons.search),
-                      suffixIcon:
-                          _searchText.isNotEmpty
-                              ? IconButton(
-                                icon: Icon(Icons.clear),
-                                onPressed: () {
-                                  _searchController.clear();
-                                },
-                              )
-                              : null,
-                      border: InputBorder.none,
-
-                      contentPadding: EdgeInsets.symmetric(vertical: 15),
-                    ),
-                  ),
-                ),
-              ),
-
-              // Function list
-              Expanded(
-                child: EnhancedFutureBuilder(
-                  future: logic.getFunList(),
-                  rememberFutureResult: true,
-                  whenDone: (v) {
-                    // Collect all services across all categories for search
-                    List<Map<String, dynamic>> allServicesWithCategory = [];
-
-                    for (var category in v) {
-                      List<FunctionItem> services = category['services'];
-                      String categoryLabel = category['label'];
-
-                      for (var service in services) {
-                        if (service.id != "8aaa866184af29a50185527fddf70dac" &&
-                            service.id != "8aaa84f692e5ae560193f24790e76752" &&
-                            service.serviceType != "4") {
-                          allServicesWithCategory.add({
-                            'service': service,
-                            'category': categoryLabel,
-                          });
-                        }
-                      }
-                    }
-
-                    // If searching, show filtered results
-                    if (_searchText.isNotEmpty) {
-                      List<Map<String, dynamic>> filteredServices =
-                          allServicesWithCategory
-                              .where(
-                                (item) =>
-                                    item['service'].serviceName
-                                        .toLowerCase()
-                                        .contains(_searchText.toLowerCase()) ||
-                                    item['category'].toLowerCase().contains(
-                                      _searchText.toLowerCase(),
-                                    ),
-                              )
-                              .toList();
-
-                      if (filteredServices.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.search_off,
-                                size: 64,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              SizedBox(height: 16),
-                              Text(
-                                '未找到与"$_searchText"相关的功能',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        padding: EdgeInsets.all(16),
-                        itemCount: filteredServices.length,
-                        itemBuilder: (context, index) {
-                          FunctionItem service =
-                              filteredServices[index]['service'];
-                          String category = filteredServices[index]['category'];
-
-                          return Padding(
-                            padding: EdgeInsets.only(bottom: 16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Show category as a small label
-                                if (index == 0 ||
-                                    filteredServices[index]['category'] !=
-                                        filteredServices[index - 1]['category'])
-                                  Padding(
-                                    padding: EdgeInsets.only(
-                                      bottom: 8,
-                                      top: index > 0 ? 16 : 0,
-                                    ),
-                                    child: Text(
-                                      category,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ),
-                                _buildServiceCard(
-                                  serviceName: service.serviceName,
-                                  serviceType: service.serviceType,
-                                  onTap: () => _openService(service),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    }
-
-                    // If not searching, show original categorized list
-                    return ListView.builder(
-                      padding: EdgeInsets.all(16),
-                      itemCount: v.length,
-                      itemBuilder: (context, index) {
-                        List<FunctionItem> services = v[index]['services'];
-                        // Filter out services we don't want to show
-                        List<FunctionItem> filteredServices =
-                            services
-                                .where(
-                                  (service) =>
-                                      service.id !=
-                                          "8aaa866184af29a50185527fddf70dac" &&
-                                      service.id !=
-                                          "8aaa84f692e5ae560193f24790e76752",
-                                )
-                                .toList();
-
-                        // If no services in this category after filtering, don't show the category
-                        if (filteredServices.isEmpty) {
-                          return SizedBox.shrink();
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Category title
-                            Padding(
-                              padding: EdgeInsets.only(
-                                bottom: 16,
-                                top: index > 0 ? 24 : 0,
-                              ),
-                              child: Text(
-                                v[index]['label'],
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-
-                            // Services in this category
-                            ...filteredServices.map(
-                              (service) => Padding(
-                                padding: EdgeInsets.only(bottom: 16),
-                                child: _buildServiceCard(
-                                  serviceName: service.serviceName,
-                                  serviceType: service.serviceType,
-                                  onTap: () => _openService(service),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                  whenNotDone: Center(
-                    child: LoadingAnimationWidget.inkDrop(
-                      color: Theme.of(context).primaryColor,
-                      size: 40,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+    return AppGlassPerformanceScope(
+      isLite: true,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AppGlassBackground(
+          style: AppGlassBackgroundStyle.soft,
+          lightBottomColor: const Color(0xFFFFF3EA),
+          darkBottomColor: const Color(0xFF20150F),
+          child: GestureDetector(
+            onTap: _unfocusSearchField,
+            child: EnhancedFutureBuilder(
+              future: _functionListFuture,
+              rememberFutureResult: true,
+              whenDone: (data) => _buildContent(context, data),
+              whenNotDone: _buildLoadingView(context),
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildLoadingView(BuildContext context) {
+    final topInset = MediaQuery.paddingOf(context).top;
+
+    return Stack(
+      children: [
+        Center(
+          child: GlassPanel(
+            style: GlassPanelStyle.hero,
+            borderRadius: BorderRadius.circular(28),
+            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 24),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: 0.78),
+                _hutAccent.withValues(alpha: 0.10),
+              ],
+            ),
+            borderColor: _hutAccent.withValues(alpha: 0.14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                LoadingAnimationWidget.inkDrop(color: _hutAccent, size: 42),
+                const SizedBox(height: 16),
+                Text(
+                  '正在加载智慧工大服务',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '为你同步可用的校园服务入口',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Positioned(
+          top: topInset + 12,
+          left: 16,
+          child: _FeatureBackButton(
+            onTap: () => Navigator.of(context).maybePop(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContent(BuildContext context, List data) {
+    final topInset = MediaQuery.paddingOf(context).top;
+    final categories = _normalizeCategories(data);
+    final allServices = _flattenServices(categories);
+    final searchableServices =
+        allServices.where((item) => item.service.serviceType != '4').toList();
+    final visibleServices =
+        _searchText.isEmpty
+            ? allServices
+            : searchableServices.where((item) {
+              final keyword = _searchText.toLowerCase();
+              return item.service.serviceName.toLowerCase().contains(keyword) ||
+                  item.category.toLowerCase().contains(keyword);
+            }).toList();
+
+    return Stack(
+      children: [
+        ListView(
+          padding: EdgeInsets.fromLTRB(16, topInset + 76, 16, 28),
+          children: [
+            _HutOverviewCard(
+              accent: _hutAccent,
+              serviceCount: allServices.length,
+              categoryCount: categories.length,
+            ),
+            const SizedBox(height: 14),
+            _SearchPanel(
+              accent: _hutAccent,
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              searchText: _searchText,
+            ),
+            const SizedBox(height: 16),
+            if (_searchText.isNotEmpty)
+              _buildSearchResultList(context, visibleServices)
+            else if (categories.isEmpty)
+              const _FeatureEmptyState(
+                icon: Ionicons.apps_outline,
+                accent: _hutAccent,
+                title: '暂无智慧工大服务',
+                subtitle: '当前账号暂未获取到可展示的服务入口，稍后再试一次。',
+              )
+            else
+              ...categories.map((category) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _ServiceCategoryPanel(
+                    accent: _accentForCategory(category.label),
+                    category: category,
+                    onOpenService: _openService,
+                  ),
+                );
+              }),
+          ],
+        ),
+        Positioned(
+          top: topInset + 12,
+          left: 16,
+          child: _FeatureBackButton(
+            onTap: () => Navigator.of(context).maybePop(),
+          ),
+        ),
+        Positioned(
+          top: topInset + 13,
+          left: 78,
+          right: 16,
+          child: Text(
+            '智慧工大',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchResultList(
+    BuildContext context,
+    List<_ServiceWithCategory> services,
+  ) {
+    if (services.isEmpty) {
+      return _FeatureEmptyState(
+        icon: Ionicons.search_outline,
+        accent: _hutAccent,
+        title: '没有找到相关服务',
+        subtitle: '未找到与“$_searchText”匹配的智慧工大功能。',
+      );
+    }
+
+    return _ServiceCategoryPanel(
+      accent: _hutAccent,
+      category: _ServiceCategory(label: '搜索结果', services: services),
+      onOpenService: _openService,
+    );
+  }
+
+  List<_ServiceCategory> _normalizeCategories(List data) {
+    final categories = <_ServiceCategory>[];
+    for (final item in data) {
+      if (item is! Map) {
+        continue;
+      }
+
+      final label = item['label']?.toString().trim() ?? '';
+      final rawServices = item['services'];
+      if (rawServices is! List) {
+        continue;
+      }
+
+      final services =
+          rawServices
+              .whereType<FunctionItem>()
+              .where(_isVisibleService)
+              .toList();
+      if (services.isEmpty) {
+        continue;
+      }
+
+      categories.add(
+        _ServiceCategory(
+          label: label.isEmpty ? '全部服务' : label,
+          services:
+              services
+                  .map(
+                    (service) => _ServiceWithCategory(
+                      category: label.isEmpty ? '全部服务' : label,
+                      service: service,
+                    ),
+                  )
+                  .toList(),
+        ),
+      );
+    }
+    return categories;
+  }
+
+  List<_ServiceWithCategory> _flattenServices(
+    List<_ServiceCategory> categories,
+  ) {
+    return categories.expand((category) => category.services).toList();
+  }
+
+  bool _isVisibleService(FunctionItem service) {
+    return !_hiddenServiceIds.contains(service.id);
+  }
+
+  Color _accentForCategory(String label) {
+    if (label.contains('教学') || label.contains('教务')) {
+      return const Color(0xFF3768D6);
+    }
+    if (label.contains('生活') || label.contains('校园')) {
+      return const Color(0xFF2C8A7D);
+    }
+    if (label.contains('办公') || label.contains('服务')) {
+      return const Color(0xFFB6569C);
+    }
+    return _hutAccent;
   }
 
   void _openService(FunctionItem service) {
@@ -312,7 +325,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
         service.servicePicUrl.isNotEmpty
             ? service.servicePicUrl
             : service.iconUrl;
-    if (service.serviceType == "1") {
+    if (service.serviceType == '1') {
       Get.to(
         () => Type1Webview(
           serviceId: '',
@@ -324,12 +337,12 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
       return;
     }
 
-    if (service.serviceType == "2" ||
-        service.serviceType == "4" ||
-        service.serviceType == "5") {
+    if (service.serviceType == '2' ||
+        service.serviceType == '4' ||
+        service.serviceType == '5') {
       Get.to(
         () => Type2Webview(
-          serviceId: service.serviceType == "5" ? service.id : '',
+          serviceId: service.serviceType == '5' ? service.id : '',
           serviceUrl: service.serviceUrl,
           serviceName: service.serviceName,
           serviceType: service.serviceType,
@@ -339,53 +352,441 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
       );
     }
   }
+}
 
-  // Custom card widget similar to _buildActivityCard in FunctionPage
-  Widget _buildServiceCard({
-    required String serviceName,
-    required String serviceType,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Theme.of(
-              context,
-            ).colorScheme.outlineVariant.withValues(alpha: 0.72),
+class _ServiceCategory {
+  const _ServiceCategory({required this.label, required this.services});
+
+  final String label;
+  final List<_ServiceWithCategory> services;
+}
+
+class _ServiceWithCategory {
+  const _ServiceWithCategory({required this.category, required this.service});
+
+  final String category;
+  final FunctionItem service;
+}
+
+class _HutOverviewCard extends StatelessWidget {
+  const _HutOverviewCard({
+    required this.accent,
+    required this.serviceCount,
+    required this.categoryCount,
+  });
+
+  final Color accent;
+  final int serviceCount;
+  final int categoryCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return GlassPanel(
+      style: GlassPanelStyle.hero,
+      borderRadius: BorderRadius.circular(26),
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.white.withValues(alpha: colorScheme.isDarkMode ? 0.14 : 0.84),
+          accent.withValues(alpha: colorScheme.isDarkMode ? 0.10 : 0.05),
+        ],
+      ),
+      borderColor: accent.withValues(alpha: 0.14),
+      child: Row(
+        children: [
+          GlassIconBadge(icon: Ionicons.phone_portrait_outline, tint: accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '服务总览',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  categoryCount == 0 ? '等待智慧工大返回服务目录' : '$categoryCount 个分类已整理',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+            decoration: BoxDecoration(
+              color: accent.withValues(
+                alpha: colorScheme.isDarkMode ? 0.20 : 0.12,
+              ),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              '$serviceCount 个服务',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchPanel extends StatelessWidget {
+  const _SearchPanel({
+    required this.accent,
+    required this.controller,
+    required this.focusNode,
+    required this.searchText,
+  });
+
+  final Color accent;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String searchText;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return GlassPanel(
+      style: GlassPanelStyle.floating,
+      borderRadius: BorderRadius.circular(24),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          colorScheme.floatingSurfaceStrong,
+          accent.withValues(alpha: colorScheme.isDarkMode ? 0.08 : 0.04),
+        ],
+      ),
+      borderColor: accent.withValues(alpha: 0.12),
+      child: TextField(
+        autofocus: false,
+        controller: controller,
+        focusNode: focusNode,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          filled: false,
+          hintText: '搜索智慧工大服务',
+          prefixIcon: Icon(Ionicons.search_outline, color: accent),
+          suffixIcon:
+              searchText.isNotEmpty
+                  ? IconButton(
+                    icon: const Icon(Ionicons.close_circle_outline),
+                    onPressed: controller.clear,
+                  )
+                  : null,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 15),
         ),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Row(
+      ),
+    );
+  }
+}
+
+class _ServiceCategoryPanel extends StatelessWidget {
+  const _ServiceCategoryPanel({
+    required this.accent,
+    required this.category,
+    required this.onOpenService,
+  });
+
+  final Color accent;
+  final _ServiceCategory category;
+  final ValueChanged<FunctionItem> onOpenService;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return GlassPanel(
+      style: GlassPanelStyle.card,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.fromLTRB(16, 13, 16, 16),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.white.withValues(alpha: colorScheme.isDarkMode ? 0.12 : 0.80),
+          accent.withValues(alpha: colorScheme.isDarkMode ? 0.08 : 0.04),
+        ],
+      ),
+      borderColor: accent.withValues(alpha: 0.12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              // Title and subtitle
+              GlassIconBadge(
+                icon: Ionicons.grid_outline,
+                tint: accent,
+                size: 38,
+              ),
+              const SizedBox(width: 9),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      serviceName,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  category.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
                 ),
               ),
-
-              // Arrow icon
-              Container(
-                decoration: BoxDecoration(shape: BoxShape.circle),
-                padding: EdgeInsets.all(8),
-                child: Icon(Icons.arrow_forward, size: 16),
+              _CountPill(
+                label: '${category.services.length} 个',
+                accent: accent,
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          ...category.services.map((item) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: _ServiceTile(
+                accent: accent,
+                service: item.service,
+                categoryLabel: item.category,
+                onTap: () => onOpenService(item.service),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _ServiceTile extends StatelessWidget {
+  const _ServiceTile({
+    required this.accent,
+    required this.service,
+    required this.categoryLabel,
+    required this.onTap,
+  });
+
+  final Color accent;
+  final FunctionItem service;
+  final String categoryLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return GlassPanel(
+      style: GlassPanelStyle.list,
+      borderRadius: BorderRadius.circular(22),
+      padding: const EdgeInsets.fromLTRB(13, 12, 12, 12),
+      borderColor: accent.withValues(
+        alpha: colorScheme.isDarkMode ? 0.14 : 0.10,
+      ),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          colorScheme.floatingSurfaceStrong,
+          accent.withValues(alpha: colorScheme.isDarkMode ? 0.08 : 0.035),
+        ],
+      ),
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: accent.withValues(
+                alpha: colorScheme.isDarkMode ? 0.20 : 0.12,
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(_iconForService(service), color: accent, size: 19),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  service.serviceName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _serviceTypeLabel(service.serviceType, categoryLabel),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Icon(
+            Ionicons.chevron_forward,
+            color: colorScheme.onSurfaceVariant,
+            size: 18,
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _iconForService(FunctionItem service) {
+    if (service.serviceName.contains('卡')) {
+      return Ionicons.card_outline;
+    }
+    if (service.serviceName.contains('图书')) {
+      return Ionicons.library_outline;
+    }
+    if (service.serviceName.contains('课') ||
+        service.serviceName.contains('教务')) {
+      return Ionicons.school_outline;
+    }
+    return Ionicons.apps_outline;
+  }
+
+  String _serviceTypeLabel(String serviceType, String categoryLabel) {
+    final typeLabel = switch (serviceType) {
+      '1' => '网页服务',
+      '2' => '认证服务',
+      '5' => '应用服务',
+      _ => '校园服务',
+    };
+    return '$categoryLabel · $typeLabel';
+  }
+}
+
+class _CountPill extends StatelessWidget {
+  const _CountPill({required this.label, required this.accent});
+
+  final String label;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: colorScheme.isDarkMode ? 0.18 : 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: accent,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _FeatureEmptyState extends StatelessWidget {
+  const _FeatureEmptyState({
+    required this.icon,
+    required this.accent,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final Color accent;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      style: GlassPanelStyle.hero,
+      borderRadius: BorderRadius.circular(28),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.white.withValues(
+            alpha: Theme.of(context).colorScheme.isDarkMode ? 0.12 : 0.78,
+          ),
+          accent.withValues(
+            alpha: Theme.of(context).colorScheme.isDarkMode ? 0.10 : 0.06,
+          ),
+        ],
+      ),
+      borderColor: accent.withValues(alpha: 0.14),
+      child: Column(
+        children: [
+          GlassIconBadge(icon: icon, tint: accent, size: 54),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureBackButton extends StatelessWidget {
+  const _FeatureBackButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      style: GlassPanelStyle.floating,
+      blur: 16,
+      borderRadius: BorderRadius.circular(20),
+      padding: EdgeInsets.zero,
+      onTap: onTap,
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Icon(
+          Ionicons.chevron_back,
+          color: Theme.of(context).colorScheme.onSurface,
+          size: 22,
         ),
       ),
     );
