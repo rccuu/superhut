@@ -8,9 +8,6 @@ const _kPortalMainPath = '/main.html';
 const _kLegacyPortalIndexPath = '/portal_dist/portal_index.html';
 
 const _kHutLoginUserAgent = 'SWSuperApp/1.1.3(XiaomidadaXiaomi15)';
-const _kBrowserUserAgent =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-    '(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.64';
 const _kV8MobileUserAgent =
     'Mozilla/5.0 (Linux; Android 15; 24129PN74C Build/AQ3A.240812.002; wv) '
     'AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/134.0.6998.39 '
@@ -219,7 +216,6 @@ String buildHutPortalServiceEntryUrl({
   return buildHutPortalCasLoginEntryUrl(
     targetUrl: targetUrl,
     entryOrigin: entryOrigin,
-    idToken: token,
   );
 }
 
