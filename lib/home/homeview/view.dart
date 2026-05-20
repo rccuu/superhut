@@ -483,6 +483,12 @@ class _CourseSyncOverlay extends StatelessWidget {
       valueListenable: CourseSyncService.instance.stateListenable,
       builder: (context, snapshot, _) {
         final visible = snapshot.isVisible;
+        // Perf: 99% 的时间这个 overlay 都不可见，但旧实现仍然走完
+        // AnimatedSlide + AnimatedOpacity 两个隐式动画 widget。
+        // 不可见时直接返回 SizedBox.shrink，连 build 都不要走。
+        if (!visible) {
+          return const SizedBox.shrink();
+        }
         final colorScheme = Theme.of(context).colorScheme;
         final bool isFailure = snapshot.status == CourseSyncTaskStatus.failure;
         final bool isSuccess = snapshot.status == CourseSyncTaskStatus.success;
@@ -496,109 +502,98 @@ class _CourseSyncOverlay extends StatelessWidget {
         return AnimatedSlide(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          offset: visible ? Offset.zero : const Offset(0, -1.2),
+          offset: Offset.zero,
           child: AnimatedOpacity(
             duration: const Duration(milliseconds: 180),
-            opacity: visible ? 1 : 0,
-            child:
-                !visible
-                    ? const SizedBox.shrink()
-                    : Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 420),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface.withValues(
-                                alpha: 0.96,
+            opacity: 1,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Material(
+                  color: Colors.transparent,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface.withValues(alpha: 0.96),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: accentColor.withValues(alpha: 0.22),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 18,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                isFailure
+                                    ? CupertinoIcons.exclamationmark_circle
+                                    : isSuccess
+                                    ? CupertinoIcons.check_mark_circled
+                                    : CupertinoIcons.arrow_2_circlepath,
+                                size: 18,
+                                color: accentColor,
                               ),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: accentColor.withValues(alpha: 0.22),
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  blurRadius: 18,
-                                  offset: const Offset(0, 10),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  snapshot.message,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: colorScheme.onSurface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(
-                                14,
-                                12,
-                                14,
-                                12,
                               ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        isFailure
-                                            ? CupertinoIcons
-                                                .exclamationmark_circle
-                                            : isSuccess
-                                            ? CupertinoIcons.check_mark_circled
-                                            : CupertinoIcons.arrow_2_circlepath,
-                                        size: 18,
-                                        color: accentColor,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          snapshot.message,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: colorScheme.onSurface,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                      if (snapshot.status ==
-                                              CourseSyncTaskStatus.running &&
-                                          snapshot.currentWeek != null &&
-                                          snapshot.totalWeeks != null)
-                                        Text(
-                                          '${snapshot.currentWeek}/${snapshot.totalWeeks}',
-                                          style: TextStyle(
-                                            color: colorScheme.onSurfaceVariant,
-                                            fontSize: 12,
-                                            fontFeatures: const [
-                                              ui.FontFeature.tabularFigures(),
-                                            ],
-                                          ),
-                                        ),
+                              if (snapshot.status ==
+                                      CourseSyncTaskStatus.running &&
+                                  snapshot.currentWeek != null &&
+                                  snapshot.totalWeeks != null)
+                                Text(
+                                  '${snapshot.currentWeek}/${snapshot.totalWeeks}',
+                                  style: TextStyle(
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontSize: 12,
+                                    fontFeatures: const [
+                                      ui.FontFeature.tabularFigures(),
                                     ],
                                   ),
-                                  const SizedBox(height: 10),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(999),
-                                    child: LinearProgressIndicator(
-                                      minHeight: 6,
-                                      value:
-                                          snapshot.status ==
-                                                  CourseSyncTaskStatus.failure
-                                              ? null
-                                              : snapshot.progress,
-                                      color: accentColor,
-                                      backgroundColor: accentColor.withValues(
-                                        alpha: 0.12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(999),
+                            child: LinearProgressIndicator(
+                              minHeight: 6,
+                              value:
+                                  snapshot.status ==
+                                          CourseSyncTaskStatus.failure
+                                      ? null
+                                      : snapshot.progress,
+                              color: accentColor,
+                              backgroundColor: accentColor.withValues(
+                                alpha: 0.12,
                               ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
+                  ),
+                ),
+              ),
+            ),
           ),
         );
       },
@@ -648,6 +643,9 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
     curve: Curves.easeOutCubic,
   );
   late Animation<Offset> _slide;
+  // Perf: 只有真正在过渡动画期间才需要 ClipRect+SlideTransition；
+  // 动画完成后退化为直接返回 child，避免常驻 saveLayer。
+  bool _isTransitioning = false;
 
   @override
   void initState() {
@@ -663,6 +661,11 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
     if (status == AnimationStatus.completed ||
         status == AnimationStatus.dismissed) {
       _setTransitionLiteMode(false);
+      if (_isTransitioning && mounted) {
+        setState(() {
+          _isTransitioning = false;
+        });
+      }
     }
   }
 
@@ -676,6 +679,9 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
 
   void _startTransition() {
     _setTransitionLiteMode(true);
+    if (!_isTransitioning) {
+      _isTransitioning = true;
+    }
     _controller.forward(from: 0);
   }
 
@@ -713,7 +719,7 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
   @override
   Widget build(BuildContext context) {
     final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations;
-    if (!widget.isActive || disableAnimations == true) {
+    if (!widget.isActive || disableAnimations == true || !_isTransitioning) {
       _setTransitionLiteMode(false);
       return widget.child;
     }
@@ -745,42 +751,71 @@ class _ClassicTabBar extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    // Perf: TabBar 是常驻浮层，且页面切换时下层内容会随 SlideTransition
+    // 移动 —— 一旦它开启 BackdropFilter，每帧都要重新采样，是头号掉帧元凶。
+    // 改为读 AppGlassPerformanceScope：lite 模式（Android / 切换动画期间）
+    // 直接关掉 BackdropFilter，把 surface 透明度上提到 0.78 保持视觉浮岛感。
+    final useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
     final panelRadius = BorderRadius.circular(28);
-    final panelGradient = LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [
-        Colors.white.withValues(alpha: isDark ? 0.16 : 0.28),
-        colorScheme.surface.withValues(alpha: isDark ? 0.14 : 0.22),
-        Colors.white.withValues(alpha: isDark ? 0.16 : 0.28),
-      ],
-      stops: const [0, 0.5, 1],
-    );
+    final panelGradient =
+        useLiteEffects
+            ? LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.white.withValues(alpha: isDark ? 0.10 : 0.84),
+                colorScheme.surface.withValues(alpha: isDark ? 0.34 : 0.78),
+                Colors.white.withValues(alpha: isDark ? 0.10 : 0.84),
+              ],
+              stops: const [0, 0.5, 1],
+            )
+            : LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.white.withValues(alpha: isDark ? 0.16 : 0.28),
+                colorScheme.surface.withValues(alpha: isDark ? 0.14 : 0.22),
+                Colors.white.withValues(alpha: isDark ? 0.16 : 0.28),
+              ],
+              stops: const [0, 0.5, 1],
+            );
     final activeBackground = colorScheme.primary.withValues(
       alpha: isDark ? 0.22 : 0.12,
     );
     final panelBorder = Colors.white.withValues(alpha: isDark ? 0.10 : 0.24);
-    final panelShadow = <BoxShadow>[
-      BoxShadow(
-        color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.18),
-        blurRadius: isDark ? 32 : 27,
-        offset: Offset(0, isDark ? 14 : 11),
-        spreadRadius: -10,
-      ),
-      BoxShadow(
-        color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.10),
-        blurRadius: isDark ? 12 : 10,
-        offset: const Offset(0, 3),
-        spreadRadius: -2,
-      ),
-    ];
+    // Perf: 双层 BoxShadow 在长方形区域上的成本接近一次小型模糊。
+    // lite 模式下合并为一层，并把 blurRadius 从 27/32 降到 16/20。
+    final panelShadow =
+        useLiteEffects
+            ? <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.12),
+                blurRadius: isDark ? 20 : 16,
+                offset: const Offset(0, 8),
+                spreadRadius: -4,
+              ),
+            ]
+            : <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.18),
+                blurRadius: isDark ? 32 : 27,
+                offset: Offset(0, isDark ? 14 : 11),
+                spreadRadius: -10,
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.10),
+                blurRadius: isDark ? 12 : 10,
+                offset: const Offset(0, 3),
+                spreadRadius: -2,
+              ),
+            ];
 
     return RepaintBoundary(
       child: GlassPanel(
         key: const ValueKey<String>('home-bottom-nav-panel-stable'),
         style: GlassPanelStyle.floating,
         blur: isDark ? 18 : 24,
-        useBackdropFilter: true,
+        useBackdropFilter: !useLiteEffects,
         borderRadius: panelRadius,
         gradient: panelGradient,
         borderColor: panelBorder,
