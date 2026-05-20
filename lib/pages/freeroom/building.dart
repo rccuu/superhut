@@ -199,68 +199,86 @@ class _BuildingPageState extends State<BuildingPage> {
     final allRoomCountLabels =
         data.map((building) => '${building.count}间').toList();
 
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(),
-      ),
-      slivers: [
-        _buildTopBar(context),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-          sliver: SliverToBoxAdapter(
-            child: _CampusHeroCard(
-              accent: _emptyRoomAccent,
-              totalClassrooms: totalClassrooms,
-            ),
-          ),
-        ),
-        if (buildingLoadErrorMessage != null)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-            sliver: SliverToBoxAdapter(
-              child: _FeatureEmptyState(
-                icon: Ionicons.alert_circle_outline,
-                accent: Theme.of(context).colorScheme.error,
-                title: '教学楼加载失败',
-                subtitle: buildingLoadErrorMessage!,
-              ),
-            ),
-          )
-        else if (data.isEmpty)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-            sliver: SliverToBoxAdapter(
-              child: _FeatureEmptyState(
-                icon: Ionicons.school_outline,
-                accent: _emptyRoomAccent,
-                title: '暂无可用教学楼数据',
-                subtitle: '当前没有拿到教学楼列表，稍后再试一次。',
-              ),
-            ),
-          )
-        else
-          ...groupedBuildings.expand((group) {
-            final campus = group.key;
-            final buildings = group.value;
+    return LayoutBuilder(
+      builder: (context, outerConstraints) {
+        // Perf: 一次性计算字体大小并缓存。之前是每个 _CampusSection 内部的
+        // LayoutBuilder 都跑一遍 _resolveBuildingTitleFontSize（12×N 次
+        // TextPainter.layout()），现在整个列表只算一次。
+        final availableWidth = outerConstraints.maxWidth - 32 - 32;
+        final crossAxisCount = availableWidth >= 720 ? 3 : 2;
+        final titleFontSize = _resolveBuildingTitleFontSize(
+          context,
+          availableWidth: availableWidth,
+          crossAxisCount: crossAxisCount,
+          displayNames: allCompactNames,
+          roomCountLabels: allRoomCountLabels,
+        );
 
-            return <Widget>[
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                sliver: SliverToBoxAdapter(
-                  child: _CampusSection(
-                    campus: campus,
-                    accent: _campusAccent(campus),
-                    buildings: buildings,
-                    compactBuildingName: _compactBuildingName,
-                    allDisplayNames: allCompactNames,
-                    allRoomCountLabels: allRoomCountLabels,
-                  ),
+        return CustomScrollView(
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          slivers: [
+            _buildTopBar(context),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              sliver: SliverToBoxAdapter(
+                child: _CampusHeroCard(
+                  accent: _emptyRoomAccent,
+                  totalClassrooms: totalClassrooms,
                 ),
               ),
-            ];
-          }),
-        const SliverToBoxAdapter(child: SizedBox(height: 28)),
-      ],
+            ),
+            if (buildingLoadErrorMessage != null)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                sliver: SliverToBoxAdapter(
+                  child: _FeatureEmptyState(
+                    icon: Ionicons.alert_circle_outline,
+                    accent: Theme.of(context).colorScheme.error,
+                    title: '教学楼加载失败',
+                    subtitle: buildingLoadErrorMessage!,
+                  ),
+                ),
+              )
+            else if (data.isEmpty)
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                sliver: SliverToBoxAdapter(
+                  child: _FeatureEmptyState(
+                    icon: Ionicons.school_outline,
+                    accent: _emptyRoomAccent,
+                    title: '暂无可用教学楼数据',
+                    subtitle: '当前没有拿到教学楼列表，稍后再试一次。',
+                  ),
+                ),
+              )
+            else
+              ...groupedBuildings.expand((group) {
+                final campus = group.key;
+                final buildings = group.value;
+
+                return <Widget>[
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: _CampusSection(
+                        campus: campus,
+                        accent: _campusAccent(campus),
+                        buildings: buildings,
+                        compactBuildingName: _compactBuildingName,
+                        allDisplayNames: allCompactNames,
+                        allRoomCountLabels: allRoomCountLabels,
+                        cachedTitleFontSize: titleFontSize,
+                      ),
+                    ),
+                  ),
+                ];
+              }),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
+          ],
+        );
+      },
     );
   }
 }
@@ -336,6 +354,7 @@ class _CampusSection extends StatelessWidget {
     required this.compactBuildingName,
     required this.allDisplayNames,
     required this.allRoomCountLabels,
+    required this.cachedTitleFontSize,
   });
 
   final String campus;
@@ -344,6 +363,9 @@ class _CampusSection extends StatelessWidget {
   final String Function(String name) compactBuildingName;
   final List<String> allDisplayNames;
   final List<String> allRoomCountLabels;
+  // Perf: 字体大小计算结果由父级一次性计算并缓存传入，避免
+  // LayoutBuilder 每次 rebuild 都跑 12×N 次 TextPainter.layout()。
+  final double cachedTitleFontSize;
 
   @override
   Widget build(BuildContext context) {
@@ -366,13 +388,6 @@ class _CampusSection extends StatelessWidget {
           final width = constraints.maxWidth;
           final crossAxisCount = width >= 720 ? 3 : 2;
           final childAspectRatio = width >= 720 ? 1.34 : 1.20;
-          final titleFontSize = _resolveBuildingTitleFontSize(
-            context,
-            availableWidth: width,
-            crossAxisCount: crossAxisCount,
-            displayNames: allDisplayNames,
-            roomCountLabels: allRoomCountLabels,
-          );
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,6 +431,10 @@ class _CampusSection extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
+              // Perf: shrinkWrap GridView 会一次性 layout 全部 item，
+              // 但空教室楼栋数通常 <12 个，不值得用 SliverGrid 来打散
+              // （因为外面的 GlassPanel 需要完整高度才能正确绘制圆角背景）。
+              // 保留 shrinkWrap 但用 addRepaintBoundaries: true 减少重绘。
               GridView.builder(
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
@@ -427,13 +446,15 @@ class _CampusSection extends StatelessWidget {
                   crossAxisSpacing: 12,
                   childAspectRatio: childAspectRatio,
                 ),
+                addRepaintBoundaries: true,
+                addAutomaticKeepAlives: false,
                 itemBuilder: (context, index) {
                   final building = buildings[index];
                   return _BuildingCard(
                     building: building,
                     displayName: compactBuildingName(building.name),
                     accent: accent,
-                    titleFontSize: titleFontSize,
+                    titleFontSize: cachedTitleFontSize,
                   );
                 },
               ),
