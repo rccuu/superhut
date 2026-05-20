@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/pages/Commentary/commentary_batch_page.dart';
 import 'package:superhut/pages/Electricitybill/electricity_page.dart';
 import 'package:superhut/pages/ExamSchedule/exam_schedule_page.dart';
@@ -242,8 +241,8 @@ class _FunctionPageState extends State<FunctionPage> {
                 shadows: [
                   Shadow(
                     color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.10),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
@@ -285,26 +284,21 @@ class _FunctionPageState extends State<FunctionPage> {
                     ),
                   ),
                   const Spacer(),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    child:
-                        isLoading
-                            ? SizedBox(
-                              key: const ValueKey('loading'),
-                              width: 24,
-                              height: 24,
-                              child: LoadingAnimationWidget.inkDrop(
-                                color: foreground,
-                                size: 20,
-                              ),
-                            )
-                            : Icon(
-                              key: const ValueKey('arrow'),
-                              Ionicons.arrow_forward,
-                              size: 18,
-                              color: foreground.withValues(alpha: 0.92),
-                            ),
-                  ),
+                  if (isLoading)
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: foreground.withValues(alpha: 0.92),
+                      ),
+                    )
+                  else
+                    Icon(
+                      Ionicons.arrow_forward,
+                      size: 18,
+                      color: foreground.withValues(alpha: 0.92),
+                    ),
                 ],
               ),
             ],

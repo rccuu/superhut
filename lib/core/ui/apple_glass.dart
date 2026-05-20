@@ -1,6 +1,5 @@
 import 'dart:ui';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 enum AppGlassBackgroundStyle { rich, soft, flat }
@@ -32,7 +31,8 @@ class AppGlassPerformanceScope extends InheritedWidget {
       return scope!.isLite!;
     }
 
-    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    // 默认全平台走轻量效果。需要完整玻璃效果的局部页面可显式传入 isLite: false。
+    return true;
   }
 
   @override
@@ -245,21 +245,21 @@ class GlassPanel extends StatelessWidget {
             ? (useLiteEffects ? blur.clamp(0.0, 12.0) : blur)
             : 0.0;
     final effectiveShadowBlur = switch (style) {
-      GlassPanelStyle.hero => useLiteEffects ? 16.0 : 30.0,
-      GlassPanelStyle.floating => useLiteEffects ? 14.0 : 24.0,
-      GlassPanelStyle.card => useLiteEffects ? 10.0 : 18.0,
-      GlassPanelStyle.list => useLiteEffects ? 6.0 : 12.0,
+      GlassPanelStyle.hero => useLiteEffects ? 10.0 : 30.0,
+      GlassPanelStyle.floating => useLiteEffects ? 8.0 : 24.0,
+      GlassPanelStyle.card => useLiteEffects ? 6.0 : 18.0,
+      GlassPanelStyle.list => useLiteEffects ? 3.0 : 12.0,
       GlassPanelStyle.solid => 0.0,
     };
     final effectiveShadowOffset = switch (style) {
       GlassPanelStyle.hero =>
-        useLiteEffects ? const Offset(0, 8) : const Offset(0, 16),
+        useLiteEffects ? const Offset(0, 5) : const Offset(0, 16),
       GlassPanelStyle.floating =>
-        useLiteEffects ? const Offset(0, 7) : const Offset(0, 12),
+        useLiteEffects ? const Offset(0, 4) : const Offset(0, 12),
       GlassPanelStyle.card =>
-        useLiteEffects ? const Offset(0, 5) : const Offset(0, 10),
+        useLiteEffects ? const Offset(0, 3) : const Offset(0, 10),
       GlassPanelStyle.list =>
-        useLiteEffects ? const Offset(0, 3) : const Offset(0, 6),
+        useLiteEffects ? const Offset(0, 2) : const Offset(0, 6),
       GlassPanelStyle.solid => Offset.zero,
     };
     final effectiveSurfaceOpacity = switch (style) {
@@ -277,12 +277,20 @@ class GlassPanel extends StatelessWidget {
       GlassPanelStyle.solid => isDark ? 0.08 : 0.16,
     };
     final effectiveShadowAlpha = switch (style) {
-      GlassPanelStyle.hero => isDark ? 0.24 : 0.08,
-      GlassPanelStyle.floating => isDark ? 0.20 : 0.07,
-      GlassPanelStyle.card => isDark ? 0.16 : 0.06,
-      GlassPanelStyle.list => isDark ? 0.10 : 0.04,
+      GlassPanelStyle.hero =>
+        useLiteEffects ? (isDark ? 0.14 : 0.04) : (isDark ? 0.24 : 0.08),
+      GlassPanelStyle.floating =>
+        useLiteEffects ? (isDark ? 0.12 : 0.035) : (isDark ? 0.20 : 0.07),
+      GlassPanelStyle.card =>
+        useLiteEffects ? (isDark ? 0.10 : 0.03) : (isDark ? 0.16 : 0.06),
+      GlassPanelStyle.list =>
+        useLiteEffects ? (isDark ? 0.06 : 0.02) : (isDark ? 0.10 : 0.04),
       GlassPanelStyle.solid => 0.0,
     };
+    final effectiveBoxShadow =
+        boxShadow == null
+            ? null
+            : _resolveGlassBoxShadow(boxShadow!, useLiteEffects);
     final defaultGradientColors = switch (style) {
       GlassPanelStyle.hero => [
         Colors.white.withValues(alpha: isDark ? 0.16 : 0.70),
@@ -326,7 +334,7 @@ class GlassPanel extends StatelessWidget {
             borderColor ?? Colors.white.withValues(alpha: effectiveBorderAlpha),
       ),
       boxShadow:
-          boxShadow ??
+          effectiveBoxShadow ??
           (effectiveShadowBlur <= 0
               ? const []
               : [
@@ -370,6 +378,27 @@ class GlassPanel extends StatelessWidget {
 
     return Container(margin: margin, child: decoratedBody);
   }
+}
+
+List<BoxShadow> _resolveGlassBoxShadow(
+  List<BoxShadow> shadows,
+  bool useLiteEffects,
+) {
+  if (!useLiteEffects) {
+    return shadows;
+  }
+
+  return shadows
+      .map(
+        (shadow) => BoxShadow(
+          color: shadow.color.withValues(alpha: shadow.color.a * 0.62),
+          offset: Offset(shadow.offset.dx * 0.72, shadow.offset.dy * 0.62),
+          blurRadius: shadow.blurRadius.clamp(0.0, 10.0).toDouble(),
+          spreadRadius: shadow.spreadRadius.clamp(-6.0, 1.0).toDouble(),
+          blurStyle: shadow.blurStyle,
+        ),
+      )
+      .toList(growable: false);
 }
 
 class GlassIconBadge extends StatelessWidget {
