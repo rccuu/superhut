@@ -1551,16 +1551,28 @@ class BubbleAnimation extends StatefulWidget {
   State<BubbleAnimation> createState() => _BubbleAnimationState();
 }
 
-class _BubbleAnimationState extends State<BubbleAnimation> {
-  final List<_BubbleData> _bubbles = <_BubbleData>[];
-  final Random _random = Random();
-  Timer? _timer;
+class _BubbleAnimationState extends State<BubbleAnimation>
+    with SingleTickerProviderStateMixin {
+  static const List<_BubbleSpec> _bubbleSpecs = [
+    _BubbleSpec(xFactor: 0.12, size: 10, speed: 0.44, drift: 18, phase: 0.02),
+    _BubbleSpec(xFactor: 0.23, size: 18, speed: 0.36, drift: -22, phase: 0.20),
+    _BubbleSpec(xFactor: 0.35, size: 12, speed: 0.50, drift: 12, phase: 0.38),
+    _BubbleSpec(xFactor: 0.47, size: 22, speed: 0.32, drift: -16, phase: 0.56),
+    _BubbleSpec(xFactor: 0.60, size: 14, speed: 0.48, drift: 20, phase: 0.72),
+    _BubbleSpec(xFactor: 0.74, size: 20, speed: 0.34, drift: -14, phase: 0.12),
+    _BubbleSpec(xFactor: 0.88, size: 11, speed: 0.54, drift: 16, phase: 0.84),
+  ];
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 14),
+  );
 
   @override
   void initState() {
     super.initState();
     if (widget.isActive) {
-      _startAnimation();
+      _controller.repeat();
     }
   }
 
@@ -1568,147 +1580,10 @@ class _BubbleAnimationState extends State<BubbleAnimation> {
   void didUpdateWidget(BubbleAnimation oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
-      _startAnimation();
+      _controller.repeat();
     } else if (!widget.isActive && oldWidget.isActive) {
-      _stopAnimation();
+      _controller.stop();
     }
-  }
-
-  void _startAnimation() {
-    _timer?.cancel();
-    _bubbles.clear();
-    _timer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        if (_bubbles.length < 15) {
-          _bubbles.add(
-            _BubbleData(
-              id: UniqueKey().toString(),
-              color: widget.color,
-              size: _random.nextDouble() * 20 + 5,
-              position: Offset(
-                _random.nextDouble() * MediaQuery.sizeOf(context).width,
-                MediaQuery.sizeOf(context).height + 20,
-              ),
-              destination: Offset(
-                _random.nextDouble() * MediaQuery.sizeOf(context).width,
-                _random.nextDouble() * 200,
-              ),
-              duration: Duration(seconds: _random.nextInt(6) + 4),
-            ),
-          );
-        }
-        _bubbles.removeWhere((bubble) => bubble.isCompleted);
-      });
-    });
-  }
-
-  void _stopAnimation() {
-    _timer?.cancel();
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _bubbles.clear();
-    });
-  }
-
-  void _markBubbleCompleted(_BubbleData bubble) {
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      bubble.isCompleted = true;
-      _bubbles.removeWhere((item) => item.isCompleted);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          for (final bubble in _bubbles)
-            _AnimatedBubble(
-              key: ValueKey(bubble.id),
-              bubble: bubble,
-              onCompleted: () => _markBubbleCompleted(bubble),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BubbleData {
-  _BubbleData({
-    required this.id,
-    required this.color,
-    required this.size,
-    required this.position,
-    required this.destination,
-    required this.duration,
-  });
-
-  final String id;
-  final Color color;
-  final double size;
-  final Offset position;
-  final Offset destination;
-  final Duration duration;
-  bool isCompleted = false;
-}
-
-class _AnimatedBubble extends StatefulWidget {
-  const _AnimatedBubble({
-    super.key,
-    required this.bubble,
-    required this.onCompleted,
-  });
-
-  final _BubbleData bubble;
-  final VoidCallback onCompleted;
-
-  @override
-  State<_AnimatedBubble> createState() => _AnimatedBubbleState();
-}
-
-class _AnimatedBubbleState extends State<_AnimatedBubble>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<Offset> _positionAnimation;
-  late final Animation<double> _opacityAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.bubble.duration,
-    );
-    _positionAnimation = Tween<Offset>(
-      begin: widget.bubble.position,
-      end: widget.bubble.destination,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _opacityAnimation = Tween<double>(begin: 0.7, end: 0.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.5, 1.0, curve: Curves.easeOut),
-      ),
-    );
-
-    _controller.forward().whenComplete(widget.onCompleted);
   }
 
   @override
@@ -1719,29 +1594,99 @@ class _AnimatedBubbleState extends State<_AnimatedBubble>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Positioned(
-          left: _positionAnimation.value.dx,
-          top: _positionAnimation.value.dy,
-          child: Opacity(
-            opacity: _opacityAnimation.value,
-            child: Container(
-              width: widget.bubble.size,
-              height: widget.bubble.size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: widget.bubble.color.withAlpha(102),
-                border: Border.all(
-                  color: widget.bubble.color.withAlpha(153),
-                  width: 1,
-                ),
+    if (!widget.isActive) {
+      return const SizedBox.shrink();
+    }
+
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return CustomPaint(
+              size: Size.infinite,
+              isComplex: true,
+              willChange: true,
+              painter: _BubblePainter(
+                progress: _controller.value,
+                color: widget.color,
+                bubbles: _bubbleSpecs,
               ),
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
+  }
+}
+
+class _BubbleSpec {
+  const _BubbleSpec({
+    required this.xFactor,
+    required this.size,
+    required this.speed,
+    required this.drift,
+    required this.phase,
+  });
+
+  final double xFactor;
+  final double size;
+  final double speed;
+  final double drift;
+  final double phase;
+}
+
+class _BubblePainter extends CustomPainter {
+  const _BubblePainter({
+    required this.progress,
+    required this.color,
+    required this.bubbles,
+  });
+
+  final double progress;
+  final Color color;
+  final List<_BubbleSpec> bubbles;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) {
+      return;
+    }
+
+    final fillPaint = Paint()..style = PaintingStyle.fill;
+    final strokePaint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1;
+    final travel = size.height + 120;
+
+    for (final bubble in bubbles) {
+      final cycle = (progress * bubble.speed + bubble.phase) % 1.0;
+      final fadeIn = (cycle / 0.16).clamp(0.0, 1.0);
+      final fadeOut = ((1.0 - cycle) / 0.30).clamp(0.0, 1.0);
+      final opacity = fadeIn < fadeOut ? fadeIn : fadeOut;
+      if (opacity <= 0.01) {
+        continue;
+      }
+
+      final wave = sin((cycle + bubble.phase) * pi * 2);
+      final center = Offset(
+        size.width * bubble.xFactor + wave * bubble.drift,
+        size.height + bubble.size - cycle * travel,
+      );
+      final radius = bubble.size / 2;
+
+      fillPaint.color = color.withValues(alpha: opacity * 0.26);
+      strokePaint.color = color.withValues(alpha: opacity * 0.38);
+      canvas.drawCircle(center, radius, fillPaint);
+      canvas.drawCircle(center, radius, strokePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BubblePainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.bubbles != bubbles;
   }
 }

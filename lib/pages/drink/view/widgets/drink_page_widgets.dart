@@ -1321,16 +1321,71 @@ class DrinkBubbleAnimation extends StatefulWidget {
   State<DrinkBubbleAnimation> createState() => _DrinkBubbleAnimationState();
 }
 
-class _DrinkBubbleAnimationState extends State<DrinkBubbleAnimation> {
-  final List<_DrinkBubbleData> _bubbles = <_DrinkBubbleData>[];
-  final Random _random = Random();
-  Timer? _timer;
+class _DrinkBubbleAnimationState extends State<DrinkBubbleAnimation>
+    with SingleTickerProviderStateMixin {
+  static const List<_DrinkBubbleSpec> _bubbleSpecs = [
+    _DrinkBubbleSpec(xFactor: 0.08, size: 24, speed: 0.54, drift: 18, phase: 0),
+    _DrinkBubbleSpec(
+      xFactor: 0.18,
+      size: 34,
+      speed: 0.48,
+      drift: -22,
+      phase: 0.18,
+    ),
+    _DrinkBubbleSpec(
+      xFactor: 0.31,
+      size: 18,
+      speed: 0.62,
+      drift: 12,
+      phase: 0.36,
+    ),
+    _DrinkBubbleSpec(
+      xFactor: 0.44,
+      size: 30,
+      speed: 0.42,
+      drift: -16,
+      phase: 0.52,
+    ),
+    _DrinkBubbleSpec(
+      xFactor: 0.58,
+      size: 22,
+      speed: 0.58,
+      drift: 20,
+      phase: 0.70,
+    ),
+    _DrinkBubbleSpec(
+      xFactor: 0.72,
+      size: 38,
+      speed: 0.38,
+      drift: -14,
+      phase: 0.10,
+    ),
+    _DrinkBubbleSpec(
+      xFactor: 0.86,
+      size: 26,
+      speed: 0.50,
+      drift: 16,
+      phase: 0.82,
+    ),
+    _DrinkBubbleSpec(
+      xFactor: 0.95,
+      size: 16,
+      speed: 0.66,
+      drift: -10,
+      phase: 0.44,
+    ),
+  ];
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 12),
+  );
 
   @override
   void initState() {
     super.initState();
     if (widget.isActive) {
-      _startAnimation();
+      _controller.repeat();
     }
   }
 
@@ -1339,144 +1394,11 @@ class _DrinkBubbleAnimationState extends State<DrinkBubbleAnimation> {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive != oldWidget.isActive) {
       if (widget.isActive) {
-        _startAnimation();
+        _controller.repeat();
       } else {
-        _stopAnimation();
+        _controller.stop();
       }
     }
-  }
-
-  void _startAnimation() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        if (_bubbles.length < 60) {
-          _bubbles.add(
-            _DrinkBubbleData(
-              id: UniqueKey().toString(),
-              x: _random.nextDouble() * MediaQuery.sizeOf(context).width,
-              size: _random.nextDouble() * 40 + 15,
-              speed: _random.nextDouble() * 1.5 + 0.8,
-              horizontalDrift: _random.nextDouble() * 40 - 20,
-            ),
-          );
-        }
-        _bubbles.removeWhere((bubble) => bubble.isCompleted);
-      });
-    });
-  }
-
-  void _stopAnimation() {
-    _timer?.cancel();
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _bubbles.clear();
-    });
-  }
-
-  void _markCompleted(_DrinkBubbleData bubble) {
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      bubble.isCompleted = true;
-      _bubbles.removeWhere((item) => item.isCompleted);
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          for (final bubble in _bubbles)
-            _AnimatedDrinkBubble(
-              key: ValueKey(bubble.id),
-              bubble: bubble,
-              color: widget.color,
-              onComplete: () => _markCompleted(bubble),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DrinkBubbleData {
-  _DrinkBubbleData({
-    required this.id,
-    required this.x,
-    required this.size,
-    required this.speed,
-    required this.horizontalDrift,
-  });
-
-  final String id;
-  final double x;
-  final double size;
-  final double speed;
-  final double horizontalDrift;
-  bool isCompleted = false;
-}
-
-class _AnimatedDrinkBubble extends StatefulWidget {
-  const _AnimatedDrinkBubble({
-    super.key,
-    required this.bubble,
-    required this.color,
-    required this.onComplete,
-  });
-
-  final _DrinkBubbleData bubble;
-  final Color color;
-  final VoidCallback onComplete;
-
-  @override
-  State<_AnimatedDrinkBubble> createState() => _AnimatedDrinkBubbleState();
-}
-
-class _AnimatedDrinkBubbleState extends State<_AnimatedDrinkBubble>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _yAnimation;
-  late final Animation<double> _opacityAnimation;
-  late final Animation<double> _horizontalAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: Duration(seconds: (4 / widget.bubble.speed).round()),
-      vsync: this,
-    );
-    _yAnimation = Tween<double>(
-      begin: 0,
-      end: 1000,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _opacityAnimation = Tween<double>(
-      begin: 0.6,
-      end: 0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _horizontalAnimation = Tween<double>(
-      begin: 0,
-      end: widget.bubble.horizontalDrift,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-
-    _controller.forward().whenComplete(widget.onComplete);
   }
 
   @override
@@ -1487,33 +1409,98 @@ class _AnimatedDrinkBubbleState extends State<_AnimatedDrinkBubble>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return Positioned(
-          left: widget.bubble.x + _horizontalAnimation.value,
-          bottom: _yAnimation.value,
-          child: Opacity(
-            opacity: _opacityAnimation.value,
-            child: Container(
-              width: widget.bubble.size,
-              height: widget.bubble.size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    widget.color.withAlpha(60),
-                    widget.color.withAlpha(120),
-                  ],
-                ),
-                border: Border.all(color: widget.color.withAlpha(80), width: 1),
+    if (!widget.isActive) {
+      return const SizedBox.shrink();
+    }
+
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return CustomPaint(
+              size: Size.infinite,
+              isComplex: true,
+              willChange: true,
+              painter: _DrinkBubblePainter(
+                progress: _controller.value,
+                color: widget.color,
+                bubbles: _bubbleSpecs,
               ),
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
+  }
+}
+
+class _DrinkBubbleSpec {
+  const _DrinkBubbleSpec({
+    required this.xFactor,
+    required this.size,
+    required this.speed,
+    required this.drift,
+    required this.phase,
+  });
+
+  final double xFactor;
+  final double size;
+  final double speed;
+  final double drift;
+  final double phase;
+}
+
+class _DrinkBubblePainter extends CustomPainter {
+  const _DrinkBubblePainter({
+    required this.progress,
+    required this.color,
+    required this.bubbles,
+  });
+
+  final double progress;
+  final Color color;
+  final List<_DrinkBubbleSpec> bubbles;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) {
+      return;
+    }
+
+    final fillPaint = Paint()..style = PaintingStyle.fill;
+    final strokePaint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1;
+    final travel = size.height + 140;
+
+    for (final bubble in bubbles) {
+      final cycle = (progress * bubble.speed + bubble.phase) % 1.0;
+      final fadeIn = (cycle / 0.14).clamp(0.0, 1.0);
+      final fadeOut = ((1.0 - cycle) / 0.26).clamp(0.0, 1.0);
+      final opacity = fadeIn < fadeOut ? fadeIn : fadeOut;
+      if (opacity <= 0.01) {
+        continue;
+      }
+
+      final wave = sin((cycle + bubble.phase) * pi * 2);
+      final x = size.width * bubble.xFactor + wave * bubble.drift;
+      final y = size.height + bubble.size - cycle * travel;
+      final radius = bubble.size / 2;
+      final center = Offset(x, y);
+
+      fillPaint.color = color.withValues(alpha: opacity * 0.22);
+      strokePaint.color = color.withValues(alpha: opacity * 0.34);
+      canvas.drawCircle(center, radius, fillPaint);
+      canvas.drawCircle(center, radius, strokePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DrinkBubblePainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.bubbles != bubbles;
   }
 }

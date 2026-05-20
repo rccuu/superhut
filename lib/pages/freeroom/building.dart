@@ -1,7 +1,6 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
@@ -170,7 +169,14 @@ class _BuildingPageState extends State<BuildingPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            LoadingAnimationWidget.inkDrop(color: _emptyRoomAccent, size: 42),
+            const SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: _emptyRoomAccent,
+              ),
+            ),
             const SizedBox(height: 16),
             Text(
               '正在整理教学楼清单',
@@ -563,10 +569,10 @@ class _BuildingCard extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: accent.withValues(
-              alpha: colorScheme.isDarkMode ? 0.10 : 0.05,
+              alpha: colorScheme.isDarkMode ? 0.06 : 0.025,
             ),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
           ),
         ],
       ),

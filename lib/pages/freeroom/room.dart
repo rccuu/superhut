@@ -2,7 +2,6 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 
 import '../../core/ui/apple_glass.dart';
@@ -415,7 +414,14 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            LoadingAnimationWidget.inkDrop(color: _emptyRoomAccent, size: 42),
+            const SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: _emptyRoomAccent,
+              ),
+            ),
             const SizedBox(height: 16),
             Text(
               '正在整理空教室结果',
@@ -1371,8 +1377,7 @@ class _RangePresetChip extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color:
@@ -1426,8 +1431,7 @@ class _BigLessonOptionCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+        child: Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           decoration: BoxDecoration(
             gradient:
@@ -1800,8 +1804,9 @@ class _FeatureBackButton extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
-      style: GlassPanelStyle.floating,
-      blur: 18,
+      style: GlassPanelStyle.solid,
+      blur: 0,
+      useBackdropFilter: false,
       borderRadius: BorderRadius.circular(18),
       padding: EdgeInsets.zero,
       borderColor: Colors.white.withValues(
@@ -1820,10 +1825,10 @@ class _FeatureBackButton extends StatelessWidget {
       boxShadow: [
         BoxShadow(
           color: colorScheme.shadow.withValues(
-            alpha: colorScheme.isDarkMode ? 0.10 : 0.04,
+            alpha: colorScheme.isDarkMode ? 0.05 : 0.018,
           ),
-          blurRadius: 16,
-          offset: const Offset(0, 8),
+          blurRadius: 6,
+          offset: const Offset(0, 3),
         ),
       ],
       onTap: onTap,
@@ -1851,8 +1856,9 @@ class _HeaderCountPill extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return GlassPanel(
-      style: GlassPanelStyle.floating,
-      blur: 18,
+      style: GlassPanelStyle.solid,
+      blur: 0,
+      useBackdropFilter: false,
       borderRadius: BorderRadius.circular(16),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       borderColor: Colors.white.withValues(
@@ -1869,10 +1875,10 @@ class _HeaderCountPill extends StatelessWidget {
       boxShadow: [
         BoxShadow(
           color: colorScheme.shadow.withValues(
-            alpha: colorScheme.isDarkMode ? 0.08 : 0.03,
+            alpha: colorScheme.isDarkMode ? 0.04 : 0.014,
           ),
-          blurRadius: 16,
-          offset: const Offset(0, 8),
+          blurRadius: 6,
+          offset: const Offset(0, 3),
         ),
       ],
       child: Text(
