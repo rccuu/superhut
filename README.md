@@ -2,158 +2,115 @@
 
 **为湖南工业大学学生打造的第三方一站式服务应用**
 
-## 📱 项目简介
+基于 [cc2562/superhut](https://github.com/cc2562/superhut) fork 并持续维护，在原作功能基础上进行了架构重建、UI 全面翻新、性能深度优化和大量功能增强。
 
-为提供更便捷的第三方校园工具体验，我们在原项目基础上进行 fork 与二次开发，持续维护这个更易用、界面更统一的校园工具版本。
+## 与上游的主要区别
 
-## 🍴 Fork 说明
+### 架构重建
 
-- 当前维护仓库：`rccuu/superhut`
-- 仓库地址：https://github.com/rccuu/superhut
-- 原作仓库：`cc2562/superhut`
-- 原作地址：https://github.com/cc2562/superhut
+- **认证系统全面重写**：HUT 智慧工大门户认证从单步 CAS 改为完整闭环（CAS 重定向 → 门户票据 → 设备绑定 → Token 刷新），修复了"功能页点了没反应""切后台回来要重新登录"等长期问题
+- **API 层模块化拆分**：`HutUserApi` 从单一文件拆为 auth / portal / session / support / water 五个 mixin 模块，边界清晰
+- **凭据存储升级**：新增 `AppAuthStorage` 统一管理 JWXT + HUT 双登录系统的所有凭据，密码迁移至 `FlutterSecureStorage` 并保留自动回退机制
+- **服务层新增**：`CourseSyncService`（非阻塞课表同步）、`AppUpdateService`（基于 GitHub Releases 的版本检查）、`AppLogger`（统一日志）
+- **代码规范统一**：全仓 CamelCase 文件重命名为 `snake_case`，消除历史遗留的命名混乱
 
-当前项目基于原作仓库 fork 后继续维护与调整，包含界面、文案、图标与部分功能体验上的二次开发。
+### UI 全面翻新
 
-仓库名与 Dart/包名目前仍沿用 `superhut`，应用对外显示名称为 `工大盒子`。
+- **自研 Glass UI 系统**：`lib/core/ui/apple_glass.dart` 提供分层玻璃材质组件（`AppGlassBackground` / `GlassPanel`），支持 rich / soft / flat 三档性能策略，全平台默认轻量模式
+- **手写 Material 3 主题**：放弃 FlexColorScheme，自建完整的 light/dark `ColorScheme`，统一品牌蓝 #3B6EEA
+- **课表页重做**：自定义 7 天 × 10 节网格布局、重叠课程布局算法、21 色调色板、课程详情弹层
+- **底栏重做**：悬浮玻璃胶囊 + 外圈阴影绘制器（`_OuterOnlyShadowPainter`），三等分大热区点击
+- **深色模式全面修正**：逐个页面消除硬编码颜色，统一使用 `colorScheme`
+- **高刷新率适配**：Android 端自动请求 120Hz，优先匹配当前分辨率模式
 
-## ✨ 主要功能
+### 新功能
 
-### 🎓 学习服务
-- **📅 课表查询** - 查看个人课程安排
-- **📊 成绩查询** - 实时查询各学期成绩和学分
-- **📝 考试安排** - 查看考试时间表和考场信息
-- **🏫 空教室查询** - 快速查找可用教室，支持按教学楼筛选
+- **课表库**：多份课表归档管理，支持 QR 码分享/导入、文件导入导出、剪贴板导入、重命名和删除
+- **游客模式**：无需登录即可浏览功能页和使用慧生活 798，需要校园账号时再登录
+- **非阻塞课表同步**：带进度报告的异步同步，不再卡住 UI
+- **首次信任说明**：首次打开展示透明度和隐私说明，让用户清楚 App 连接哪些服务
+- **项目支持页**：App 内查看支持方式和加密地址
+- **课程删除**：支持手动删除不需要的课程条目
 
-### 🏠 生活服务
-- **💧 宿舍喝水** - 一键购买宿舍饮用水
-- **🚿 洗澡服务** - 便捷的洗澡卡充值和管理
-- **⚡ 电费充值** - 宿舍电费查询和在线充值
-- **💧 水费管理** - 宿舍水费查询和充值服务
+### 性能优化
 
-### 📋 其他功能
-- **📝 学生评教** - 参与课程评价和教学质量反馈
-- **🔐 统一登录** - 支持HUT统一身份认证系统
-- **🌙 深色模式** - 支持明暗主题切换
-- **📱 Android 桌面小组件** - 课表与快捷功能快速查看
-- **🔔 智能提醒** - 电费预警、课程提醒等功能
+- **GPU 过绘削减**：全局玻璃层 blur sigma 降低 ~40%，模糊核大小呈平方关系，对帧率影响显著
+- **页面转场降级**：Android 上全局使用 `FadeUpwardsPageTransitionsBuilder` 替代滑动转场
+- **轻量玻璃策略**：Android 上自动压低 blur 和阴影，重页面关闭背板模糊
+- **懒加载 + RepaintBoundary**：首页三大 tab 按需构建，功能卡片和重组件包隔离层
+- **弹层先出壳再挂内容**：课表库管理等重弹层先显示骨架，延迟挂载重内容
+- **课表连续分页**：`PageView.builder` 渲染完整周序列，慢拖时相邻周内容持续进入视口
 
-## 🛠️ 技术栈
+### 品牌变更
 
-- **框架**: Flutter 3.7.0+
+- 应用名称：超级包菜 → **工大盒子**
+- 包名：`com.superhut.rice.superhut` → `com.tune.superhut`
+- 全平台图标与窗口标题统一更新
+
+## 主要功能
+
+| 类别 | 功能 | 说明 |
+|---|---|---|
+| 学习 | 课表查询 | 自定义网格视图，支持周切换、实验课筛选、课表库管理 |
+| 学习 | 成绩查询 | 按学期查询，缓存结果，深色模式可用 |
+| 学习 | 考试安排 | 考试时间与考场信息，倒计时显示 |
+| 学习 | 空教室查询 | 按校区/教学楼筛选，三列卡片网格，大节时间表达 |
+| 学习 | 学生评教 | 批次获取、课程列表、选项选择与提交 |
+| 生活 | 慧生活 798 | 扫码绑定饮水设备，手机号验证码登录 |
+| 生活 | 宿舍热水 | 设备管理与洗澡卡充值，金粉暖色调 UI |
+| 生活 | 电费充值 | 房间选择、余额查询、在线充值 |
+| 系统 | 统一登录 | JWXT 教务系统 + HUT 智慧工大双登录，游客模式 |
+| 系统 | 深色模式 | 全页面跟随系统明暗主题 |
+| 系统 | 桌面小组件 | Android/iOS 课表桌面小组件 |
+| 系统 | 课表分享 | QR 码、文件、剪贴板多种分享与导入方式 |
+
+## 技术栈
+
+- **框架**: Flutter 3.7+ / Dart 3.7+
 - **状态管理**: GetX
-- **网络请求**: Dio
-- **本地存储**: SharedPreferences + flutter_secure_storage
+- **网络**: Dio + dio_cache_interceptor
+- **存储**: SharedPreferences + FlutterSecureStorage（密码安全存储）
 - **WebView**: flutter_inappwebview
-- **UI组件**: Material Design 3
-- **主题**: FlexColorScheme
-- **图标**: Ionicons
-- **二维码**: qr_code_scanner
+- **主题**: 手写 Material 3 ColorScheme（非 FlexColorScheme）
+- **响应式**: responsive_framework
+- **其他**: qr_flutter, share_plus, file_picker, encrypt, pub_semver
 
-## 📦 安装说明
+## 快速开始
 
-### 环境要求
-- Flutter SDK 3.7.0 或更高版本
-- Dart SDK 3.7.0 或更高版本
-- Android Studio / VS Code
-- Android SDK (Android 5.0+)
-- iOS SDK (iOS 11.0+) - 仅iOS开发需要
-
-### 安装步骤
-
-1. **克隆项目**
 ```bash
 git clone https://github.com/rccuu/superhut.git
 cd superhut
-```
-
-2. **安装依赖**
-```bash
 flutter pub get
-```
-
-3. **运行项目**
-```bash
-# 调试模式
 flutter run
-
-# 发布模式
-flutter run --release
 ```
 
-### 构建发布版本
+构建发布包：
 
 ```bash
-# Android 分架构 APK，并移动到 releases/
+# Android 分架构 APK → releases/
 bash scripts/build_android_release.sh
-
-# Android App Bundle
-flutter build appbundle --release
 
 # iOS 未签名 IPA
 bash scripts/build_ios_quick.sh
-
 ```
 
-## 🚀 开发指南
+## 信任与隐私
 
-### 添加新功能
-1. 在 `lib/pages/` 下创建新的功能模块
-2. 在 `lib/home/Functionpage/view.dart` 中添加功能入口
-3. 更新路由配置和状态管理
+- 源码、版本发布和更新入口均公开在 GitHub
+- 业务域名均为学校系统和校园生活服务提供方
+- 密码存储在系统安全存储中
+- 完整说明见 [工大盒子的信任与隐私说明](docs/trust-and-privacy.md)
 
-### 代码规范
-- 使用 GetX 进行状态管理
-- 遵循 Flutter 官方代码规范
-- 使用有意义的方法和变量命名
-- 添加适当的注释和文档
+## 版本历史
 
-## 🔒 为什么可以相对放心使用
+从上游 v1.2.0 fork 后，已迭代至 v1.5.7（45 次提交）。详细变更见 [changelog.md](changelog.md)。
 
-如果你不熟悉 GitHub，也不想先读源码，可以先看这几条：
+## 许可证
 
-- 当前仓库、上游仓库和版本发布页都是公开的
-- 应用内更新检查直接读取 GitHub Releases
-- 当前公开代码中可见的业务域名主要是学校系统、校园生活服务提供方和 GitHub
-- 密码优先保存在系统安全存储中，登录态和缓存默认保存在本机
+GPL-3.0 — 查看 [LICENSE](LICENSE)
 
-更完整的说明见：
+## 致谢
 
-- [工大盒子的信任与隐私说明](docs/trust-and-privacy.md)
-
-## ❤️ 支持项目
-
-想支持的话，可以在 App 内查看方式。
-
-- App 内入口：`我的 -> 关于工大盒子 -> 支持项目`
-- 页面内支持查看二维码大图和一键复制当前网络地址
-- 转账前请务必确认网络一致，转错链无法找回
-
-当前支持的网络与地址：
-
-- `TRC20`：`TNvVV3XgpDbnfT8kAVB5Pwe7UYVCfqekDT`
-- `BSC (BEP-20)`：`0xca48641aad9c37f74d2999686799deaee95b6105`
-
-## 🤝 贡献指南
-
-我们欢迎所有形式的贡献！
-
-1. Fork 本项目
-2. 创建功能分支
-3. 提交更改
-4. 推送到分支
-5. 开启 Pull Request
-
-## 📄 许可证
-
-本项目采用 GPL-3.0 license - 查看 [LICENSE](LICENSE) 文件了解详情
-
-## 📦 版本发布
-
-- Releases: https://github.com/rccuu/superhut/releases
-- 应用内更新检查当前也基于 GitHub Releases
-
-## 🙏 致谢
-
-- 感谢所有为项目做出贡献的开发者
-- 感谢Flutter团队提供的优秀框架
+- 原作 [cc2562/superhut](https://github.com/cc2562/superhut) 及其贡献者
+- 湖南工业大学各系统的维护团队
+- Flutter 团队
