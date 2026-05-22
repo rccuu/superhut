@@ -7,6 +7,7 @@ import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/services/app_logger.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../utils/hut_user_api.dart';
 import 'electricity_api.dart';
 
@@ -140,14 +141,40 @@ class _ElectricityPageState extends State<ElectricityPage> {
     return electricityApi.getRoomList();
   }
 
+  AppSnackBarType _resolveSnackBarType(String message) {
+    if (message.contains('成功') ||
+        message.contains('已开启') ||
+        message.contains('已更新') ||
+        message.contains('已关闭')) {
+      return AppSnackBarType.success;
+    }
+    if (message.contains('失败') ||
+        message.contains('错误') ||
+        message.contains('不足') ||
+        message.contains('未获取')) {
+      return AppSnackBarType.error;
+    }
+    if (message.contains('请输入') ||
+        message.contains('不能为空') ||
+        message.contains('必须') ||
+        message.contains('最多') ||
+        message.contains('不能超过') ||
+        message.contains('暂未')) {
+      return AppSnackBarType.warning;
+    }
+    return AppSnackBarType.info;
+  }
+
   void _showSnackBar(String message) {
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      type: _resolveSnackBarType(message),
+    );
   }
 
   String? _validatePaymentInput(String paymentText) {

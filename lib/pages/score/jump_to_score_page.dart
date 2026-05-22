@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import '../../utils/token.dart';
@@ -31,9 +32,12 @@ class _JumpToScorePageState extends State<JumpToScorePage> {
       return;
     }
 
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      type: AppSnackBarType.warning,
+      icon: Icons.lock_reset_rounded,
+    );
   }
 
   Future<void> _jumpToScorePage() async {

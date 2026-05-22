@@ -103,7 +103,7 @@ bash scripts/build_ios_quick.sh
 
 ## 版本历史
 
-从上游 v1.2.0 fork 后，已迭代至 v1.5.7（45 次提交）。详细变更见 [changelog.md](changelog.md)。
+从上游 v1.2.0 fork 后，已迭代至 v1.5.8。详细变更见 [changelog.md](changelog.md)。
 
 ## 许可证
 

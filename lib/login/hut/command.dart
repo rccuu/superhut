@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/ui/app_snack_bar.dart';
 import '../../utils/hut_user_api.dart';
 
 var api = HutUserApi();
@@ -10,14 +11,10 @@ bool first = true;
 void loginToHuT(String username, String password, context) {
   api.userLogin(username: username, password: password).then((value) {
     if (value) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('登录成功')));
+      showAppSnackBar(context, message: '登录成功', type: AppSnackBarType.success);
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('登录失败')));
+      showAppSnackBar(context, message: '登录失败', type: AppSnackBarType.error);
     }
   });
 }

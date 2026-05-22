@@ -16,6 +16,7 @@ import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/services/app_update_service.dart';
 import '../../core/services/course_sync_service.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../about/first_open_trust_dialog.dart';
 import '../about/trust_page.dart';
@@ -40,7 +41,7 @@ class HomeviewPage extends StatefulWidget {
 
 class _HomeviewPageState extends State<HomeviewPage> {
   static const int _courseTabIndex = 0;
-  static const _tabAnimationDuration = Duration(milliseconds: 190);
+  static const _tabAnimationDuration = Duration(milliseconds: 150);
   static const _dockItems = [
     _DockItemData(icon: CupertinoIcons.calendar, label: '课表'),
     _DockItemData(icon: CupertinoIcons.square_grid_2x2, label: '功能'),
@@ -108,30 +109,17 @@ class _HomeviewPageState extends State<HomeviewPage> {
 
     if (snapshot.status == CourseSyncTaskStatus.success ||
         snapshot.status == CourseSyncTaskStatus.failure) {
-      final colorScheme = Theme.of(context).colorScheme;
       final isSuccess = snapshot.status == CourseSyncTaskStatus.success;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  isSuccess
-                      ? CupertinoIcons.check_mark_circled_solid
-                      : CupertinoIcons.exclamationmark_circle_fill,
-                  size: 18,
-                  color: isSuccess ? colorScheme.primary : colorScheme.error,
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text(snapshot.message)),
-              ],
-            ),
-            margin: const EdgeInsets.fromLTRB(20, 0, 20, 68),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+      showAppSnackBar(
+        context,
+        message: snapshot.message,
+        type: isSuccess ? AppSnackBarType.success : AppSnackBarType.error,
+        icon:
+            isSuccess
+                ? CupertinoIcons.check_mark_circled_solid
+                : CupertinoIcons.exclamationmark_circle_fill,
+        duration: const Duration(seconds: 2),
+      );
     }
   }
 
@@ -324,27 +312,13 @@ class _HomeviewPageState extends State<HomeviewPage> {
       mode: LaunchMode.externalApplication,
     );
     if (!opened && mounted) {
-      final colorScheme = Theme.of(context).colorScheme;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  CupertinoIcons.exclamationmark_circle_fill,
-                  size: 18,
-                  color: colorScheme.error,
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: Text('无法打开更新链接：$releaseUrl')),
-              ],
-            ),
-            margin: const EdgeInsets.fromLTRB(20, 0, 20, 68),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+      showAppSnackBar(
+        context,
+        message: '无法打开更新链接：$releaseUrl',
+        type: AppSnackBarType.error,
+        icon: CupertinoIcons.exclamationmark_circle_fill,
+        duration: const Duration(seconds: 2),
+      );
     }
   }
 
@@ -500,11 +474,11 @@ class _CourseSyncOverlay extends StatelessWidget {
                 : colorScheme.primary;
 
         return AnimatedSlide(
-          duration: const Duration(milliseconds: 220),
+          duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
           offset: Offset.zero,
           child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 180),
+            duration: const Duration(milliseconds: 130),
             opacity: 1,
             child: Center(
               child: ConstrainedBox(
@@ -843,7 +817,7 @@ class _ClassicTabBar extends StatelessWidget {
                     tabBackgroundColor: activeBackground,
                     tabBorderRadius: 18,
                     iconSize: 20,
-                    duration: const Duration(milliseconds: 280),
+                    duration: const Duration(milliseconds: 180),
                     curve: Curves.easeOutCubic,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,

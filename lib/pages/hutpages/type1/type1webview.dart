@@ -5,6 +5,7 @@ import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
 import '../../../core/services/app_logger.dart';
+import '../../../core/ui/app_snack_bar.dart';
 import '../../../core/ui/color_scheme_ext.dart';
 import '../hut_service_auth.dart';
 
@@ -55,7 +56,10 @@ class _Type1WebviewState extends State<Type1Webview> {
           ticket: session.ticket,
         );
       } else {
-        resultUrl = buildHutCasLoginUrl(serviceUrl: widget.serviceUrl, idToken: session.token);
+        resultUrl = buildHutCasLoginUrl(
+          serviceUrl: widget.serviceUrl,
+          idToken: session.token,
+        );
       }
       AppLogger.debug(
         'Type1 result url prepared: ${describeHutUrlForLog(resultUrl)}',
@@ -145,9 +149,16 @@ class _Type1WebviewState extends State<Type1Webview> {
     }
 
     _hasWarnedLoginRedirect = true;
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(const SnackBar(content: Text('智慧工大登录状态可能已失效，请重新登录后再试')));
+      message: '智慧工大登录状态可能已失效，请重新登录后再试',
+      type: AppSnackBarType.warning,
+      icon: Icons.lock_reset_rounded,
+      actionLabel: '重新登录',
+      onAction: () {
+        _openLoginAndRetry();
+      },
+    );
   }
 
   @override

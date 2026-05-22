@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_update_service.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import 'support_page.dart';
 import 'trust_page.dart';
@@ -84,9 +85,11 @@ class _AboutPageState extends State<AboutPage> {
   Future<void> _openUrl(Uri url) async {
     final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
-      ScaffoldMessenger.of(
+      showAppSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text('无法打开链接：$url')));
+        message: '无法打开链接：$url',
+        type: AppSnackBarType.error,
+      );
     }
   }
 
@@ -126,9 +129,14 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   void _showMessage(String message) {
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      type:
+          message.contains('失败') || message.contains('无效')
+              ? AppSnackBarType.error
+              : AppSnackBarType.info,
+    );
   }
 
   void _showUpdateDialog(AppUpdateInfo update) {
@@ -271,9 +279,7 @@ class _AboutPageState extends State<AboutPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const _AboutFactLine(
-                          text: '想支持的话，这里有个入口。',
-                        ),
+                        const _AboutFactLine(text: '想支持的话，这里有个入口。'),
                         const SizedBox(height: 18),
                         FilledButton.tonalIcon(
                           onPressed: _openSupportPage,

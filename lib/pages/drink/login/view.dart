@@ -1,6 +1,7 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/app_snack_bar.dart';
 import 'command.dart';
 import 'widgets/login_widgets.dart';
 
@@ -31,9 +32,11 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
 
   Future<void> _sendMessageCode() async {
     if (_userNoController.text.isEmpty || _captchaController.text.isEmpty) {
-      ScaffoldMessenger.of(
+      showAppSnackBar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('请输入手机号和图形验证码')));
+        message: '请输入手机号和图形验证码',
+        type: AppSnackBarType.warning,
+      );
       return;
     }
 

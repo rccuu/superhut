@@ -2,6 +2,7 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 
+import '../../core/ui/app_snack_bar.dart';
 import 'commentary_api.dart';
 
 class CommentaryQuestionPage extends StatefulWidget {
@@ -28,6 +29,17 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
   List<List<bool>>? _questionSelections;
   bool _isInitialized = false;
   List<CommentaryPayload> _savedQuestionList = <CommentaryPayload>[];
+
+  void _showSnackBar(
+    String message, {
+    AppSnackBarType type = AppSnackBarType.info,
+  }) {
+    if (!mounted) {
+      return;
+    }
+
+    showAppSnackBar(context, message: message, type: type);
+  }
 
   Future<List<CommentaryPayload>> _getOptionList() async {
     if (_isInitialized) {
@@ -135,7 +147,6 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
   Future<void> _submitSelections(
     List<CommentarySubmissionItem> userSelections,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final result = await submitCommentary(
       widget.batchId,
@@ -151,27 +162,23 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
     }
 
     if (result == 'success') {
-      messenger.showSnackBar(const SnackBar(content: Text('提交成功')));
+      _showSnackBar('提交成功', type: AppSnackBarType.success);
       navigator.pop(true);
       return;
     }
 
-    messenger.showSnackBar(SnackBar(content: Text(result)));
+    _showSnackBar(result, type: AppSnackBarType.error);
   }
 
   Future<void> _handleAutoSubmit() async {
     if (_savedQuestionList.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('题目还在加载中，请稍后再试')));
+      _showSnackBar('题目还在加载中，请稍后再试', type: AppSnackBarType.warning);
       return;
     }
 
     final userSelections = _buildAutoSelections();
     if (userSelections.length < _savedQuestionList.length) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('还有题目未匹配到可提交选项')));
+      _showSnackBar('还有题目未匹配到可提交选项', type: AppSnackBarType.warning);
       return;
     }
 
@@ -181,9 +188,7 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
   Future<void> _handleManualSubmit(int questionCount) async {
     final userSelections = _getUserSelections();
     if (userSelections.length < questionCount) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('需要完成所有题目才可以提交~')));
+      _showSnackBar('需要完成所有题目才可以提交~', type: AppSnackBarType.warning);
       return;
     }
 

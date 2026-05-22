@@ -11,6 +11,7 @@ import 'package:superhut/utils/hut_user_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/app_logger.dart';
+import '../../../core/ui/app_snack_bar.dart';
 import '../../../core/ui/color_scheme_ext.dart';
 import '../hut_service_auth.dart';
 
@@ -258,9 +259,16 @@ class _Type2WebviewState extends State<Type2Webview> {
     }
 
     _hasWarnedLoginRedirect = true;
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(const SnackBar(content: Text('智慧工大登录状态可能已失效，请重新登录后再试')));
+      message: '智慧工大登录状态可能已失效，请重新登录后再试',
+      type: AppSnackBarType.warning,
+      icon: Icons.lock_reset_rounded,
+      actionLabel: '重新登录',
+      onAction: () {
+        _openLoginAndRetry();
+      },
+    );
   }
 
   Future<NavigationActionPolicy> _rewriteLegacyPortalNavigation(
@@ -307,11 +315,10 @@ class _Type2WebviewState extends State<Type2Webview> {
       final result = await Permission.location.request();
       if (result != PermissionStatus.granted) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('某些功能可能需要位置权限才能正常使用'),
-            duration: Duration(seconds: 3),
-          ),
+        showAppSnackBar(
+          context,
+          message: '某些功能可能需要位置权限才能正常使用',
+          type: AppSnackBarType.warning,
         );
       }
     } catch (e) {
@@ -493,24 +500,30 @@ class _Type2WebviewState extends State<Type2Webview> {
   Future<void> _handleAlipayUrl(String url) async {
     try {
       final Uri uri = Uri.parse(url);
-      final messenger = ScaffoldMessenger.of(context);
       final navigator = Navigator.of(context);
       AppLogger.debug('Attempting to open Alipay url: $url');
-      if (!await launchUrl(uri)) {
-        messenger.showSnackBar(SnackBar(content: Text('无法打开支付宝: $url')));
-        throw Exception('Could not launch $uri');
+      final didLaunch = await launchUrl(uri);
+      if (!mounted) {
+        return;
       }
 
-      if (!mounted) {
+      if (!didLaunch) {
+        showAppSnackBar(
+          context,
+          message: '无法打开支付宝: $url',
+          type: AppSnackBarType.error,
+        );
         return;
       }
 
       navigator.pop();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        showAppSnackBar(
           context,
-        ).showSnackBar(SnackBar(content: Text('打开链接失败：$e')));
+          message: '打开链接失败：$e',
+          type: AppSnackBarType.error,
+        );
       }
       AppLogger.debug('Error launching URL: $e');
     }

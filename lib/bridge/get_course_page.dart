@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/home/homeview/view.dart';
 
+import '../core/ui/app_snack_bar.dart';
 import '../utils/course/coursemain.dart';
 import '../utils/token.dart';
 
@@ -47,9 +48,11 @@ class _GetcoursepageState extends State<Getcoursepage> {
       return;
     }
 
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(widget.renew ? '课表已刷新' : '课表已同步')));
+      message: widget.renew ? '课表已刷新' : '课表已同步',
+      type: AppSnackBarType.success,
+    );
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const HomeviewPage()),
       (route) => false,

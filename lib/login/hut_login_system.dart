@@ -3,6 +3,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../core/ui/color_scheme_ext.dart';
 import '../core/services/app_logger.dart';
+import '../core/ui/app_snack_bar.dart';
 
 bool _isUsableJwxtTokenCandidate(
   String? token, {
@@ -324,16 +325,14 @@ class HutLoginExample extends StatelessWidget {
         String myClientTicket = result['my_client_ticket'] ?? '';
         AppLogger.debug('提取到的token: $token');
         AppLogger.debug('提取到的my_client_ticket: $myClientTicket');
-        ScaffoldMessenger.of(
+        showAppSnackBar(
           context,
-        ).showSnackBar(SnackBar(content: Text('登录成功')));
+          message: '登录成功',
+          type: AppSnackBarType.success,
+        );
         Navigator.of(context).pop(result); // 返回包含token和cookie的Map并关闭页面
       },
-      onError: (errorMessage) {
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-        // );
-      },
+      onError: (errorMessage) {},
     );
   }
 }

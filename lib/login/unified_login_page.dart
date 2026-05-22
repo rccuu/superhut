@@ -12,6 +12,7 @@ import 'package:superhut/utils/course/coursemain.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
 import '../core/services/app_auth_storage.dart';
+import '../core/ui/app_snack_bar.dart';
 import '../core/ui/apple_glass.dart';
 
 class UnifiedLoginPage extends StatefulWidget {
@@ -27,8 +28,8 @@ class UnifiedLoginPage extends StatefulWidget {
     }
 
     return PageRouteBuilder<bool?>(
-      transitionDuration: const Duration(milliseconds: 160),
-      reverseTransitionDuration: const Duration(milliseconds: 140),
+      transitionDuration: const Duration(milliseconds: 130),
+      reverseTransitionDuration: const Duration(milliseconds: 110),
       pageBuilder:
           (context, animation, secondaryAnimation) => const UnifiedLoginPage(),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -41,7 +42,7 @@ class UnifiedLoginPage extends StatefulWidget {
           opacity: curve,
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: const Offset(0, 0.018),
+              begin: const Offset(0, 0.012),
               end: Offset.zero,
             ).animate(curve),
             child: child,
@@ -87,14 +88,15 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     _pwdController.text = savedPassword;
   }
 
-  void _showSnackBar(String message, {Color? backgroundColor}) {
+  void _showSnackBar(
+    String message, {
+    AppSnackBarType type = AppSnackBarType.info,
+  }) {
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: backgroundColor),
-    );
+    showAppSnackBar(context, message: message, type: type);
   }
 
   void _finishLogin() {
@@ -122,7 +124,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   }
 
   Future<bool> _tryOfficialJwxtLogin(String reason) async {
-    _showSnackBar(reason);
+    _showSnackBar(reason, type: AppSnackBarType.warning);
 
     if (!mounted) {
       return false;
@@ -147,7 +149,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     final password = _pwdController.text;
 
     if (username.isEmpty || password.isEmpty) {
-      _showSnackBar('请输入学号/手机号和密码');
+      _showSnackBar('请输入学号/手机号和密码', type: AppSnackBarType.warning);
       return;
     }
 

@@ -7,6 +7,7 @@ import 'package:superhut/utils/token.dart';
 
 import '../core/services/app_auth_storage.dart';
 import '../core/services/app_logger.dart';
+import '../core/ui/app_snack_bar.dart';
 import 'hut_login_system.dart';
 
 class HutCasLoginPage extends StatefulWidget {
@@ -185,11 +186,10 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
       onTokenAndCookieExtracted: _saveTokenAndCookie,
       onError: (errorMessage) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(errorMessage),
-              backgroundColor: colorScheme.errorContainer,
-            ),
+          showAppSnackBar(
+            context,
+            message: errorMessage,
+            type: AppSnackBarType.error,
           );
         }
       },

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 
 class SupportPage extends StatefulWidget {
@@ -99,9 +100,11 @@ class _SupportPageState extends State<SupportPage> {
       return;
     }
 
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text('${spec.fullLabel} 地址已复制到剪贴板')));
+      message: '${spec.fullLabel} 地址已复制到剪贴板',
+      type: AppSnackBarType.success,
+    );
   }
 
   @override
@@ -313,10 +316,7 @@ class _SupportSectionPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              if (trailing != null) ...[
-                const SizedBox(width: 12),
-                trailing!,
-              ],
+              if (trailing != null) ...[const SizedBox(width: 12), trailing!],
             ],
           ),
           const SizedBox(height: 18),

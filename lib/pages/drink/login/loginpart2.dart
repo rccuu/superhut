@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/app_snack_bar.dart';
 import 'command.dart';
 import 'widgets/login_widgets.dart';
 
@@ -34,9 +35,11 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
 
   Future<void> _submitLogin() async {
     if (_codeController.text.isEmpty) {
-      ScaffoldMessenger.of(
+      showAppSnackBar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('请输入短信验证码')));
+        message: '请输入短信验证码',
+        type: AppSnackBarType.warning,
+      );
       return;
     }
 

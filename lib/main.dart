@@ -69,7 +69,7 @@ abstract final class AppTheme {
       visualDensity: VisualDensity.standard,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+          TargetPlatform.android: _AppLightPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
           TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
         },
@@ -241,6 +241,39 @@ abstract final class AppTheme {
           bodyColor: colorScheme.onSurface,
           displayColor: colorScheme.onSurface,
         );
+  }
+}
+
+class _AppLightPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _AppLightPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations;
+    if (disableAnimations == true) {
+      return child;
+    }
+
+    final curvedAnimation = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    final slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.012),
+      end: Offset.zero,
+    ).animate(curvedAnimation);
+
+    return FadeTransition(
+      opacity: curvedAnimation,
+      child: SlideTransition(position: slideAnimation, child: child),
+    );
   }
 }
 
@@ -464,7 +497,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       defaultTransition: isAndroid ? Transition.fadeIn : Transition.cupertino,
-      transitionDuration: Duration(milliseconds: isAndroid ? 160 : 220),
+      transitionDuration: Duration(milliseconds: isAndroid ? 130 : 220),
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
       locale: const Locale('zh', 'CN'),

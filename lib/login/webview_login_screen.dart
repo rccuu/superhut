@@ -6,6 +6,7 @@ import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../core/services/app_auth_storage.dart';
+import '../core/ui/app_snack_bar.dart';
 import '../home/homeview/view.dart';
 import '../utils/course/coursemain.dart';
 import '../utils/token.dart';
@@ -54,11 +55,10 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
       setState(() {
         _autoLoginTimedOut = true;
       });
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-          content: Text('自动登录超时，请直接在页面中手动完成登录'),
-          duration: Duration(seconds: 3),
-        ),
+      showAppSnackBar(
+        context,
+        message: '自动登录超时，请直接在页面中手动完成登录',
+        type: AppSnackBarType.warning,
       );
     });
   }
@@ -101,18 +101,12 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
     }
 
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    final colorScheme = Theme.of(context).colorScheme;
-    navigator.pop(false);
-    messenger?.showSnackBar(
-      SnackBar(
-        content: Text('登录失败：$message'),
-        backgroundColor: colorScheme.errorContainer,
-        behavior: SnackBarBehavior.floating,
-        showCloseIcon: true,
-        duration: const Duration(seconds: 3),
-      ),
+    showAppSnackBar(
+      context,
+      message: '登录失败：$message',
+      type: AppSnackBarType.error,
     );
+    navigator.pop(false);
   }
 
   Future<void> _injectLoginHooks() async {
