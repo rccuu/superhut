@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/pages/drink/login/view.dart';
 
+import '../../../core/ui/app_snack_bar.dart';
 import '../api/drink_api.dart';
 import 'state.dart';
 
@@ -13,22 +13,10 @@ class FunctionDrinkLogic extends GetxController {
   final DrinkApi drinkApi = DrinkApi();
 
   void _showErrorSnackBar(String title, String message) {
-    final context = Get.context;
-    final colorScheme = context != null ? Theme.of(context).colorScheme : null;
-
-    Get.snackbar(
-      title,
-      message,
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: colorScheme?.errorContainer,
-      colorText: colorScheme?.onErrorContainer,
-      duration: const Duration(seconds: 3),
-      margin: const EdgeInsets.all(10),
-      borderRadius: 10,
-      icon: Icon(
-        Icons.error,
-        color: colorScheme?.onErrorContainer ?? Colors.white,
-      ),
+    showAppSnackBar(
+      Get.context,
+      message: '$title：$message',
+      type: AppSnackBarType.error,
     );
   }
 

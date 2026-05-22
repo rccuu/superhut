@@ -2,6 +2,7 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import 'commentary_api.dart';
 import 'commentary_question_page.dart';
@@ -57,8 +58,10 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
                 return GestureDetector(
                   onTap: () async {
                     if (isSubmitted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('已经评教过啦~不能重复评教')),
+                      showAppSnackBar(
+                        context,
+                        message: '已经评教过啦~不能重复评教',
+                        type: AppSnackBarType.info,
                       );
                       return;
                     }

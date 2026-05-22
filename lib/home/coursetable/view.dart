@@ -22,6 +22,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/course_sync_service.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import '../../login/unified_login_page.dart';
@@ -729,27 +730,12 @@ class _CourseTableViewState extends State<CourseTableView> {
       return;
     }
 
-    final colorScheme = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                CupertinoIcons.info_circle_fill,
-                size: 18,
-                color: colorScheme.primary,
-              ),
-              const SizedBox(width: 10),
-              Expanded(child: Text(message)),
-            ],
-          ),
-          margin: const EdgeInsets.fromLTRB(20, 0, 20, 68),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    showAppSnackBar(
+      context,
+      message: message,
+      icon: CupertinoIcons.info_circle_fill,
+      duration: const Duration(seconds: 2),
+    );
   }
 
   bool get _useLiteAndroidEffects =>
@@ -1597,18 +1583,16 @@ class _CourseTableViewState extends State<CourseTableView> {
         final needsSettings =
             cameraPermission.isPermanentlyDenied ||
             cameraPermission.isRestricted;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
+        showAppSnackBar(
+          context,
+          message:
               needsSettings
                   ? '相机权限已关闭，请在系统设置中允许工大盒子访问相机后再扫码导入。'
                   : '未授予相机权限，无法扫码导入课表。',
-            ),
-            action:
-                needsSettings
-                    ? SnackBarAction(label: '去设置', onPressed: openAppSettings)
-                    : null,
-          ),
+          type: AppSnackBarType.warning,
+          icon: CupertinoIcons.camera_fill,
+          actionLabel: needsSettings ? '去设置' : null,
+          onAction: needsSettings ? openAppSettings : null,
         );
         return;
       }

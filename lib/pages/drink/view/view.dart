@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../core/ui/color_scheme_ext.dart';
+import '../../../core/ui/app_snack_bar.dart';
 import 'logic.dart';
 import 'widgets/drink_page_widgets.dart';
 
@@ -17,14 +17,23 @@ class FunctionDrinkPage extends StatefulWidget {
 class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
   final FunctionDrinkLogic logic = Get.put(FunctionDrinkLogic());
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(
+    String message, {
+    AppSnackBarType type = AppSnackBarType.info,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(
+    showAppSnackBar(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      message: message,
+      type: type,
+      actionLabel: actionLabel,
+      onAction: onAction,
+    );
   }
 
   void _showResultSnackBar({
@@ -32,32 +41,15 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     required String successMessage,
     required String failureMessage,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    Get.snackbar(
-      success ? '操作成功' : '操作失败',
+    _showSnackBar(
       success ? successMessage : failureMessage,
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor:
-          success
-              ? colorScheme.successContainerSoft
-              : colorScheme.errorContainer,
-      colorText:
-          success
-              ? colorScheme.onSuccessContainerSoft
-              : colorScheme.onErrorContainer,
-      duration: const Duration(seconds: 3),
-      margin: const EdgeInsets.all(10),
-      borderRadius: 10,
-      icon: Icon(
-        success ? Icons.check_circle : Icons.error,
-        color: success ? colorScheme.success : colorScheme.onErrorContainer,
-      ),
+      type: success ? AppSnackBarType.success : AppSnackBarType.error,
     );
   }
 
   void _handleDrinkToggle() {
     if (logic.state.choiceDevice.value == -1) {
-      _showSnackBar('请先选择设备');
+      _showSnackBar('请先选择设备', type: AppSnackBarType.warning);
       return;
     }
 
@@ -188,18 +180,13 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
             cameraPermission.isPermanentlyDenied ||
             cameraPermission.isRestricted;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              needsSettings
-                  ? '相机权限已关闭，请在系统设置中允许工大盒子访问相机后再扫描。'
-                  : '未授予相机权限，无法扫描设备二维码。',
-            ),
-            action:
-                needsSettings
-                    ? SnackBarAction(label: '去设置', onPressed: openAppSettings)
-                    : null,
-          ),
+        _showSnackBar(
+          needsSettings
+              ? '相机权限已关闭，请在系统设置中允许工大盒子访问相机后再扫描。'
+              : '未授予相机权限，无法扫描设备二维码。',
+          type: AppSnackBarType.warning,
+          actionLabel: needsSettings ? '去设置' : null,
+          onAction: needsSettings ? openAppSettings : null,
         );
         return false;
       }

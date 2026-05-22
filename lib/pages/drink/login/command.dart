@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:superhut/pages/drink/api/drink_api.dart';
 
+import '../../../core/ui/app_snack_bar.dart';
 import 'loginpart2.dart';
 
 class DrinkLoginCommand {
@@ -70,9 +71,7 @@ class DrinkLoginCommand {
     if (value) {
       to2Login(context, phoneNumber, imageCode);
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('验证码错误')));
+      showAppSnackBar(context, message: '验证码错误', type: AppSnackBarType.warning);
     }
   }
 
@@ -90,15 +89,11 @@ class DrinkLoginCommand {
     }
 
     if (value) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('登录成功')));
+      showAppSnackBar(context, message: '登录成功', type: AppSnackBarType.success);
       Navigator.pop(context);
       Navigator.pop(context);
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('登录失败')));
+      showAppSnackBar(context, message: '登录失败', type: AppSnackBarType.error);
     }
   }
 

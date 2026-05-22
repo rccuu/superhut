@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/services/app_logger.dart';
+import '../../core/ui/app_snack_bar.dart';
 import 'course_sync_progress.dart';
 import '../withhttp.dart';
 import 'coursemain.dart';
@@ -122,13 +123,11 @@ String? _findEarliestDateKey(Iterable<String> dates) {
 }
 
 void _showLoadingSnackBar(BuildContext context, String message) {
-  final messenger = ScaffoldMessenger.of(context);
-  messenger.removeCurrentSnackBar();
-  messenger.showSnackBar(
-    SnackBar(
-      backgroundColor: Theme.of(context).secondaryHeaderColor,
-      content: Text(message),
-    ),
+  showAppSnackBar(
+    context,
+    message: message,
+    type: AppSnackBarType.info,
+    duration: const Duration(seconds: 2),
   );
 }
 

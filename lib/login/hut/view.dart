@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../generated/assets.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../utils/hut_user_api.dart';
 import 'command.dart';
 
@@ -148,12 +149,10 @@ class _HutLoginPageState extends State<HutLoginPage> {
                                       onPressed: () {
                                         if (_userNoController.text.isEmpty ||
                                             _pwdController.text.isEmpty) {
-                                          ScaffoldMessenger.of(
+                                          showAppSnackBar(
                                             context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('请输入学号/手机号和密码'),
-                                            ),
+                                            message: '请输入学号/手机号和密码',
+                                            type: AppSnackBarType.warning,
                                           );
                                           return;
                                         }

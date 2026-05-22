@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/services/course_sync_service.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../login/unified_login_page.dart';
 import '../../pages/score/logic.dart';
@@ -222,9 +223,11 @@ class _UserPageState extends State<UserPage> {
   Future<void> _refreshCourse() async {
     if (CourseSyncService.instance.state.isRunning) {
       if (mounted) {
-        ScaffoldMessenger.of(
+        showAppSnackBar(
           context,
-        ).showSnackBar(const SnackBar(content: Text('课表正在同步，请稍候')));
+          message: '课表正在同步，请稍候',
+          type: AppSnackBarType.info,
+        );
       }
       return;
     }

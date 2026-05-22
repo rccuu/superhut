@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
 import '../../../core/ui/apple_glass.dart';
+import '../../../core/ui/app_snack_bar.dart';
 import '../../../core/ui/color_scheme_ext.dart';
 import '../../../utils/course/coursemain.dart';
 
@@ -383,9 +384,7 @@ class CourseDetailSheet extends StatelessWidget {
       if (!context.mounted) {
         return;
       }
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text(message)));
+      showAppSnackBar(context, message: message, type: AppSnackBarType.success);
     }
 
     final detailItems = [

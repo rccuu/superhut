@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 
 class TrustCenterPage extends StatelessWidget {
@@ -25,9 +26,11 @@ class TrustCenterPage extends StatelessWidget {
   Future<void> _openUrl(BuildContext context, Uri url) async {
     final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
     if (!opened && context.mounted) {
-      ScaffoldMessenger.of(
+      showAppSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text('无法打开链接：$url')));
+        message: '无法打开链接：$url',
+        type: AppSnackBarType.error,
+      );
     }
   }
 

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/ui/app_snack_bar.dart';
 import 'logic.dart';
 import 'widgets/water_page_widgets.dart';
 
@@ -22,18 +23,19 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
 
   Future<void> _launchUrl() async {
     if (!await launchUrl(_url)) {
-      _showSnackBar('无法打开校园卡页面');
+      _showSnackBar('无法打开校园卡页面', type: AppSnackBarType.error);
     }
   }
 
-  void _showSnackBar(String message) {
+  void _showSnackBar(
+    String message, {
+    AppSnackBarType type = AppSnackBarType.info,
+  }) {
     if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showAppSnackBar(context, message: message, type: type);
   }
 
   Color _hotWaterSheetBackgroundColor() {
@@ -64,7 +66,7 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     }
 
     if (logic.state.choiceDevice.value == -1) {
-      _showSnackBar('请先选择设备');
+      _showSnackBar('请先选择设备', type: AppSnackBarType.warning);
       return;
     }
 
@@ -197,7 +199,7 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
             onClose: () => Navigator.of(sheetContext).pop(),
             onSubmit: (deviceCode) async {
               if (deviceCode.isEmpty) {
-                _showSnackBar('请输入设备号');
+                _showSnackBar('请输入设备号', type: AppSnackBarType.warning);
                 return;
               }
 

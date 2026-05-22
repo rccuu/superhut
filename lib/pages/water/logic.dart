@@ -1,14 +1,13 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/login/hut/view.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
-import '../../core/ui/color_scheme_ext.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
+import '../../core/ui/app_snack_bar.dart';
 import 'state.dart';
 
 class FunctionHotWaterLogic extends GetxController {
@@ -70,27 +69,15 @@ class FunctionHotWaterLogic extends GetxController {
     bool isError = false,
     bool isWarning = false,
   }) {
-    final context = Get.context;
-    final colorScheme = context != null ? Theme.of(context).colorScheme : null;
-    final backgroundColor =
-        isError
-            ? colorScheme?.errorContainer
-            : isWarning
-            ? colorScheme?.warningContainerSoft
-            : colorScheme?.successContainerSoft;
-    final textColor =
-        isError
-            ? colorScheme?.onErrorContainer
-            : isWarning
-            ? colorScheme?.onWarningContainerSoft
-            : colorScheme?.onSuccessContainerSoft;
-
-    Get.snackbar(
-      title,
-      message,
-      backgroundColor: backgroundColor,
-      colorText: textColor,
-      margin: const EdgeInsets.only(top: 30, left: 50, right: 50),
+    showAppSnackBar(
+      Get.context,
+      message: '$title：$message',
+      type:
+          isError
+              ? AppSnackBarType.error
+              : isWarning
+              ? AppSnackBarType.warning
+              : AppSnackBarType.success,
     );
   }
 
