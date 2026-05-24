@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/app_loading_indicator.dart';
 import '../../../core/ui/app_snack_bar.dart';
 import 'command.dart';
 import 'widgets/login_widgets.dart';
@@ -104,14 +105,7 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
               onPressed: _isSubmitting ? null : _submitLogin,
               child:
                   _isSubmitting
-                      ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: Colors.white,
-                        ),
-                      )
+                      ? const AppLoadingIndicator(size: 22, color: Colors.white)
                       : const Text(
                         '完成登录',
                         style: TextStyle(

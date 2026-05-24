@@ -12,6 +12,7 @@ import 'package:superhut/utils/course/coursemain.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
 import '../core/services/app_auth_storage.dart';
+import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_snack_bar.dart';
 import '../core/ui/apple_glass.dart';
 
@@ -332,13 +333,9 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                                 onPressed: _isLoading ? null : _loginWithCAS,
                                 child:
                                     _isLoading
-                                        ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            color: Colors.white,
-                                            strokeWidth: 2,
-                                          ),
+                                        ? const AppLoadingIndicator(
+                                          size: 20,
+                                          color: Colors.white,
                                         )
                                         : const Text('登录并继续'),
                               ),

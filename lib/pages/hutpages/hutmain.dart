@@ -2,12 +2,12 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/pages/hutpages/hutmain_logic.dart';
 import 'package:superhut/pages/hutpages/type1/type1webview.dart';
 import 'package:superhut/pages/hutpages/type2/type2webview.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 
@@ -127,7 +127,7 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                LoadingAnimationWidget.inkDrop(color: _hutAccent, size: 42),
+                AppLoadingIndicator(color: _hutAccent, size: 42),
                 const SizedBox(height: 16),
                 Text(
                   '正在加载智慧工大服务',

@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_update_service.dart';
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import 'support_page.dart';
@@ -429,11 +430,7 @@ class _AboutHeroCard extends StatelessWidget {
               onPressed: onCheckUpdates,
               icon:
                   isCheckingUpdate
-                      ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                      ? const AppLoadingIndicator(size: 18, color: Colors.white)
                       : const Icon(Ionicons.refresh_outline, size: 18),
               label: Text(isCheckingUpdate ? '检查中...' : '检查更新'),
             ),

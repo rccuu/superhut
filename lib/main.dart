@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'package:superhut/pages/score/jump_to_score_page.dart';
+import 'core/ui/app_loading_indicator.dart';
 import 'home/homeview/view.dart';
 import 'core/services/app_auth_storage.dart';
 import 'pages/drink/view/view.dart';
@@ -270,10 +272,96 @@ class _AppLightPageTransitionsBuilder extends PageTransitionsBuilder {
       end: Offset.zero,
     ).animate(curvedAnimation);
 
+    final transitionChild = _RouteTransitionRepaintBoundary(
+      animation: animation,
+      child: child,
+    );
+
     return FadeTransition(
       opacity: curvedAnimation,
-      child: SlideTransition(position: slideAnimation, child: child),
+      child: SlideTransition(position: slideAnimation, child: transitionChild),
     );
+  }
+}
+
+class _RouteTransitionRepaintBoundary extends SingleChildRenderObjectWidget {
+  const _RouteTransitionRepaintBoundary({
+    required this.animation,
+    required super.child,
+  });
+
+  final Animation<double> animation;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderRouteTransitionRepaintBoundary(animation: animation);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderRouteTransitionRepaintBoundary renderObject,
+  ) {
+    renderObject.animation = animation;
+  }
+}
+
+class _RenderRouteTransitionRepaintBoundary extends RenderProxyBox {
+  _RenderRouteTransitionRepaintBoundary({required Animation<double> animation})
+    : _animation = animation,
+      _isTransitioning = _resolveIsTransitioning(animation);
+
+  Animation<double> get animation => _animation;
+  Animation<double> _animation;
+  set animation(Animation<double> value) {
+    if (_animation == value) {
+      return;
+    }
+    if (attached) {
+      _animation.removeStatusListener(_handleAnimationStatusChanged);
+    }
+    _animation = value;
+    if (attached) {
+      _animation.addStatusListener(_handleAnimationStatusChanged);
+    }
+    _updateTransitioningState();
+  }
+
+  bool _isTransitioning;
+
+  @override
+  bool get isRepaintBoundary => child != null && _isTransitioning;
+
+  static bool _resolveIsTransitioning(Animation<double> animation) {
+    return animation.status == AnimationStatus.forward ||
+        animation.status == AnimationStatus.reverse;
+  }
+
+  void _handleAnimationStatusChanged(AnimationStatus status) {
+    _updateTransitioningState();
+  }
+
+  void _updateTransitioningState() {
+    final nextValue = _resolveIsTransitioning(_animation);
+    if (_isTransitioning == nextValue) {
+      return;
+    }
+    _isTransitioning = nextValue;
+    markNeedsCompositingBitsUpdate();
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _animation.addStatusListener(_handleAnimationStatusChanged);
+    _updateTransitioningState();
+  }
+
+  @override
+  void detach() {
+    _animation.removeStatusListener(_handleAnimationStatusChanged);
+    super.detach();
   }
 }
 
@@ -486,7 +574,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const MaterialApp(
-        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+        home: Scaffold(body: Center(child: AppLoadingIndicator())),
       );
     }
 

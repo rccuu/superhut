@@ -22,6 +22,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/course_sync_service.dart';
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
@@ -654,7 +655,37 @@ class _CourseTableViewState extends State<CourseTableView> {
     );
   }
 
-  void _scheduleWeekPlacementWarmup(_WeekGridMetrics metrics) {
+  bool _hasWeekPaintCache({
+    required int weekNumber,
+    required _WeekGridMetrics metrics,
+    required ThemeData theme,
+    required ui.TextDirection textDirection,
+    required TextScaler textScaler,
+  }) {
+    final weekDays = _buildWeekDaysForWeek(weekNumber);
+    final placements =
+        _weekPlacementsCache[_buildWeekPlacementCacheKey(weekDays, metrics)];
+    if (placements == null || placements.isEmpty) {
+      return placements != null;
+    }
+
+    return _weekCourseCardPaintCache.containsKey(
+      _buildWeekCourseCardPaintCacheKey(
+        weekDays,
+        metrics,
+        theme,
+        textDirection,
+        textScaler,
+      ),
+    );
+  }
+
+  void _scheduleWeekPlacementWarmup(
+    _WeekGridMetrics metrics, {
+    required ThemeData theme,
+    required ui.TextDirection textDirection,
+    required TextScaler textScaler,
+  }) {
     if (_weekPlacementWarmupPending ||
         !_isInitialLoadComplete ||
         _courseData.isEmpty) {
@@ -669,9 +700,16 @@ class _CourseTableViewState extends State<CourseTableView> {
             if (centerWeek < _allWeek) centerWeek + 1,
           }.toList()
           ..sort();
-    final needsWarmup = targetWeeks.any(
-      (weekNumber) => !_hasWeekPlacementCache(weekNumber, metrics),
-    );
+    final needsWarmup = targetWeeks.any((weekNumber) {
+      return !_hasWeekPlacementCache(weekNumber, metrics) ||
+          !_hasWeekPaintCache(
+            weekNumber: weekNumber,
+            metrics: metrics,
+            theme: theme,
+            textDirection: textDirection,
+            textScaler: textScaler,
+          );
+    });
     if (!needsWarmup) {
       return;
     }
@@ -683,10 +721,16 @@ class _CourseTableViewState extends State<CourseTableView> {
         return;
       }
       for (final weekNumber in targetWeeks) {
-        if (_hasWeekPlacementCache(weekNumber, metrics)) {
-          continue;
-        }
-        _buildPlacedCourses(_buildWeekDaysForWeek(weekNumber), metrics);
+        final weekDays = _buildWeekDaysForWeek(weekNumber);
+        final placedCourses = _buildPlacedCourses(weekDays, metrics);
+        _buildWeekCourseCardPaintDataForEnvironment(
+          weekDays: weekDays,
+          metrics: metrics,
+          placedCourses: placedCourses,
+          theme: theme,
+          textDirection: textDirection,
+          textScaler: textScaler,
+        );
       }
     });
   }
@@ -696,8 +740,8 @@ class _CourseTableViewState extends State<CourseTableView> {
    * @param seed 颜色生成种子字符串（课程名称）
    * @return HSL颜色空间生成的固定颜色
    */
-  _CoursePalette _getCoursePalette(String seed) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  _CoursePalette _getCoursePalette(String seed, ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
     final hash = seed.hashCode % 360;
     final fill =
         HSLColor.fromAHSL(
@@ -1903,19 +1947,12 @@ class _CourseTableViewState extends State<CourseTableView> {
       builder: (context, snapshot) {
         final isReady = snapshot.data ?? false;
         return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 90),
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
-          transitionBuilder: (child, animation) {
-            final offsetAnimation = Tween<Offset>(
-              begin: const Offset(0, 0.02),
-              end: Offset.zero,
-            ).animate(animation);
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(position: offsetAnimation, child: child),
-            );
-          },
+          transitionBuilder:
+              (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
           child:
               isReady
                   ? KeyedSubtree(
@@ -2545,13 +2582,9 @@ class _CourseTableViewState extends State<CourseTableView> {
                         _isPrimaryActionLoading ? null : _handlePrimaryAction,
                     icon:
                         _isPrimaryActionLoading
-                            ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
+                            ? const AppLoadingIndicator(
+                              size: 18,
+                              color: Colors.white,
                             )
                             : Icon(
                               _hasLinkedCampusAccount
@@ -2618,12 +2651,7 @@ class _CourseTableViewState extends State<CourseTableView> {
       key: const ValueKey('course-table-preparing-state'),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
       child: Center(
-        child: RepaintBoundary(
-          child: CupertinoActivityIndicator(
-            radius: 11,
-            color: colorScheme.primary,
-          ),
-        ),
+        child: AppLoadingIndicator(size: 22, color: colorScheme.primary),
       ),
     );
   }
@@ -2672,7 +2700,12 @@ class _CourseTableViewState extends State<CourseTableView> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final metrics = _buildGridMetrics(constraints);
-                  _scheduleWeekPlacementWarmup(metrics);
+                  _scheduleWeekPlacementWarmup(
+                    metrics,
+                    theme: Theme.of(context),
+                    textDirection: Directionality.of(context),
+                    textScaler: MediaQuery.textScalerOf(context),
+                  );
                   final basePagingPhysics =
                       _allWeek <= 1
                           ? const NeverScrollableScrollPhysics()
@@ -2847,13 +2880,28 @@ class _CourseTableViewState extends State<CourseTableView> {
     required _WeekGridMetrics metrics,
     required List<_PlacedCourse> placedCourses,
   }) {
+    return _buildWeekCourseCardPaintDataForEnvironment(
+      weekDays: weekDays,
+      metrics: metrics,
+      placedCourses: placedCourses,
+      theme: Theme.of(context),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    );
+  }
+
+  List<_CourseCardPaintData> _buildWeekCourseCardPaintDataForEnvironment({
+    required List<DateTime> weekDays,
+    required _WeekGridMetrics metrics,
+    required List<_PlacedCourse> placedCourses,
+    required ThemeData theme,
+    required ui.TextDirection textDirection,
+    required TextScaler textScaler,
+  }) {
     if (placedCourses.isEmpty) {
       return const <_CourseCardPaintData>[];
     }
 
-    final theme = Theme.of(context);
-    final textDirection = Directionality.of(context);
-    final textScaler = MediaQuery.textScalerOf(context);
     final cacheKey = _buildWeekCourseCardPaintCacheKey(
       weekDays,
       metrics,
@@ -2870,7 +2918,7 @@ class _CourseTableViewState extends State<CourseTableView> {
         .map(
           (placement) => _buildCourseCardPaintData(
             placement: placement,
-            palette: _getCoursePalette(placement.course.name),
+            palette: _getCoursePalette(placement.course.name, theme),
             theme: theme,
             textDirection: textDirection,
             textScaler: textScaler,
@@ -3228,127 +3276,131 @@ class _CourseTableViewState extends State<CourseTableView> {
 
     return KeyedSubtree(
       key: ValueKey<String>(_dateKey(weekDays.first)),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: _headerHeight,
-              width: metrics.totalWidth,
-              child: _WeekHeaderStrip(
-                weekDays: weekDays,
-                weekdayMap: _weekdayMap,
-                metrics: metrics,
-              ),
-            ),
-            const SizedBox(height: _headerGap),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withValues(alpha: isDark ? 0.10 : 0.52),
-                      colorScheme.surface.withValues(
-                        alpha: isDark ? 0.08 : 0.30,
-                      ),
-                    ],
-                  ),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: isDark ? 0.10 : 0.72),
-                  ),
+      child: RepaintBoundary(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: _headerHeight,
+                width: metrics.totalWidth,
+                child: _WeekHeaderStrip(
+                  weekDays: weekDays,
+                  weekdayMap: _weekdayMap,
+                  metrics: metrics,
                 ),
-                child: SizedBox(
-                  width: metrics.totalWidth,
-                  height: metrics.gridHeight,
-                  child: Stack(
-                    clipBehavior: Clip.hardEdge,
-                    children: [
-                      Positioned.fill(
-                        child: RepaintBoundary(
-                          child: CustomPaint(
-                            key: const ValueKey(
-                              'course-table-static-grid-layer',
-                            ),
-                            painter: _WeekGridStaticPainter(
-                              metrics: metrics,
-                              sectionCount: _sectionCount,
-                              todayColumnIndex: weekDays.indexWhere(_isToday),
-                              todayHighlightColor: colorScheme.primary
-                                  .withValues(alpha: isDark ? 0.08 : 0.06),
-                              horizontalLineColor: colorScheme.outlineVariant
-                                  .withValues(alpha: isDark ? 0.24 : 0.34),
-                              verticalLineColor: colorScheme.outlineVariant
-                                  .withValues(alpha: isDark ? 0.18 : 0.22),
-                            ),
-                          ),
+              ),
+              const SizedBox(height: _headerGap),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withValues(alpha: isDark ? 0.10 : 0.52),
+                        colorScheme.surface.withValues(
+                          alpha: isDark ? 0.08 : 0.30,
                         ),
+                      ],
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withValues(
+                        alpha: isDark ? 0.10 : 0.72,
                       ),
-                      ..._sectionTimes.map((section) {
-                        final top = metrics.topForSection(section.index);
-                        return Positioned(
-                          left: 0,
-                          top: top,
-                          width: metrics.timeColumnWidth,
-                          height: metrics.slotHeight,
-                          child: _TimeAxisLabel(section: section),
-                        );
-                      }),
-                      if (paintedCards.isNotEmpty)
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: metrics.totalWidth,
+                    height: metrics.gridHeight,
+                    child: Stack(
+                      clipBehavior: Clip.hardEdge,
+                      children: [
                         Positioned.fill(
                           child: RepaintBoundary(
                             child: CustomPaint(
                               key: const ValueKey(
-                                'course-table-static-card-layer',
+                                'course-table-static-grid-layer',
                               ),
-                              painter: _WeekCourseCardPainter(
-                                cards: paintedCards,
+                              painter: _WeekGridStaticPainter(
+                                metrics: metrics,
+                                sectionCount: _sectionCount,
+                                todayColumnIndex: weekDays.indexWhere(_isToday),
+                                todayHighlightColor: colorScheme.primary
+                                    .withValues(alpha: isDark ? 0.08 : 0.06),
+                                horizontalLineColor: colorScheme.outlineVariant
+                                    .withValues(alpha: isDark ? 0.24 : 0.34),
+                                verticalLineColor: colorScheme.outlineVariant
+                                    .withValues(alpha: isDark ? 0.18 : 0.22),
                               ),
-                              isComplex: true,
-                              willChange: false,
                             ),
                           ),
                         ),
-                      if (placedCourses.isEmpty)
-                        Positioned.fill(
-                          child: IgnorePointer(
-                            child: Center(
-                              child: Text(
-                                '本周暂无课程',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurfaceVariant
-                                      .withValues(alpha: 0.82),
-                                  fontWeight: FontWeight.w600,
+                        ..._sectionTimes.map((section) {
+                          final top = metrics.topForSection(section.index);
+                          return Positioned(
+                            left: 0,
+                            top: top,
+                            width: metrics.timeColumnWidth,
+                            height: metrics.slotHeight,
+                            child: _TimeAxisLabel(section: section),
+                          );
+                        }),
+                        if (paintedCards.isNotEmpty)
+                          Positioned.fill(
+                            child: RepaintBoundary(
+                              child: CustomPaint(
+                                key: const ValueKey(
+                                  'course-table-static-card-layer',
+                                ),
+                                painter: _WeekCourseCardPainter(
+                                  cards: paintedCards,
+                                ),
+                                isComplex: true,
+                                willChange: false,
+                              ),
+                            ),
+                          ),
+                        if (placedCourses.isEmpty)
+                          Positioned.fill(
+                            child: IgnorePointer(
+                              child: Center(
+                                child: Text(
+                                  '本周暂无课程',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurfaceVariant
+                                        .withValues(alpha: 0.82),
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ...placedCourses.map((placement) {
-                        return Positioned(
-                          left: placement.left,
-                          top: placement.top,
-                          width: placement.width,
-                          height: placement.height,
-                          child: _ScheduleCourseCardHitTarget(
-                            key: ValueKey<String>(
-                              'course-card-hit-${_buildCourseCardHitKey(placement)}',
+                        ...placedCourses.map((placement) {
+                          return Positioned(
+                            left: placement.left,
+                            top: placement.top,
+                            width: placement.width,
+                            height: placement.height,
+                            child: _ScheduleCourseCardHitTarget(
+                              key: ValueKey<String>(
+                                'course-card-hit-${_buildCourseCardHitKey(placement)}',
+                              ),
+                              semanticLabel: placement.course.name,
+                              onTap: () => _showCourseDetails(placement),
                             ),
-                            semanticLabel: placement.course.name,
-                            onTap: () => _showCourseDetails(placement),
-                          ),
-                        );
-                      }),
-                    ],
+                          );
+                        }),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -3741,8 +3793,7 @@ class _WeekHeaderStrip extends StatelessWidget {
             padding: EdgeInsets.only(left: index == 0 ? 0 : metrics.columnGap),
             child: SizedBox(
               width: metrics.dayWidth,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
+              child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 decoration: BoxDecoration(
                   color:

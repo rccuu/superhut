@@ -1,8 +1,8 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import 'commentary_api.dart';
 import 'commentary_course_list_page.dart';
 
@@ -37,6 +37,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 10),
             child: ListView.builder(
+              addAutomaticKeepAlives: false,
               itemCount: typedBatchesList.length,
               itemBuilder: (BuildContext context, int index) {
                 final batch = typedBatchesList[index];
@@ -136,10 +137,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
           );
         },
         whenNotDone: Center(
-          child: LoadingAnimationWidget.inkDrop(
-            color: colorScheme.primary,
-            size: 40,
-          ),
+          child: AppLoadingIndicator(color: colorScheme.primary, size: 40),
         ),
       ),
     );

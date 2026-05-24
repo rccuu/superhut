@@ -8,6 +8,7 @@ import 'package:superhut/pages/freeroom/building.dart';
 import 'package:superhut/pages/hutpages/hutmain.dart';
 import 'package:superhut/pages/water/view.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/token.dart';
@@ -20,20 +21,22 @@ class FunctionPage extends StatefulWidget {
 }
 
 class _FunctionPageState extends State<FunctionPage> {
-  final Set<String> _loadingFunctions = <String>{};
+  final Map<String, ValueNotifier<bool>> _loadingNotifiers =
+      <String, ValueNotifier<bool>>{};
 
-  void _setLoading(String functionId, bool isLoading) {
-    setState(() {
-      if (isLoading) {
-        _loadingFunctions.add(functionId);
-      } else {
-        _loadingFunctions.remove(functionId);
-      }
-    });
+  ValueNotifier<bool> _loadingNotifierFor(String functionId) {
+    return _loadingNotifiers.putIfAbsent(
+      functionId,
+      () => ValueNotifier<bool>(false),
+    );
   }
 
-  bool _isLoading(String functionId) {
-    return _loadingFunctions.contains(functionId);
+  void _setLoading(String functionId, bool isLoading) {
+    final notifier = _loadingNotifierFor(functionId);
+    if (notifier.value == isLoading) {
+      return;
+    }
+    notifier.value = isLoading;
   }
 
   Future<void> _openProtectedPage({
@@ -54,6 +57,14 @@ class _FunctionPageState extends State<FunctionPage> {
         _setLoading(functionId, false);
       }
     }
+  }
+
+  @override
+  void dispose() {
+    for (final notifier in _loadingNotifiers.values) {
+      notifier.dispose();
+    }
+    super.dispose();
   }
 
   @override
@@ -183,6 +194,7 @@ class _FunctionPageState extends State<FunctionPage> {
                         : 1.04;
 
                 return GridView.builder(
+                  addAutomaticKeepAlives: false,
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 88),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: crossAxisCount,
@@ -206,105 +218,107 @@ class _FunctionPageState extends State<FunctionPage> {
   Widget _buildFeatureCard(_FunctionFeature item) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final isLoading = _isLoading(item.id);
     final useLiteCards = AppGlassPerformanceScope.isLiteOf(context);
     final lightColor = _shiftAccent(item.accent, lightnessDelta: 0.10);
     final deepColor = _shiftAccent(item.accent, lightnessDelta: -0.05);
     const foreground = Colors.white;
 
-    return RepaintBoundary(
-      child: Material(
-        color: Colors.transparent,
-        child: GlassPanel(
-          style: GlassPanelStyle.card,
-          blur: useLiteCards ? 0 : 18,
-          useBackdropFilter: !useLiteCards,
-          borderRadius: BorderRadius.circular(26),
-          padding: const EdgeInsets.all(16),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              lightColor.withValues(alpha: isDark ? 0.82 : 0.74),
-              deepColor.withValues(alpha: isDark ? 0.74 : 0.70),
-            ],
-          ),
-          borderColor: Colors.white.withValues(alpha: isDark ? 0.12 : 0.24),
-          onTap: isLoading ? null : () => item.onTap(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                item.icon,
-                color: foreground,
-                size: 26,
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.10),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: _loadingNotifierFor(item.id),
+      builder: (context, isLoading, _) {
+        return RepaintBoundary(
+          child: Material(
+            color: Colors.transparent,
+            child: GlassPanel(
+              style: GlassPanelStyle.card,
+              blur: useLiteCards ? 0 : 18,
+              useBackdropFilter: !useLiteCards,
+              borderRadius: BorderRadius.circular(26),
+              padding: const EdgeInsets.all(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  lightColor.withValues(alpha: isDark ? 0.82 : 0.74),
+                  deepColor.withValues(alpha: isDark ? 0.74 : 0.70),
                 ],
               ),
-              const Spacer(),
-              Text(
-                item.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontSize: 20,
-                  letterSpacing: -0.4,
-                  color: foreground,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
+              borderColor: Colors.white.withValues(alpha: isDark ? 0.12 : 0.24),
+              onTap: isLoading ? null : () => item.onTap(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(
-                        alpha: isDark ? 0.10 : 0.14,
-                      ),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: Colors.white.withValues(
-                          alpha: isDark ? 0.08 : 0.18,
+                  Icon(
+                    item.icon,
+                    color: foreground,
+                    size: 26,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.18 : 0.10,
                         ),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
-                    ),
-                    child: Text(
-                      '进入',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: foreground.withValues(alpha: 0.92),
-                      ),
-                    ),
+                    ],
                   ),
                   const Spacer(),
-                  if (isLoading)
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: foreground.withValues(alpha: 0.92),
-                      ),
-                    )
-                  else
-                    Icon(
-                      Ionicons.arrow_forward,
-                      size: 18,
-                      color: foreground.withValues(alpha: 0.92),
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontSize: 20,
+                      letterSpacing: -0.4,
+                      color: foreground,
                     ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(
+                            alpha: isDark ? 0.10 : 0.14,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: Colors.white.withValues(
+                              alpha: isDark ? 0.08 : 0.18,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          '进入',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: foreground.withValues(alpha: 0.92),
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      if (isLoading)
+                        AppLoadingIndicator(
+                          size: 18,
+                          color: foreground.withValues(alpha: 0.92),
+                        )
+                      else
+                        Icon(
+                          Ionicons.arrow_forward,
+                          size: 18,
+                          color: foreground.withValues(alpha: 0.92),
+                        ),
+                    ],
+                  ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

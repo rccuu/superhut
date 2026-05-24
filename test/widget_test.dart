@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:superhut/home/coursetable/view.dart';
 import 'package:superhut/home/homeview/view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -94,9 +95,9 @@ void main() {
         resolveCourseStateOnStartup: false,
       ),
     );
-    await pumpUntilFound(tester, find.byType(IndexedStack));
+    await pumpUntilFound(tester, find.byKey(const ValueKey('home-tab-stage')));
 
-    expect(find.byType(IndexedStack), findsOneWidget);
+    expect(find.byKey(const ValueKey('home-tab-stage')), findsOneWidget);
     expect(find.text('功能'), findsOneWidget);
     expect(find.byType(FunctionPage), findsOneWidget);
 
@@ -199,6 +200,30 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('keeps inactive tabs mounted but offstage', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(FunctionPage), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(UserPage), findsOneWidget);
+    expect(find.byType(FunctionPage), findsNothing);
+    expect(find.byType(FunctionPage, skipOffstage: false), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('home-loaded-tab-1'), skipOffstage: false),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('animates tab transitions horizontally by tab order', (
     WidgetTester tester,
   ) async {
@@ -261,6 +286,20 @@ void main() {
     );
   });
 
+  testWidgets('uses shorter dock item animation in lite mode', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final nav = tester.widget<GNav>(find.byType(GNav));
+    expect(nav.duration, const Duration(milliseconds: 90));
+  });
+
   testWidgets('disables ticker activity for inactive tabs', (
     WidgetTester tester,
   ) async {
@@ -319,5 +358,8 @@ void main() {
 
     expect(find.byKey(const ValueKey('home-tab-slide-2')), findsNothing);
     expect(find.byType(UserPage), findsOneWidget);
+
+    final nav = tester.widget<GNav>(find.byType(GNav));
+    expect(nav.duration, Duration.zero);
   });
 }

@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../core/services/app_auth_storage.dart';
+import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_snack_bar.dart';
 import '../home/homeview/view.dart';
 import '../utils/course/coursemain.dart';
@@ -234,10 +234,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
         child: Row(
           children: [
             if (!_autoLoginTimedOut)
-              LoadingAnimationWidget.inkDrop(
-                color: theme.primaryColor,
-                size: 24,
-              )
+              AppLoadingIndicator(color: theme.primaryColor, size: 24)
             else
               Icon(
                 Icons.touch_app_outlined,

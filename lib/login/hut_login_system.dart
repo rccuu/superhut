@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
-import '../core/ui/color_scheme_ext.dart';
 import '../core/services/app_logger.dart';
+import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_snack_bar.dart';
+import '../core/ui/color_scheme_ext.dart';
 
 bool _isUsableJwxtTokenCandidate(
   String? token, {
@@ -300,7 +301,7 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
             Container(
               color: colorScheme.floatingSurface.withValues(alpha: 0.92),
               child: Center(
-                child: CircularProgressIndicator(color: colorScheme.primary),
+                child: AppLoadingIndicator(color: colorScheme.primary),
               ),
             ),
         ],

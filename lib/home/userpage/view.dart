@@ -33,11 +33,16 @@ class _UserPageState extends State<UserPage> {
   );
   bool _isInitialized = false;
   bool _hasLinkedCampusAccount = false;
-  bool _isLoadingBalance = false;
   bool _isRefreshingBalance = false;
   bool _isRefreshingScoreSummary = false;
-  String _balance = '--';
-  Map<String, String> _profile = _defaultProfile();
+  late final ValueNotifier<Map<String, String>> _profileNotifier =
+      ValueNotifier<Map<String, String>>(_defaultProfile());
+  late final ValueNotifier<String> _balanceNotifier = ValueNotifier<String>(
+    '--',
+  );
+  late final ValueNotifier<bool> _balanceLoadingNotifier = ValueNotifier<bool>(
+    false,
+  );
 
   @override
   void initState() {
@@ -90,12 +95,12 @@ class _UserPageState extends State<UserPage> {
       return;
     }
 
+    _profileNotifier.value = profile;
+    _balanceNotifier.value = hasLinkedCampusAccount ? cachedBalance : '--';
+    _balanceLoadingNotifier.value = false;
     setState(() {
       _isInitialized = true;
       _hasLinkedCampusAccount = hasLinkedCampusAccount;
-      _profile = profile;
-      _balance = hasLinkedCampusAccount ? cachedBalance : '--';
-      _isLoadingBalance = false;
     });
 
     if (hasLinkedCampusAccount) {
@@ -113,9 +118,7 @@ class _UserPageState extends State<UserPage> {
       return;
     }
 
-    setState(() {
-      _profile = nextProfile;
-    });
+    _profileNotifier.value = nextProfile;
   }
 
   Future<void> _refreshScoreSummaryInBackground() async {
@@ -130,14 +133,12 @@ class _UserPageState extends State<UserPage> {
         return;
       }
 
-      setState(() {
-        _profile = {
-          ..._profile,
-          'yxzxf': scoreData.yxzxf,
-          'zxfjd': scoreData.zxfjd,
-          'pjxfjd': scoreData.pjxfjd,
-        };
-      });
+      _profileNotifier.value = {
+        ..._profileNotifier.value,
+        'yxzxf': scoreData.yxzxf,
+        'zxfjd': scoreData.zxfjd,
+        'pjxfjd': scoreData.pjxfjd,
+      };
     } catch (error, stackTrace) {
       AppLogger.error(
         'Failed to refresh score summary on user page',
@@ -156,9 +157,7 @@ class _UserPageState extends State<UserPage> {
 
     _isRefreshingBalance = true;
     if (showStatus && mounted) {
-      setState(() {
-        _isLoadingBalance = true;
-      });
+      _balanceLoadingNotifier.value = true;
     }
 
     try {
@@ -169,9 +168,7 @@ class _UserPageState extends State<UserPage> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _balance = normalized;
-      });
+      _balanceNotifier.value = normalized;
     } catch (error, stackTrace) {
       AppLogger.error(
         'Failed to load card balance on user page',
@@ -181,9 +178,7 @@ class _UserPageState extends State<UserPage> {
     } finally {
       _isRefreshingBalance = false;
       if (mounted) {
-        setState(() {
-          _isLoadingBalance = false;
-        });
+        _balanceLoadingNotifier.value = false;
       }
     }
   }
@@ -192,6 +187,14 @@ class _UserPageState extends State<UserPage> {
     if (!await launchUrl(_url)) {
       throw Exception('Could not launch $_url');
     }
+  }
+
+  @override
+  void dispose() {
+    _profileNotifier.dispose();
+    _balanceNotifier.dispose();
+    _balanceLoadingNotifier.dispose();
+    super.dispose();
   }
 
   Future<void> _openLoginPage() async {
@@ -299,34 +302,49 @@ class _UserPageState extends State<UserPage> {
                     ],
                   ),
                 ] else ...[
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          title: '已修学分',
-                          value: _profile['yxzxf'] ?? '-',
-                          accent: const Color(0xFF1E8A6F),
-                          icon: Ionicons.ribbon_outline,
-                          onTap: _openScorePage,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: _buildStatCard(
-                          title: '平均绩点',
-                          value: _profile['pjxfjd'] ?? '-',
-                          accent: const Color(0xFFE28A2E),
-                          icon: Ionicons.stats_chart_outline,
-                          onTap: _openScorePage,
-                        ),
-                      ),
-                    ],
+                  ValueListenableBuilder<Map<String, String>>(
+                    valueListenable: _profileNotifier,
+                    builder: (context, profile, _) {
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              title: '已修学分',
+                              value: profile['yxzxf'] ?? '-',
+                              accent: const Color(0xFF1E8A6F),
+                              icon: Ionicons.ribbon_outline,
+                              onTap: _openScorePage,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: _buildStatCard(
+                              title: '平均绩点',
+                              value: profile['pjxfjd'] ?? '-',
+                              accent: const Color(0xFFE28A2E),
+                              icon: Ionicons.stats_chart_outline,
+                              onTap: _openScorePage,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
-                  _buildBalanceCard(
-                    theme,
-                    _balance,
-                    isLoading: _isLoadingBalance,
+                  ValueListenableBuilder<String>(
+                    valueListenable: _balanceNotifier,
+                    builder: (context, balance, _) {
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: _balanceLoadingNotifier,
+                        builder: (context, isLoading, _) {
+                          return _buildBalanceCard(
+                            theme,
+                            balance,
+                            isLoading: isLoading,
+                          );
+                        },
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   _buildActionPanel(

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
@@ -190,7 +190,7 @@ class _LoadingPanel extends StatelessWidget {
           const SizedBox(height: 18),
           Row(
             children: [
-              LoadingAnimationWidget.inkDrop(color: accent, size: 40),
+              AppLoadingIndicator(color: accent, size: 40),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
+import '../../../../core/ui/app_loading_indicator.dart';
+import '../../../../core/ui/apple_glass.dart';
 import '../../../../core/ui/color_scheme_ext.dart';
 
 class DrinkBackground extends StatelessWidget {
@@ -16,21 +18,28 @@ class DrinkBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final Color accent = colorScheme.primary;
+    final useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
+    final decoration = BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          accent.withValues(alpha: drinkStatus ? 0.20 : 0.12),
+          accent.withValues(alpha: drinkStatus ? 0.10 : 0.04),
+          colorScheme.surface,
+        ],
+        stops: drinkStatus ? const [0.0, 0.45, 1.0] : const [0.0, 0.18, 1.0],
+      ),
+    );
+
+    if (useLiteEffects) {
+      return DecoratedBox(decoration: decoration);
+    }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 800),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            accent.withValues(alpha: drinkStatus ? 0.20 : 0.12),
-            accent.withValues(alpha: drinkStatus ? 0.10 : 0.04),
-            colorScheme.surface,
-          ],
-          stops: drinkStatus ? const [0.0, 0.45, 1.0] : const [0.0, 0.18, 1.0],
-        ),
-      ),
+      curve: Curves.easeOutCubic,
+      decoration: decoration,
     );
   }
 }
@@ -46,11 +55,7 @@ class DrinkLoadingState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: CircularProgressIndicator(color: colorScheme.primary),
-          ),
+          AppLoadingIndicator(size: 32, color: colorScheme.primary),
           const SizedBox(height: 16),
           Text(
             '正在同步设备信息',
@@ -84,6 +89,9 @@ class DrinkStatusHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final bool isDark = colorScheme.isDarkMode;
+    final bool reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final bool useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
     final Color restingCardTop =
         isDark
             ? colorScheme.surfaceContainerHigh.withValues(alpha: 0.96)
@@ -96,9 +104,16 @@ class DrinkStatusHeader extends StatelessWidget {
     final Color restingSubtleText = colorScheme.onSurfaceVariant;
     final Color emphasisColor =
         drinkStatus ? colorScheme.onPrimary : restingText;
+    final duration =
+        reduceMotion
+            ? Duration.zero
+            : useLiteEffects
+            ? const Duration(milliseconds: 140)
+            : const Duration(milliseconds: 260);
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 260),
+      duration: duration,
+      curve: Curves.easeOutCubic,
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -121,10 +136,14 @@ class DrinkStatusHeader extends StatelessWidget {
           BoxShadow(
             color:
                 drinkStatus
-                    ? colorScheme.primary.withValues(alpha: 0.24)
-                    : colorScheme.primary.withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
+                    ? colorScheme.primary.withValues(
+                      alpha: useLiteEffects ? 0.16 : 0.24,
+                    )
+                    : colorScheme.primary.withValues(
+                      alpha: useLiteEffects ? 0.07 : 0.10,
+                    ),
+            blurRadius: useLiteEffects ? 14 : 24,
+            offset: Offset(0, useLiteEffects ? 8 : 12),
           ),
         ],
       ),
@@ -856,6 +875,9 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final maxListHeight = MediaQuery.sizeOf(context).height * 0.5;
+    final listHeight = min(maxListHeight, devices.length * 92.0);
+
     return DrinkBottomSheetScaffold(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -876,12 +898,11 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
               ),
             )
           else
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.5,
-              ),
+            SizedBox(
+              height: listHeight,
               child: ListView.builder(
-                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                addAutomaticKeepAlives: false,
                 itemCount: devices.length,
                 itemBuilder: (context, index) {
                   final Map<String, dynamic> device = Map<String, dynamic>.from(
@@ -937,6 +958,9 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final maxListHeight = MediaQuery.sizeOf(context).height * 0.42;
+    final listHeight = min(maxListHeight, devices.length * 92.0);
+
     return DrinkBottomSheetScaffold(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -947,41 +971,44 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
             subtitle: '查看已收藏设备，删除不再使用的设备',
             badge: '${devices.length} 台',
           ),
-          SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.42,
-            child:
-                devices.isEmpty
-                    ? const Padding(
-                      padding: EdgeInsets.only(bottom: 12),
-                      child: _DrinkSheetEmptyCard(
-                        icon: Ionicons.water_outline,
-                        title: '还没有收藏设备',
-                        subtitle: '扫码添加宿舍设备后，后续就能直接在这里管理。',
+          if (devices.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: _DrinkSheetEmptyCard(
+                icon: Ionicons.water_outline,
+                title: '还没有收藏设备',
+                subtitle: '扫码添加宿舍设备后，后续就能直接在这里管理。',
+              ),
+            )
+          else
+            SizedBox(
+              height: listHeight,
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                addAutomaticKeepAlives: false,
+                itemCount: devices.length,
+                itemBuilder: (context, index) {
+                  final Map<String, dynamic> device = Map<String, dynamic>.from(
+                    devices[index] as Map,
+                  );
+                  final String deviceName = formatDeviceName(
+                    device['name']?.toString() ?? '未知设备',
+                  );
+                  return _DrinkSheetDeviceCard(
+                    title: deviceName,
+                    subtitle: 'ID: ${device['id']?.toString() ?? ''}',
+                    trailing: IconButton(
+                      tooltip: '删除设备',
+                      icon: Icon(
+                        Ionicons.trash_outline,
+                        color: Theme.of(context).colorScheme.error,
                       ),
-                    )
-                    : ListView.builder(
-                      itemCount: devices.length,
-                      itemBuilder: (context, index) {
-                        final Map<String, dynamic> device =
-                            Map<String, dynamic>.from(devices[index] as Map);
-                        final String deviceName = formatDeviceName(
-                          device['name']?.toString() ?? '未知设备',
-                        );
-                        return _DrinkSheetDeviceCard(
-                          title: deviceName,
-                          subtitle: 'ID: ${device['id']?.toString() ?? ''}',
-                          trailing: IconButton(
-                            tooltip: '删除设备',
-                            icon: Icon(
-                              Ionicons.trash_outline,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                            onPressed: () => onDeleteDevice(index),
-                          ),
-                        );
-                      },
+                      onPressed: () => onDeleteDevice(index),
                     ),
-          ),
+                  );
+                },
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
             child: Row(

@@ -1,6 +1,7 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/ui/app_loading_indicator.dart';
 import '../../../core/ui/app_snack_bar.dart';
 import 'command.dart';
 import 'widgets/login_widgets.dart';
@@ -143,14 +144,7 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
               onPressed: _isSending ? null : _sendMessageCode,
               child:
                   _isSending
-                      ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.2,
-                          color: Colors.white,
-                        ),
-                      )
+                      ? const AppLoadingIndicator(size: 22, color: Colors.white)
                       : const Text(
                         '发送验证码',
                         style: TextStyle(
@@ -184,14 +178,7 @@ class _CaptchaPlaceholder extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.2,
-              color: colorScheme.primary,
-            ),
-          ),
+          AppLoadingIndicator(size: 22, color: colorScheme.primary),
           const SizedBox(height: 12),
           Text(
             '正在加载验证码',

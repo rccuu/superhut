@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../../core/ui/app_loading_indicator.dart';
 import '../../../core/ui/apple_glass.dart';
 import '../../../core/ui/color_scheme_ext.dart';
 
@@ -108,8 +109,7 @@ class WaterBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 800),
+        DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -391,6 +391,9 @@ class HotWaterControlButton extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final isDisabled = isLoading || !deviceCheckComplete || !hasSelectedDevice;
     final bool isDark = colorScheme.isDarkMode;
+    final bool reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final bool useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
     final Color accent =
         isDisabled
             ? colorScheme.onSurfaceVariant
@@ -415,11 +418,17 @@ class HotWaterControlButton extends StatelessWidget {
             : waterStatus
             ? '结束'
             : '开始';
+    final animationDuration =
+        reduceMotion
+            ? Duration.zero
+            : useLiteEffects
+            ? const Duration(milliseconds: 140)
+            : const Duration(milliseconds: 300);
 
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: animationDuration,
         curve: Curves.easeOutCubic,
         width: 176,
         height: 176,
@@ -441,10 +450,21 @@ class HotWaterControlButton extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: accent.withValues(alpha: isDisabled ? 0.04 : 0.10),
-              blurRadius: isDisabled ? 10 : 18,
-              spreadRadius: isDisabled ? 1 : 2,
-              offset: const Offset(0, 8),
+              color: accent.withValues(
+                alpha:
+                    isDisabled
+                        ? (useLiteEffects ? 0.03 : 0.04)
+                        : (useLiteEffects ? 0.07 : 0.10),
+              ),
+              blurRadius:
+                  isDisabled
+                      ? (useLiteEffects ? 7 : 10)
+                      : (useLiteEffects ? 12 : 18),
+              spreadRadius:
+                  isDisabled
+                      ? (useLiteEffects ? 0 : 1)
+                      : (useLiteEffects ? 1 : 2),
+              offset: Offset(0, useLiteEffects ? 5 : 8),
             ),
           ],
         ),
@@ -645,11 +665,9 @@ class _ProgressIndicator extends StatelessWidget {
         SizedBox(
           width: 62,
           height: 62,
-          child: CircularProgressIndicator(
-            strokeWidth: 3,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              color.withValues(alpha: 0.72),
-            ),
+          child: AppLoadingIndicator(
+            size: 62,
+            color: color.withValues(alpha: 0.72),
           ),
         ),
         const SizedBox(height: 14),
@@ -1086,6 +1104,8 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final Color accent = HotWaterPalette.accentStrong(context);
+    final maxListHeight = MediaQuery.sizeOf(context).height * 0.5;
+    final listHeight = min(maxListHeight, devices.length * 64.0);
 
     return WaterBottomSheetScaffold(
       child: Column(
@@ -1120,12 +1140,11 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
             )
           else
             Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.sizeOf(context).height * 0.5,
-              ),
+              height: listHeight + 20,
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 20),
               child: ListView.builder(
-                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                addAutomaticKeepAlives: false,
                 itemCount: devices.length,
                 itemBuilder: (context, index) {
                   final Map<String, dynamic> device = Map<String, dynamic>.from(
@@ -1178,6 +1197,8 @@ class WaterDeviceManagementSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final Color accent = HotWaterPalette.accentStrong(context);
+    final maxListHeight = MediaQuery.sizeOf(context).height * 0.3;
+    final listHeight = min(maxListHeight, devices.length * 72.0);
 
     return WaterBottomSheetScaffold(
       child: Column(
@@ -1225,12 +1246,11 @@ class WaterDeviceManagementSheet extends StatelessWidget {
                     child: _EmptyDeviceState(message: '暂无设备，请先添加设备'),
                   )
                 else
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.sizeOf(context).height * 0.3,
-                    ),
+                  SizedBox(
+                    height: listHeight,
                     child: ListView.builder(
-                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      addAutomaticKeepAlives: false,
                       itemCount: devices.length,
                       itemBuilder: (context, index) {
                         final Map<String, dynamic> device =
@@ -1324,6 +1344,10 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
     final colorScheme = Theme.of(context).colorScheme;
     final bool isDark = colorScheme.isDarkMode;
     final Color accent = HotWaterPalette.accentStrong(context);
+    final Color buttonForeground =
+        ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+            ? Colors.white
+            : const Color(0xFF5A1735);
 
     return WaterBottomSheetScaffold(
       child: Padding(
@@ -1393,21 +1417,16 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
                     onPressed: _handleSubmit,
                     style: FilledButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor:
-                          ThemeData.estimateBrightnessForColor(accent) ==
-                                  Brightness.dark
-                              ? Colors.white
-                              : const Color(0xFF5A1735),
+                      foregroundColor: buttonForeground,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     child:
                         _isSubmitting
-                            ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ? AppLoadingIndicator(
+                              size: 20,
+                              color: buttonForeground,
                             )
                             : const Text(
                               '添加设备',

@@ -2,11 +2,11 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/services/app_logger.dart';
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../utils/hut_user_api.dart';
 import 'electricity_api.dart';
@@ -452,10 +452,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
                   );
                 },
                 whenNotDone: Center(
-                  child: LoadingAnimationWidget.inkDrop(
-                    color: roomAccent,
-                    size: 40,
-                  ),
+                  child: AppLoadingIndicator(color: roomAccent, size: 40),
                 ),
               ),
             ),
@@ -601,13 +598,9 @@ class _ElectricityPageState extends State<ElectricityPage> {
                       ),
                       child:
                           isChargeLoading
-                              ? SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: colorScheme.onSecondary,
-                                ),
+                              ? AppLoadingIndicator(
+                                size: 20,
+                                color: colorScheme.onSecondary,
                               )
                               : const Text('充值'),
                     ),
@@ -622,7 +615,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
               onTap: _handleRoomPickerPressed,
               trailing:
                   isRoomLoading
-                      ? LoadingAnimationWidget.inkDrop(
+                      ? AppLoadingIndicator(
                         color: colorScheme.primary,
                         size: 20,
                       )
@@ -721,6 +714,7 @@ class _ElectricityPageState extends State<ElectricityPage> {
                       SizedBox(
                         height: 400,
                         child: ListView.builder(
+                          addAutomaticKeepAlives: false,
                           itemCount: filteredRooms.length,
                           itemBuilder: (BuildContext context, int index) {
                             final room = filteredRooms[index];
