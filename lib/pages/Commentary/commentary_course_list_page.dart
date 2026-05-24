@@ -1,7 +1,7 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import 'commentary_api.dart';
@@ -50,6 +50,7 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 10),
             child: ListView.builder(
+              addAutomaticKeepAlives: false,
               itemCount: typedCommentaryList.length,
               itemBuilder: (BuildContext context, int index) {
                 final commentary = typedCommentaryList[index];
@@ -158,10 +159,7 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
           );
         },
         whenNotDone: Center(
-          child: LoadingAnimationWidget.inkDrop(
-            color: colorScheme.primary,
-            size: 40,
-          ),
+          child: AppLoadingIndicator(color: colorScheme.primary, size: 40),
         ),
       ),
     );

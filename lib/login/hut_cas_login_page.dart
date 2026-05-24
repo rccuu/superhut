@@ -7,6 +7,7 @@ import 'package:superhut/utils/token.dart';
 
 import '../core/services/app_auth_storage.dart';
 import '../core/services/app_logger.dart';
+import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_snack_bar.dart';
 import 'hut_login_system.dart';
 
@@ -141,13 +142,13 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('统一认证登录'), leading: SizedBox()),
-        body: const Center(
+        body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('正在打开统一认证...'),
+              AppLoadingIndicator(color: colorScheme.primary),
+              const SizedBox(height: 16),
+              const Text('正在打开统一认证...'),
             ],
           ),
         ),

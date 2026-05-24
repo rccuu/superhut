@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -51,12 +52,9 @@ class _HomeviewPageState extends State<HomeviewPage> {
   late int _selectedIndex;
   late final List<bool> _loadedPages;
   late final ValueNotifier<bool> _courseTransitionLiteMode;
-  late final ValueNotifier<bool> _tabTransitionLiteMode;
   late final List<Widget> _pages;
-  Timer? _tabTransitionLiteTimer;
   int _tabAnimationSeed = 0;
   int _tabAnimationDirection = 1;
-  int _tabTransitionLiteRequestId = 0;
   int _handledCourseSyncEventId = 0;
   bool _hasHandledStartupDialogs = false;
 
@@ -64,7 +62,6 @@ class _HomeviewPageState extends State<HomeviewPage> {
   void initState() {
     super.initState();
     _courseTransitionLiteMode = ValueNotifier<bool>(false);
-    _tabTransitionLiteMode = ValueNotifier<bool>(false);
     _pages = <Widget>[
       CourseTableView(transitionLiteModeListenable: _courseTransitionLiteMode),
       const FunctionPage(),
@@ -90,8 +87,6 @@ class _HomeviewPageState extends State<HomeviewPage> {
       _handleCourseSyncStateChanged,
     );
     _courseTransitionLiteMode.dispose();
-    _tabTransitionLiteTimer?.cancel();
-    _tabTransitionLiteMode.dispose();
     super.dispose();
   }
 
@@ -331,50 +326,42 @@ class _HomeviewPageState extends State<HomeviewPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBody: true,
-      body: ValueListenableBuilder<bool>(
-        valueListenable: _tabTransitionLiteMode,
-        builder: (context, useLiteEffects, _) {
-          return AppGlassPerformanceScope(
-            isLite: useLiteEffects ? true : null,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                IndexedStack(
-                  sizing: StackFit.expand,
-                  index: _selectedIndex,
-                  children: List.generate(_pages.length, _buildPageSlot),
-                ),
-                Positioned(
-                  top: topInset + 10,
-                  left: 16,
-                  right: 16,
-                  child: const IgnorePointer(child: _CourseSyncOverlay()),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: dockBottom,
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    heightFactor: 1,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 390),
-                        child: _ClassicTabBar(
-                          key: const ValueKey<String>('home-bottom-nav'),
-                          items: _dockItems,
-                          selectedIndex: _selectedIndex,
-                          onSelected: _onTabChange,
-                        ),
-                      ),
-                    ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          _ActiveOnlyIndexedStack(
+            key: const ValueKey<String>('home-tab-stage'),
+            index: _selectedIndex,
+            children: List.generate(_pages.length, _buildPageSlot),
+          ),
+          Positioned(
+            top: topInset + 10,
+            left: 16,
+            right: 16,
+            child: const IgnorePointer(child: _CourseSyncOverlay()),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: dockBottom,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              heightFactor: 1,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 390),
+                  child: _ClassicTabBar(
+                    key: const ValueKey<String>('home-bottom-nav'),
+                    items: _dockItems,
+                    selectedIndex: _selectedIndex,
+                    onSelected: _onTabChange,
                   ),
                 ),
-              ],
+              ),
             ),
-          );
-        },
+          ),
+        ],
       ),
     );
   }
@@ -410,7 +397,6 @@ class _HomeviewPageState extends State<HomeviewPage> {
     }
 
     final previousIndex = _selectedIndex;
-    _setTabTransitionLiteMode(true);
     setState(() {
       _tabAnimationDirection = index > previousIndex ? 1 : -1;
       _selectedIndex = index;
@@ -418,32 +404,172 @@ class _HomeviewPageState extends State<HomeviewPage> {
       _tabAnimationSeed++;
     });
   }
+}
 
-  void _setTabTransitionLiteMode(bool value) {
-    _tabTransitionLiteRequestId++;
-    final requestId = _tabTransitionLiteRequestId;
-    _tabTransitionLiteTimer?.cancel();
+class _ActiveOnlyIndexedStack extends MultiChildRenderObjectWidget {
+  const _ActiveOnlyIndexedStack({
+    super.key,
+    required this.index,
+    required super.children,
+  });
 
-    if (value) {
-      if (!_tabTransitionLiteMode.value) {
-        _tabTransitionLiteMode.value = true;
+  final int index;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderActiveOnlyIndexedStack(index: index);
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderActiveOnlyIndexedStack renderObject,
+  ) {
+    renderObject.index = index;
+  }
+
+  @override
+  MultiChildRenderObjectElement createElement() {
+    return _ActiveOnlyIndexedStackElement(this);
+  }
+}
+
+class _ActiveOnlyIndexedStackElement extends MultiChildRenderObjectElement {
+  _ActiveOnlyIndexedStackElement(_ActiveOnlyIndexedStack super.widget);
+
+  @override
+  _ActiveOnlyIndexedStack get widget => super.widget as _ActiveOnlyIndexedStack;
+
+  @override
+  void debugVisitOnstageChildren(ElementVisitor visitor) {
+    final index = widget.index;
+    if (index >= 0 && index < children.length) {
+      visitor(children.elementAt(index));
+    }
+  }
+}
+
+class _RenderActiveOnlyIndexedStack extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, StackParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, StackParentData> {
+  _RenderActiveOnlyIndexedStack({required int index}) : _index = index;
+
+  int get index => _index;
+  int _index;
+  set index(int value) {
+    if (_index == value) {
+      return;
+    }
+    _index = value;
+    markNeedsLayout();
+    markNeedsPaint();
+    markNeedsSemanticsUpdate();
+  }
+
+  RenderBox? _activeChild() {
+    if (index < 0) {
+      return null;
+    }
+
+    RenderBox? child = firstChild;
+    for (
+      var childIndex = 0;
+      child != null && childIndex < index;
+      childIndex++
+    ) {
+      child = childAfter(child);
+    }
+    return child;
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! StackParentData) {
+      child.parentData = StackParentData();
+    }
+  }
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) {
+    if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) {
+      return constraints.biggest;
+    }
+    return constraints.smallest;
+  }
+
+  @override
+  void performLayout() {
+    final previousSize = hasSize ? size : null;
+    size = constraints.biggest;
+    assert(size.isFinite, '首页 Tab 容器需要来自 Scaffold/Stack 的有界尺寸。');
+    final childConstraints = BoxConstraints.tight(size);
+    final shouldRefreshAllChildren = previousSize != size;
+
+    var childIndex = 0;
+    RenderBox? child = firstChild;
+    while (child != null) {
+      final childParentData = child.parentData! as StackParentData;
+      final shouldLayoutChild =
+          childIndex == index || !child.hasSize || shouldRefreshAllChildren;
+      if (shouldLayoutChild) {
+        child.layout(childConstraints);
       }
-      _tabTransitionLiteTimer = Timer(
-        _tabAnimationDuration + const Duration(milliseconds: 36),
-        () {
-          if (!mounted || requestId != _tabTransitionLiteRequestId) {
-            return;
-          }
-          if (_tabTransitionLiteMode.value) {
-            _tabTransitionLiteMode.value = false;
-          }
-        },
-      );
+      childParentData.offset = Offset.zero;
+      child = childParentData.nextSibling;
+      childIndex++;
+    }
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    final child = _activeChild();
+    if (child == null || !child.hasSize) {
+      return false;
+    }
+
+    final childParentData = child.parentData! as StackParentData;
+    return result.addWithPaintOffset(
+      offset: childParentData.offset,
+      position: position,
+      hitTest: (result, transformed) {
+        assert(transformed == position - childParentData.offset);
+        return child.hitTest(result, position: transformed);
+      },
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = _activeChild();
+    if (child == null || !child.hasSize) {
       return;
     }
 
-    if (_tabTransitionLiteMode.value) {
-      _tabTransitionLiteMode.value = false;
+    final childParentData = child.parentData! as StackParentData;
+    context.paintChild(child, offset + childParentData.offset);
+  }
+
+  @override
+  bool paintsChild(RenderBox child) {
+    return child == _activeChild();
+  }
+
+  @override
+  void applyPaintTransform(RenderBox child, Matrix4 transform) {
+    if (!paintsChild(child)) {
+      return;
+    }
+
+    final childParentData = child.parentData! as StackParentData;
+    transform.translate(childParentData.offset.dx, childParentData.offset.dy);
+  }
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    final child = _activeChild();
+    if (child != null) {
+      visitor(child);
     }
   }
 }
@@ -473,96 +599,88 @@ class _CourseSyncOverlay extends StatelessWidget {
                 ? colorScheme.primary
                 : colorScheme.primary;
 
-        return AnimatedSlide(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOutCubic,
-          offset: Offset.zero,
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 130),
-            opacity: 1,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Material(
-                  color: Colors.transparent,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface.withValues(alpha: 0.96),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: accentColor.withValues(alpha: 0.22),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          blurRadius: 18,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: RepaintBoundary(
+              child: Material(
+                color: Colors.transparent,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colorScheme.surface.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: accentColor.withValues(alpha: 0.22),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                isFailure
-                                    ? CupertinoIcons.exclamationmark_circle
-                                    : isSuccess
-                                    ? CupertinoIcons.check_mark_circled
-                                    : CupertinoIcons.arrow_2_circlepath,
-                                size: 18,
-                                color: accentColor,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  snapshot.message,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: colorScheme.onSurface,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              if (snapshot.status ==
-                                      CourseSyncTaskStatus.running &&
-                                  snapshot.currentWeek != null &&
-                                  snapshot.totalWeeks != null)
-                                Text(
-                                  '${snapshot.currentWeek}/${snapshot.totalWeeks}',
-                                  style: TextStyle(
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontSize: 12,
-                                    fontFeatures: const [
-                                      ui.FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(999),
-                            child: LinearProgressIndicator(
-                              minHeight: 6,
-                              value:
-                                  snapshot.status ==
-                                          CourseSyncTaskStatus.failure
-                                      ? null
-                                      : snapshot.progress,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 18,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              isFailure
+                                  ? CupertinoIcons.exclamationmark_circle
+                                  : isSuccess
+                                  ? CupertinoIcons.check_mark_circled
+                                  : CupertinoIcons.arrow_2_circlepath,
+                              size: 18,
                               color: accentColor,
-                              backgroundColor: accentColor.withValues(
-                                alpha: 0.12,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                snapshot.message,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colorScheme.onSurface,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
+                            if (snapshot.status ==
+                                    CourseSyncTaskStatus.running &&
+                                snapshot.currentWeek != null &&
+                                snapshot.totalWeeks != null)
+                              Text(
+                                '${snapshot.currentWeek}/${snapshot.totalWeeks}',
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
+                                  fontFeatures: const [
+                                    ui.FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            minHeight: 6,
+                            value:
+                                snapshot.status == CourseSyncTaskStatus.failure
+                                    ? null
+                                    : snapshot.progress,
+                            color: accentColor,
+                            backgroundColor: accentColor.withValues(
+                              alpha: 0.12,
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -620,6 +738,7 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
   // Perf: 只有真正在过渡动画期间才需要 ClipRect+SlideTransition；
   // 动画完成后退化为直接返回 child，避免常驻 saveLayer。
   bool _isTransitioning = false;
+  bool _disableAnimations = false;
 
   @override
   void initState() {
@@ -628,6 +747,23 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
     _configureAnimations();
     if (widget.isActive && widget.animationSeed > 0) {
       _startTransition();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations == true;
+    if (_disableAnimations == disableAnimations) {
+      return;
+    }
+
+    _disableAnimations = disableAnimations;
+    if (disableAnimations) {
+      _setTransitionLiteMode(false);
+      _isTransitioning = false;
+      _controller.value = 1;
     }
   }
 
@@ -652,6 +788,13 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
   }
 
   void _startTransition() {
+    if (_disableAnimations) {
+      _setTransitionLiteMode(false);
+      _isTransitioning = false;
+      _controller.value = 1;
+      return;
+    }
+
     _setTransitionLiteMode(true);
     if (!_isTransitioning) {
       _isTransitioning = true;
@@ -692,9 +835,7 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
 
   @override
   Widget build(BuildContext context) {
-    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations;
-    if (!widget.isActive || disableAnimations == true || !_isTransitioning) {
-      _setTransitionLiteMode(false);
+    if (!widget.isActive || _disableAnimations || !_isTransitioning) {
       return widget.child;
     }
 
@@ -725,6 +866,7 @@ class _ClassicTabBar extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
+    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations;
     // Perf: TabBar 是常驻浮层，且页面切换时下层内容会随 SlideTransition
     // 移动 —— 一旦它开启 BackdropFilter，每帧都要重新采样，是头号掉帧元凶。
     // 改为读 AppGlassPerformanceScope：lite 模式（Android / 切换动画期间）
@@ -783,6 +925,12 @@ class _ClassicTabBar extends StatelessWidget {
                 spreadRadius: -2,
               ),
             ];
+    final navAnimationDuration =
+        disableAnimations == true
+            ? Duration.zero
+            : useLiteEffects
+            ? const Duration(milliseconds: 90)
+            : const Duration(milliseconds: 180);
 
     return RepaintBoundary(
       child: GlassPanel(
@@ -817,7 +965,7 @@ class _ClassicTabBar extends StatelessWidget {
                     tabBackgroundColor: activeBackground,
                     tabBorderRadius: 18,
                     iconSize: 20,
-                    duration: const Duration(milliseconds: 180),
+                    duration: navAnimationDuration,
                     curve: Curves.easeOutCubic,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,

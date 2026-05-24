@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 
 import '../../core/services/app_logger.dart';
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import 'logic.dart';
@@ -333,10 +333,7 @@ class _ScorePageState extends State<ScorePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    LoadingAnimationWidget.inkDrop(
-                      color: _scoreAccent,
-                      size: 42,
-                    ),
+                    AppLoadingIndicator(color: _scoreAccent, size: 42),
                     const SizedBox(height: 16),
                     Text(
                       '正在整理成绩档案',
@@ -603,11 +600,7 @@ class _SemesterSelectorButton extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           if (isRefreshing)
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2, color: accent),
-            )
+            AppLoadingIndicator(size: 14, color: accent)
           else
             Icon(
               Ionicons.chevron_down_outline,
@@ -642,6 +635,12 @@ class _SemesterPickerSheet extends StatelessWidget {
         return (id: semester, label: formatSemesterLabel(semester));
       }),
     ];
+    final separatorCount = items.length > 1 ? items.length - 1 : 0;
+    final maxListHeight = MediaQuery.sizeOf(context).height * 0.42;
+    final listHeight =
+        (items.length * 62.0 + separatorCount * 8.0)
+            .clamp(0.0, maxListHeight)
+            .toDouble();
 
     return SafeArea(
       top: false,
@@ -708,9 +707,11 @@ class _SemesterPickerSheet extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                Flexible(
+                SizedBox(
+                  height: listHeight,
                   child: ListView.separated(
-                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    addAutomaticKeepAlives: false,
                     itemCount: items.length,
                     separatorBuilder: (context, index) {
                       return const SizedBox(height: 8);

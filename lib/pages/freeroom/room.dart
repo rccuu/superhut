@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import '../../utils/roomapi.dart';
@@ -414,14 +415,7 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
-              width: 34,
-              height: 34,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: _emptyRoomAccent,
-              ),
-            ),
+            const AppLoadingIndicator(size: 34, color: _emptyRoomAccent),
             const SizedBox(height: 16),
             Text(
               '正在整理空教室结果',
@@ -928,24 +922,23 @@ class _RoomDetailSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: slotCount,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
-                            childAspectRatio: 1.55,
-                          ),
-                      itemBuilder: (context, index) {
-                        final lesson = index + 1;
-                        final busy = isSlotBusy(lesson);
-                        return _LessonSlotCard(
-                          lesson: lesson,
-                          busy: busy,
-                          accent: accent,
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        return _FixedCrossAxisGrid(
+                          width: constraints.maxWidth,
+                          itemCount: slotCount,
+                          crossAxisCount: 4,
+                          spacing: 10,
+                          childAspectRatio: 1.55,
+                          itemBuilder: (context, index) {
+                            final lesson = index + 1;
+                            final busy = isSlotBusy(lesson);
+                            return _LessonSlotCard(
+                              lesson: lesson,
+                              busy: busy,
+                              accent: accent,
+                            );
+                          },
                         );
                       },
                     ),
@@ -1289,26 +1282,26 @@ class _BigLessonSheetState extends State<_BigLessonSheet> {
                   },
                 ),
                 const SizedBox(height: 14),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _bigLessonBlocks.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 2.42,
-                  ),
-                  itemBuilder: (context, index) {
-                    final block = _bigLessonBlocks[index];
-                    return _BigLessonOptionCard(
-                      block: block,
-                      accent: widget.accent,
-                      selected: _selectedBlock.index == block.index,
-                      onTap: () {
-                        setState(() {
-                          _selectedBlock = block;
-                        });
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    return _FixedCrossAxisGrid(
+                      width: constraints.maxWidth,
+                      itemCount: _bigLessonBlocks.length,
+                      crossAxisCount: 2,
+                      spacing: 8,
+                      childAspectRatio: 2.42,
+                      itemBuilder: (context, index) {
+                        final block = _bigLessonBlocks[index];
+                        return _BigLessonOptionCard(
+                          block: block,
+                          accent: widget.accent,
+                          selected: _selectedBlock.index == block.index,
+                          onTap: () {
+                            setState(() {
+                              _selectedBlock = block;
+                            });
+                          },
+                        );
                       },
                     );
                   },
@@ -1405,6 +1398,51 @@ class _RangePresetChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FixedCrossAxisGrid extends StatelessWidget {
+  const _FixedCrossAxisGrid({
+    required this.width,
+    required this.itemCount,
+    required this.crossAxisCount,
+    required this.spacing,
+    required this.childAspectRatio,
+    required this.itemBuilder,
+  });
+
+  final double width;
+  final int itemCount;
+  final int crossAxisCount;
+  final double spacing;
+  final double childAspectRatio;
+  final Widget Function(BuildContext context, int index) itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (itemCount <= 0 ||
+        crossAxisCount <= 0 ||
+        childAspectRatio <= 0 ||
+        !width.isFinite ||
+        width <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final itemWidth = (width - (crossAxisCount - 1) * spacing) / crossAxisCount;
+    final itemHeight = itemWidth / childAspectRatio;
+
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      children: [
+        for (var index = 0; index < itemCount; index++)
+          SizedBox(
+            width: itemWidth,
+            height: itemHeight,
+            child: RepaintBoundary(child: itemBuilder(context, index)),
+          ),
+      ],
     );
   }
 }

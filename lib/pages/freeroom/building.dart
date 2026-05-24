@@ -2,6 +2,7 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import '../../utils/roomapi.dart';
@@ -169,14 +170,7 @@ class _BuildingPageState extends State<BuildingPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
-              width: 34,
-              height: 34,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                color: _emptyRoomAccent,
-              ),
-            ),
+            const AppLoadingIndicator(size: 34, color: _emptyRoomAccent),
             const SizedBox(height: 16),
             Text(
               '正在整理教学楼清单',
@@ -437,37 +431,76 @@ class _CampusSection extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              // Perf: shrinkWrap GridView 会一次性 layout 全部 item，
-              // 但空教室楼栋数通常 <12 个，不值得用 SliverGrid 来打散
-              // （因为外面的 GlassPanel 需要完整高度才能正确绘制圆角背景）。
-              // 保留 shrinkWrap 但用 addRepaintBoundaries: true 减少重绘。
-              GridView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: buildings.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: childAspectRatio,
-                ),
-                addRepaintBoundaries: true,
-                addAutomaticKeepAlives: false,
-                itemBuilder: (context, index) {
-                  final building = buildings[index];
-                  return _BuildingCard(
-                    building: building,
-                    displayName: compactBuildingName(building.name),
-                    accent: accent,
-                    titleFontSize: cachedTitleFontSize,
-                  );
-                },
+              _CampusBuildingGrid(
+                width: width,
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: childAspectRatio,
+                buildings: buildings,
+                compactBuildingName: compactBuildingName,
+                accent: accent,
+                titleFontSize: cachedTitleFontSize,
               ),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+class _CampusBuildingGrid extends StatelessWidget {
+  const _CampusBuildingGrid({
+    required this.width,
+    required this.crossAxisCount,
+    required this.childAspectRatio,
+    required this.buildings,
+    required this.compactBuildingName,
+    required this.accent,
+    required this.titleFontSize,
+  });
+
+  static const double _spacing = 12;
+
+  final double width;
+  final int crossAxisCount;
+  final double childAspectRatio;
+  final List<Building> buildings;
+  final String Function(String name) compactBuildingName;
+  final Color accent;
+  final double titleFontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    if (buildings.isEmpty ||
+        crossAxisCount <= 0 ||
+        childAspectRatio <= 0 ||
+        !width.isFinite ||
+        width <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final itemWidth =
+        (width - (crossAxisCount - 1) * _spacing) / crossAxisCount;
+    final itemHeight = itemWidth / childAspectRatio;
+
+    return Wrap(
+      spacing: _spacing,
+      runSpacing: _spacing,
+      children: [
+        for (final building in buildings)
+          SizedBox(
+            width: itemWidth,
+            height: itemHeight,
+            child: RepaintBoundary(
+              child: _BuildingCard(
+                building: building,
+                displayName: compactBuildingName(building.name),
+                accent: accent,
+                titleFontSize: titleFontSize,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

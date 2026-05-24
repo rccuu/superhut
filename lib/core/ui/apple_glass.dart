@@ -71,11 +71,11 @@ class AppGlassBackground extends StatelessWidget {
               AppGlassBackgroundStyle.flat => AppGlassBackgroundStyle.flat,
             }
             : style;
-    // Perf: orb sigma 降到原值的 ~60%。半径 > 22 后视觉差异已不明显，
-    // 但 GPU 上模糊核大小是平方关系，对帧率影响显著。
+    // Perf: lite 模式保留径向渐变光斑，但不再套 ImageFiltered.blur。
+    // 页面 push / tab 切换首帧会频繁首次 raster 背景，大面积 blur 很容易抖。
     final orbBlurSigma = switch (effectiveStyle) {
-      AppGlassBackgroundStyle.rich => useLiteEffects ? 18.0 : 34.0,
-      AppGlassBackgroundStyle.soft => useLiteEffects ? 12.0 : 22.0,
+      AppGlassBackgroundStyle.rich => useLiteEffects ? 0.0 : 34.0,
+      AppGlassBackgroundStyle.soft => useLiteEffects ? 0.0 : 22.0,
       AppGlassBackgroundStyle.flat => 0.0,
     };
     final orbScale = switch (effectiveStyle) {
@@ -483,20 +483,28 @@ class _AmbientOrb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final orb = Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(colors: colors),
+      ),
+    );
+
     return IgnorePointer(
       child: Align(
         alignment: alignment,
-        child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-          child: Container(
-            width: width,
-            height: height,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(colors: colors),
-            ),
-          ),
-        ),
+        child:
+            blurSigma > 0.01
+                ? ImageFiltered(
+                  imageFilter: ImageFilter.blur(
+                    sigmaX: blurSigma,
+                    sigmaY: blurSigma,
+                  ),
+                  child: orb,
+                )
+                : orb,
       ),
     );
   }

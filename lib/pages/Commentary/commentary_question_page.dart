@@ -1,7 +1,7 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import 'commentary_api.dart';
 
@@ -214,6 +214,7 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
           whenDone: (List optionList) {
             final typedOptionList = List<CommentaryPayload>.from(optionList);
             return ListView.builder(
+              addAutomaticKeepAlives: false,
               itemCount: typedOptionList.length + 1,
               itemBuilder: (BuildContext context, int index) {
                 if (index == typedOptionList.length) {
@@ -254,28 +255,29 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              ListView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                itemCount: optionList.length,
-                                itemBuilder: (
-                                  BuildContext context,
-                                  int optionIndex,
-                                ) {
-                                  return CheckboxListTile(
-                                    value:
-                                        _questionSelections![index][optionIndex],
-                                    onChanged: (value) {
-                                      _selectOption(
-                                        index,
-                                        optionIndex,
-                                        optionList.length,
-                                        value,
-                                      );
-                                    },
-                                    title: Text(optionList[optionIndex].answer),
-                                  );
-                                },
+                              Column(
+                                children: [
+                                  for (
+                                    var optionIndex = 0;
+                                    optionIndex < optionList.length;
+                                    optionIndex++
+                                  )
+                                    CheckboxListTile(
+                                      value:
+                                          _questionSelections![index][optionIndex],
+                                      onChanged: (value) {
+                                        _selectOption(
+                                          index,
+                                          optionIndex,
+                                          optionList.length,
+                                          value,
+                                        );
+                                      },
+                                      title: Text(
+                                        optionList[optionIndex].answer,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ],
                           ),
@@ -288,7 +290,7 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
             );
           },
           whenNotDone: Center(
-            child: LoadingAnimationWidget.inkDrop(
+            child: AppLoadingIndicator(
               color: Theme.of(context).primaryColor,
               size: 40,
             ),

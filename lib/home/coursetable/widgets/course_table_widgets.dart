@@ -158,8 +158,7 @@ class CourseWeekdayHeader extends StatelessWidget {
             flex: dayFlexes[index],
             child: Padding(
               padding: const EdgeInsets.fromLTRB(0.6, 0, 0.6, 5),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
+              child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 5),
                 decoration: BoxDecoration(
                   color:
@@ -596,6 +595,7 @@ class ExperimentStudentsSheet extends StatelessWidget {
             const SizedBox(height: 12),
             Expanded(
               child: ListView.separated(
+                addAutomaticKeepAlives: false,
                 itemCount: students.length,
                 separatorBuilder: (context, index) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {

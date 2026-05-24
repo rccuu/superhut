@@ -46,4 +46,40 @@ void main() {
 
     expect(find.byType(BackdropFilter), findsNothing);
   });
+
+  testWidgets('drops ambient orb image filters in lite background mode', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: AppGlassPerformanceScope(
+          isLite: true,
+          child: AppGlassBackground(
+            style: AppGlassBackgroundStyle.rich,
+            child: SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(ImageFiltered), findsNothing);
+  });
+
+  testWidgets('keeps ambient orb image filters in full background mode', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: AppGlassPerformanceScope(
+          isLite: false,
+          child: AppGlassBackground(
+            style: AppGlassBackgroundStyle.rich,
+            child: SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(ImageFiltered), findsWidgets);
+  });
 }

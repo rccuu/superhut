@@ -1,9 +1,9 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/pages/ExamSchedule/exam_schedule_bridge.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 
@@ -80,10 +80,7 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    LoadingAnimationWidget.inkDrop(
-                      color: _examAccent,
-                      size: 42,
-                    ),
+                    AppLoadingIndicator(color: _examAccent, size: 42),
                     const SizedBox(height: 16),
                     Text(
                       '正在同步考试安排',

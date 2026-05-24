@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../core/ui/app_loading_indicator.dart';
 import '../../../core/ui/app_snack_bar.dart';
 import 'logic.dart';
 import 'widgets/drink_page_widgets.dart';
@@ -66,24 +67,24 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
       expand: false,
       backgroundColor: Colors.transparent,
       builder:
-          (sheetContext) => GetBuilder<FunctionDrinkLogic>(
-            builder: (logic) {
-              return DrinkDeviceSelectionSheet(
-                devices: List<dynamic>.from(logic.state.deviceList),
-                selectedIndex: logic.state.choiceDevice.value,
-                formatDeviceName: logic.formatDeviceName,
-                onSelectDevice: (index) {
-                  if (logic.state.drinkStatus.value) {
-                    Navigator.of(sheetContext).pop();
-                    return;
-                  }
+          (sheetContext) => Obx(() {
+            final devices = List<dynamic>.from(logic.state.deviceList);
 
-                  logic.setChoiceDevice(index);
+            return DrinkDeviceSelectionSheet(
+              devices: devices,
+              selectedIndex: logic.state.choiceDevice.value,
+              formatDeviceName: logic.formatDeviceName,
+              onSelectDevice: (index) {
+                if (logic.state.drinkStatus.value) {
                   Navigator.of(sheetContext).pop();
-                },
-              );
-            },
-          ),
+                  return;
+                }
+
+                logic.setChoiceDevice(index);
+                Navigator.of(sheetContext).pop();
+              },
+            );
+          }),
     );
   }
 
@@ -140,30 +141,32 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
       expand: false,
       backgroundColor: Colors.transparent,
       builder:
-          (sheetContext) => GetBuilder<FunctionDrinkLogic>(
-            builder: (logic) {
-              return DrinkDeviceManagementSheet(
-                devices: List<dynamic>.from(logic.state.deviceList),
-                formatDeviceName: logic.formatDeviceName,
-                onClose: () => Navigator.of(sheetContext).pop(),
-                onAddDevice: () async {
-                  Navigator.of(sheetContext).pop();
-                  await _scanQRCodeAndAddDevice();
-                },
-                onDeleteDevice: (index) {
-                  final Map<String, dynamic> device = Map<String, dynamic>.from(
-                    logic.state.deviceList[index] as Map,
-                  );
-                  _confirmDeleteDevice(
-                    logic.formatDeviceName(
-                      device['name']?.toString() ?? '未知设备',
-                    ),
-                    device['id']?.toString() ?? '',
-                  );
-                },
-              );
-            },
-          ),
+          (sheetContext) => Obx(() {
+            final devices = List<dynamic>.from(logic.state.deviceList);
+
+            return DrinkDeviceManagementSheet(
+              devices: devices,
+              formatDeviceName: logic.formatDeviceName,
+              onClose: () => Navigator.of(sheetContext).pop(),
+              onAddDevice: () async {
+                Navigator.of(sheetContext).pop();
+                await _scanQRCodeAndAddDevice();
+              },
+              onDeleteDevice: (index) {
+                if (index < 0 || index >= devices.length) {
+                  return;
+                }
+
+                final Map<String, dynamic> device = Map<String, dynamic>.from(
+                  devices[index] as Map,
+                );
+                _confirmDeleteDevice(
+                  logic.formatDeviceName(device['name']?.toString() ?? '未知设备'),
+                  device['id']?.toString() ?? '',
+                );
+              },
+            );
+          }),
     );
   }
 
@@ -228,20 +231,6 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
   Widget build(BuildContext context) {
     final bool canPop = Navigator.of(context).canPop();
 
-    String? selectedDeviceName(FunctionDrinkLogic currentLogic) {
-      if (currentLogic.state.deviceList.isEmpty ||
-          currentLogic.state.choiceDevice.value == -1) {
-        return null;
-      }
-
-      return currentLogic.formatDeviceName(
-        currentLogic
-            .state
-            .deviceList[currentLogic.state.choiceDevice.value]['name']
-            .toString(),
-      );
-    }
-
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
@@ -275,48 +264,37 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
         elevation: 0,
         backgroundColor: Colors.transparent,
         actions: [
-          GetBuilder<FunctionDrinkLogic>(
-            builder: (logic) {
-              if (logic.state.isRefreshing.value) {
-                return const Padding(
-                  padding: EdgeInsets.only(right: 18),
-                  child: Center(
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2.2),
-                    ),
-                  ),
-                );
-              }
-
-              return IconButton(
-                tooltip: '刷新设备',
-                onPressed: () => logic.getDeviceList(showRefreshing: true),
-                icon: const Icon(Icons.refresh_rounded),
+          Obx(() {
+            if (logic.state.isRefreshing.value) {
+              return const Padding(
+                padding: EdgeInsets.only(right: 18),
+                child: Center(child: AppLoadingIndicator(size: 20)),
               );
-            },
-          ),
+            }
+
+            return IconButton(
+              tooltip: '刷新设备',
+              onPressed: () => logic.getDeviceList(showRefreshing: true),
+              icon: const Icon(Icons.refresh_rounded),
+            );
+          }),
         ],
       ),
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
           Positioned.fill(
-            child: GetBuilder<FunctionDrinkLogic>(
-              builder: (logic) {
-                return DrinkBackground(
+            child: Obx(
+              () => RepaintBoundary(
+                child: DrinkBackground(
                   drinkStatus: logic.state.drinkStatus.value,
-                );
-              },
+                ),
+              ),
             ),
           ),
           SafeArea(
-            child: GetBuilder<FunctionDrinkLogic>(
-              builder: (logic) {
-                final String? deviceName = selectedDeviceName(logic);
-                final bool hasDevice = deviceName != null;
-
+            child: RepaintBoundary(
+              child: Obx(() {
                 if (logic.state.isLoading.value) {
                   return const DrinkLoadingState();
                 }
@@ -333,46 +311,100 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              DrinkStatusHeader(
-                                drinkStatus: logic.state.drinkStatus.value,
-                                deviceCount: logic.state.deviceList.length,
-                                deviceName: deviceName,
-                              ),
+                              Obx(() {
+                                final state = logic.state;
+                                final selectedIndex = state.choiceDevice.value;
+                                final hasDevice =
+                                    state.deviceList.isNotEmpty &&
+                                    selectedIndex >= 0 &&
+                                    selectedIndex < state.deviceList.length;
+                                final deviceName =
+                                    hasDevice
+                                        ? logic.formatDeviceName(
+                                          state
+                                              .deviceList[selectedIndex]['name']
+                                              .toString(),
+                                        )
+                                        : null;
+
+                                return DrinkStatusHeader(
+                                  drinkStatus: state.drinkStatus.value,
+                                  deviceCount: state.deviceList.length,
+                                  deviceName: deviceName,
+                                );
+                              }),
                               const SizedBox(height: 18),
-                              hasDevice
-                                  ? DrinkCurrentDeviceCard(
-                                    deviceName: deviceName,
-                                    deviceCount: logic.state.deviceList.length,
-                                    onTap: _showDeviceSelectionDialog,
-                                  )
-                                  : DrinkEmptyDeviceCard(
+                              Obx(() {
+                                final state = logic.state;
+                                final selectedIndex = state.choiceDevice.value;
+                                final hasDevice =
+                                    state.deviceList.isNotEmpty &&
+                                    selectedIndex >= 0 &&
+                                    selectedIndex < state.deviceList.length;
+                                final deviceName =
+                                    hasDevice
+                                        ? logic.formatDeviceName(
+                                          state
+                                              .deviceList[selectedIndex]['name']
+                                              .toString(),
+                                        )
+                                        : '';
+
+                                if (!hasDevice) {
+                                  return DrinkEmptyDeviceCard(
                                     onAddDevice: _scanQRCodeAndAddDevice,
-                                  ),
+                                  );
+                                }
+
+                                return DrinkCurrentDeviceCard(
+                                  deviceName: deviceName,
+                                  deviceCount: state.deviceList.length,
+                                  onTap: _showDeviceSelectionDialog,
+                                );
+                              }),
                               const SizedBox(height: 14),
                               DrinkQuickActions(
                                 onManageDevices: _showDeviceManagementSheet,
                                 onAddDevice: _scanQRCodeAndAddDevice,
                               ),
                               const Spacer(),
-                              DrinkActionButton(
-                                drinkStatus: logic.state.drinkStatus.value,
-                                enabled: hasDevice,
-                                onTap: _handleDrinkToggle,
-                              ),
+                              Obx(() {
+                                final state = logic.state;
+                                final selectedIndex = state.choiceDevice.value;
+                                final hasDevice =
+                                    state.deviceList.isNotEmpty &&
+                                    selectedIndex >= 0 &&
+                                    selectedIndex < state.deviceList.length;
+
+                                return DrinkActionButton(
+                                  drinkStatus: state.drinkStatus.value,
+                                  enabled: hasDevice,
+                                  onTap: _handleDrinkToggle,
+                                );
+                              }),
                               const SizedBox(height: 14),
-                              Text(
-                                hasDevice
-                                    ? '设备可切换，开始用水后会自动检测状态。'
-                                    : '添加设备后即可开始用水。',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
+                              Obx(() {
+                                final state = logic.state;
+                                final selectedIndex = state.choiceDevice.value;
+                                final hasDevice =
+                                    state.deviceList.isNotEmpty &&
+                                    selectedIndex >= 0 &&
+                                    selectedIndex < state.deviceList.length;
+
+                                return Text(
+                                  hasDevice
+                                      ? '设备可切换，开始用水后会自动检测状态。'
+                                      : '添加设备后即可开始用水。',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color:
+                                        Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                  ),
+                                );
+                              }),
                             ],
                           ),
                         ),
@@ -380,17 +412,15 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
                     ],
                   ),
                 );
-              },
+              }),
             ),
           ),
           Positioned.fill(
-            child: GetBuilder<FunctionDrinkLogic>(
-              builder: (logic) {
-                return DrinkBubbleAnimation(
-                  isActive: logic.state.drinkStatus.value,
-                  color: Theme.of(context).colorScheme.primary,
-                );
-              },
+            child: Obx(
+              () => DrinkBubbleAnimation(
+                isActive: logic.state.drinkStatus.value,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
           ),
         ],

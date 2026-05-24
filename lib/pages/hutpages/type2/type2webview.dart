@@ -5,12 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/services/app_logger.dart';
+import '../../../core/ui/app_loading_indicator.dart';
 import '../../../core/ui/app_snack_bar.dart';
 import '../../../core/ui/color_scheme_ext.dart';
 import '../hut_service_auth.dart';
@@ -645,7 +645,7 @@ class _Type2WebviewState extends State<Type2Webview> {
                     );
                   },
                   whenNotDone: Center(
-                    child: LoadingAnimationWidget.inkDrop(
+                    child: AppLoadingIndicator(
                       color: colorScheme.primary,
                       size: 40,
                     ),
@@ -702,7 +702,7 @@ class _Type2WebviewState extends State<Type2Webview> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            LoadingAnimationWidget.inkDrop(
+                            AppLoadingIndicator(
                               color: colorScheme.primary,
                               size: 40,
                             ),
@@ -740,9 +740,7 @@ class _Type2WebviewState extends State<Type2Webview> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            CircularProgressIndicator(
-                              color: colorScheme.primary,
-                            ),
+                            AppLoadingIndicator(color: colorScheme.primary),
                             const SizedBox(height: 16),
                             Text(
                               '请求位置权限...',

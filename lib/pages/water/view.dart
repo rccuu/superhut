@@ -85,27 +85,27 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
       topRadius: _hotWaterSheetTopRadius,
       shadow: _hotWaterSheetShadow(),
       builder:
-          (sheetContext) => GetBuilder<FunctionHotWaterLogic>(
-            builder: (logic) {
-              return WaterDeviceSelectionSheet(
-                devices: List<dynamic>.from(logic.state.deviceList),
-                selectedIndex: logic.state.choiceDevice.value,
-                onManageDevices: () {
-                  Navigator.of(sheetContext).pop();
-                  _showDeviceManagementDialog();
-                },
-                onSelectDevice: (index) {
-                  if (logic.state.waterStatus.value) {
-                    Navigator.of(sheetContext).pop();
-                    return;
-                  }
+          (sheetContext) => Obx(() {
+            final devices = List<dynamic>.from(logic.state.deviceList);
 
-                  logic.setChoiceDevice(index);
+            return WaterDeviceSelectionSheet(
+              devices: devices,
+              selectedIndex: logic.state.choiceDevice.value,
+              onManageDevices: () {
+                Navigator.of(sheetContext).pop();
+                _showDeviceManagementDialog();
+              },
+              onSelectDevice: (index) {
+                if (logic.state.waterStatus.value) {
                   Navigator.of(sheetContext).pop();
-                },
-              );
-            },
-          ),
+                  return;
+                }
+
+                logic.setChoiceDevice(index);
+                Navigator.of(sheetContext).pop();
+              },
+            );
+          }),
     );
   }
 
@@ -163,27 +163,31 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
       topRadius: _hotWaterSheetTopRadius,
       shadow: _hotWaterSheetShadow(),
       builder:
-          (sheetContext) => GetBuilder<FunctionHotWaterLogic>(
-            builder: (logic) {
-              return WaterDeviceManagementSheet(
-                devices: List<dynamic>.from(logic.state.deviceList),
-                onAddDevice: () {
-                  Navigator.of(sheetContext).pop();
-                  _showAddDevicePage();
-                },
-                onDeleteDevice: (index) {
-                  final Map<String, dynamic> device = Map<String, dynamic>.from(
-                    logic.state.deviceList[index] as Map,
-                  );
-                  _confirmDeleteDevice(
-                    sheetContext,
-                    device['posname']?.toString() ?? '未知设备',
-                    device['poscode']?.toString() ?? '',
-                  );
-                },
-              );
-            },
-          ),
+          (sheetContext) => Obx(() {
+            final devices = List<dynamic>.from(logic.state.deviceList);
+
+            return WaterDeviceManagementSheet(
+              devices: devices,
+              onAddDevice: () {
+                Navigator.of(sheetContext).pop();
+                _showAddDevicePage();
+              },
+              onDeleteDevice: (index) {
+                if (index < 0 || index >= devices.length) {
+                  return;
+                }
+
+                final Map<String, dynamic> device = Map<String, dynamic>.from(
+                  devices[index] as Map,
+                );
+                _confirmDeleteDevice(
+                  sheetContext,
+                  device['posname']?.toString() ?? '未知设备',
+                  device['poscode']?.toString() ?? '',
+                );
+              },
+            );
+          }),
     );
   }
 
@@ -249,80 +253,114 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
         surfaceTintColor: Colors.transparent,
       ),
       extendBodyBehindAppBar: true,
-      body: GetBuilder<FunctionHotWaterLogic>(
-        builder: (logic) {
-          final state = logic.state;
-          final bool hasSelectedDevice =
-              state.deviceList.isNotEmpty && state.choiceDevice.value >= 0;
-          final String? deviceName =
-              hasSelectedDevice
-                  ? state.deviceList[state.choiceDevice.value]['posname']
-                      ?.toString()
-                  : null;
-
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: WaterBackground(waterStatus: state.waterStatus.value),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Obx(
+              () => RepaintBoundary(
+                child: WaterBackground(
+                  waterStatus: logic.state.waterStatus.value,
+                ),
               ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      HotWaterStatusHeader(
+            ),
+          ),
+          SafeArea(
+            child: RepaintBoundary(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Obx(() {
+                      final state = logic.state;
+                      final selectedIndex = state.choiceDevice.value;
+                      final hasSelectedDevice =
+                          state.deviceList.isNotEmpty &&
+                          selectedIndex >= 0 &&
+                          selectedIndex < state.deviceList.length;
+
+                      return HotWaterStatusHeader(
                         waterStatus: state.waterStatus.value,
                         hasSelectedDevice: hasSelectedDevice,
-                      ),
-                      const SizedBox(height: 16),
-                      HotWaterCurrentDeviceCard(
+                      );
+                    }),
+                    const SizedBox(height: 16),
+                    Obx(() {
+                      final state = logic.state;
+                      final selectedIndex = state.choiceDevice.value;
+                      final hasSelectedDevice =
+                          state.deviceList.isNotEmpty &&
+                          selectedIndex >= 0 &&
+                          selectedIndex < state.deviceList.length;
+                      final deviceName =
+                          hasSelectedDevice
+                              ? state.deviceList[selectedIndex]['posname']
+                                  ?.toString()
+                              : null;
+
+                      return HotWaterCurrentDeviceCard(
                         deviceName: deviceName,
                         hasSelectedDevice: hasSelectedDevice,
                         onTap: _showDeviceSelectionDialog,
-                      ),
-                      Expanded(
-                        child: Column(
+                      );
+                    }),
+                    Expanded(
+                      child: Obx(() {
+                        final state = logic.state;
+                        final selectedIndex = state.choiceDevice.value;
+                        final hasSelectedDevice =
+                            state.deviceList.isNotEmpty &&
+                            selectedIndex >= 0 &&
+                            selectedIndex < state.deviceList.length;
+                        final isLoading = state.isLoading.value;
+                        final deviceCheckComplete =
+                            state.deviceCheckComplete.value;
+
+                        return Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             HotWaterControlButton(
-                              isLoading: state.isLoading.value,
-                              deviceCheckComplete:
-                                  state.deviceCheckComplete.value,
+                              isLoading: isLoading,
+                              deviceCheckComplete: deviceCheckComplete,
                               waterStatus: state.waterStatus.value,
                               hasSelectedDevice: hasSelectedDevice,
                               onTap: _handleWaterToggle,
                             ),
                             HotWaterActionHint(
-                              isLoading: state.isLoading.value,
-                              deviceCheckComplete:
-                                  state.deviceCheckComplete.value,
+                              isLoading: isLoading,
+                              deviceCheckComplete: deviceCheckComplete,
                               hasSelectedDevice: hasSelectedDevice,
                             ),
                           ],
-                        ),
-                      ),
-                      if (state.balance.value != 'null')
-                        HotWaterBalanceCard(
-                          balance: state.balance.value,
-                          onTap: _launchUrl,
-                        ),
-                    ],
-                  ),
+                        );
+                      }),
+                    ),
+                    Obx(() {
+                      final balance = logic.state.balance.value;
+                      if (balance == 'null') {
+                        return const SizedBox.shrink();
+                      }
+
+                      return HotWaterBalanceCard(
+                        balance: balance,
+                        onTap: _launchUrl,
+                      );
+                    }),
+                  ],
                 ),
               ),
-              Positioned.fill(
-                child: BubbleAnimation(
-                  isActive: state.waterStatus.value,
-                  color: HotWaterPalette.accentStrong(
-                    context,
-                    active: state.waterStatus.value,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+          ),
+          Positioned.fill(
+            child: Obx(() {
+              final isActive = logic.state.waterStatus.value;
+              return BubbleAnimation(
+                isActive: isActive,
+                color: HotWaterPalette.accentStrong(context, active: isActive),
+              );
+            }),
+          ),
+        ],
       ),
     );
   }

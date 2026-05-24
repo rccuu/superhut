@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:superhut/home/homeview/view.dart';
 
+import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_snack_bar.dart';
 import '../utils/course/coursemain.dart';
 import '../utils/token.dart';
@@ -118,7 +118,7 @@ class _GetcoursepageState extends State<Getcoursepage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    LoadingAnimationWidget.inkDrop(
+                    AppLoadingIndicator(
                       color: Theme.of(context).primaryColor,
                       size: 40,
                     ),
