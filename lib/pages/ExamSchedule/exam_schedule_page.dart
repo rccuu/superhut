@@ -22,6 +22,10 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
   static const Color _examAccent = Color(0xFFE28A2E);
 
   late Future<ExamScheduleResult> _examScheduleFuture;
+  final Map<Map<String, dynamic>, _ExamScheduleCardInfo>
+  _examScheduleCardInfoCache = <Map<String, dynamic>, _ExamScheduleCardInfo>{};
+  List<Map<String, dynamic>>? _examScheduleCardInfoSource;
+  DateTime? _examScheduleCardInfoDate;
 
   @override
   void initState() {
@@ -116,6 +120,8 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
     final topInset = MediaQuery.paddingOf(context).top;
     final schedules = result.schedules;
     final errorMessage = result.errorMessage;
+    final today = _todayDate();
+    _syncExamScheduleCardInfoCache(schedules, today);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -125,74 +131,83 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
         darkBottomColor: const Color(0xFF21170E),
         child: Stack(
           children: [
-            ListView(
-              padding: EdgeInsets.fromLTRB(16, topInset + 76, 16, 28),
-              children: [
-                _ExamOverviewCard(
-                  accent: _examAccent,
-                  examCount: schedules.length,
-                  nearestExamText: _nearestExamText(schedules),
+            CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(16, topInset + 76, 16, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _ExamOverviewCard(
+                          accent: _examAccent,
+                          examCount: schedules.length,
+                          nearestExamText: _nearestExamText(schedules, today),
+                        ),
+                        const SizedBox(height: 16),
+                        _SectionHeader(
+                          title: '考试列表',
+                          subtitle:
+                              errorMessage != null
+                                  ? '当前结果未能正常加载'
+                                  : schedules.isEmpty
+                                  ? '当前学期暂无考试'
+                                  : '共 ${schedules.length} 门考试',
+                        ),
+                        const SizedBox(height: 8),
+                        if (errorMessage != null)
+                          _FeatureEmptyState(
+                            icon: Ionicons.alert_circle_outline,
+                            accent: Theme.of(context).colorScheme.error,
+                            title: '考试安排加载失败',
+                            subtitle: errorMessage,
+                          )
+                        else if (schedules.isEmpty)
+                          const _FeatureEmptyState(
+                            icon: Ionicons.ribbon_outline,
+                            accent: _examAccent,
+                            title: '当前学期暂无考试安排',
+                            subtitle: '如果教务系统稍后发布考试信息，这里会同步展示。',
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                _SectionHeader(
-                  title: '考试列表',
-                  subtitle:
-                      errorMessage != null
-                          ? '当前结果未能正常加载'
-                          : schedules.isEmpty
-                          ? '当前学期暂无考试'
-                          : '共 ${schedules.length} 门考试',
-                ),
-                const SizedBox(height: 8),
-                if (errorMessage != null)
-                  _FeatureEmptyState(
-                    icon: Ionicons.alert_circle_outline,
-                    accent: Theme.of(context).colorScheme.error,
-                    title: '考试安排加载失败',
-                    subtitle: errorMessage,
-                  )
-                else if (schedules.isEmpty)
-                  const _FeatureEmptyState(
-                    icon: Ionicons.ribbon_outline,
-                    accent: _examAccent,
-                    title: '当前学期暂无考试安排',
-                    subtitle: '如果教务系统稍后发布考试信息，这里会同步展示。',
-                  )
-                else
-                  ...schedules.map((schedule) {
-                    final examDate = _parseExamDate(
-                      schedule['time']?.toString() ?? '',
-                    );
-                    final daysLeftText = _daysLeftText(examDate);
+                if (errorMessage == null && schedules.isNotEmpty)
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final schedule = schedules[index];
+                          final cardInfo = _examScheduleCardInfoFor(
+                            schedule,
+                            today,
+                          );
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _ExamScheduleCard(
-                        accent: _examAccent,
-                        courseName: _readScheduleText(
-                          schedule,
-                          'courseName',
-                          fallback: '未命名课程',
-                        ),
-                        place: _readScheduleText(
-                          schedule,
-                          'examinationPlace',
-                          fallback: '考场待公布',
-                        ),
-                        time: _readScheduleText(
-                          schedule,
-                          'time',
-                          fallback: '时间待公布',
-                        ),
-                        courseNumber: _readScheduleText(
-                          schedule,
-                          'courseNumber',
-                        ),
-                        daysLeftText: daysLeftText,
-                        daysLeftColor: _daysLeftColor(daysLeftText, context),
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _ExamScheduleCard(
+                              accent: _examAccent,
+                              courseName: cardInfo.courseName,
+                              place: cardInfo.place,
+                              time: cardInfo.time,
+                              courseNumber: cardInfo.courseNumber,
+                              daysLeftText: cardInfo.daysLeftText,
+                              daysLeftColor: _daysLeftColor(
+                                cardInfo.daysLeft,
+                                context,
+                              ),
+                            ),
+                          );
+                        },
+                        childCount: schedules.length,
+                        addAutomaticKeepAlives: false,
+                        addRepaintBoundaries: false,
                       ),
-                    );
-                  }),
+                    ),
+                  ),
+                const SliverToBoxAdapter(child: SizedBox(height: 28)),
               ],
             ),
             Positioned(
@@ -208,46 +223,124 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
     );
   }
 
-  String _nearestExamText(List<Map<String, dynamic>> schedules) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final upcoming =
-        schedules
-            .map((schedule) {
-              final date = _parseExamDate(schedule['time']?.toString() ?? '');
-              return (schedule: schedule, date: date);
-            })
-            .where((item) => item.date != null && !item.date!.isBefore(today))
-            .toList()
-          ..sort((a, b) => a.date!.compareTo(b.date!));
+  void _syncExamScheduleCardInfoCache(
+    List<Map<String, dynamic>> schedules,
+    DateTime today,
+  ) {
+    final cachedDate = _examScheduleCardInfoDate;
+    if (identical(_examScheduleCardInfoSource, schedules) &&
+        cachedDate != null &&
+        _isSameDate(cachedDate, today)) {
+      return;
+    }
 
-    if (upcoming.isEmpty) {
+    _examScheduleCardInfoCache.clear();
+    _examScheduleCardInfoSource = schedules;
+    _examScheduleCardInfoDate = today;
+  }
+
+  bool _isSameDate(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  _ExamScheduleCardInfo _examScheduleCardInfoFor(
+    Map<String, dynamic> schedule,
+    DateTime today,
+  ) {
+    final cached = _examScheduleCardInfoCache[schedule];
+    if (cached != null) {
+      return cached;
+    }
+
+    final time = _readScheduleText(schedule, 'time', fallback: '时间待公布');
+    final examDate = _parseExamDate(time, fallbackYear: today.year);
+    final daysLeft = _daysLeft(examDate, today);
+    final info = _ExamScheduleCardInfo(
+      courseName: _readScheduleText(schedule, 'courseName', fallback: '未命名课程'),
+      place: _readScheduleText(schedule, 'examinationPlace', fallback: '考场待公布'),
+      time: time,
+      courseNumber: _readScheduleText(schedule, 'courseNumber'),
+      daysLeftText: _daysLeftText(daysLeft),
+      daysLeft: daysLeft,
+    );
+    _examScheduleCardInfoCache[schedule] = info;
+    return info;
+  }
+
+  DateTime _todayDate() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  String _nearestExamText(
+    List<Map<String, dynamic>> schedules,
+    DateTime today,
+  ) {
+    Map<String, dynamic>? nearestSchedule;
+    DateTime? nearestDate;
+    for (final schedule in schedules) {
+      final date = _parseExamDate(
+        schedule['time']?.toString() ?? '',
+        fallbackYear: today.year,
+      );
+      if (date == null || date.isBefore(today)) {
+        continue;
+      }
+      if (nearestDate == null || date.isBefore(nearestDate)) {
+        nearestDate = date;
+        nearestSchedule = schedule;
+      }
+    }
+
+    if (nearestSchedule == null || nearestDate == null) {
       return schedules.isEmpty ? '暂无考试' : '本学期考试已结束';
     }
 
-    final first = upcoming.first;
     final courseName = _readScheduleText(
-      first.schedule,
+      nearestSchedule,
       'courseName',
       fallback: '最近考试',
     );
-    return '$courseName · ${_daysLeftText(first.date)}';
+    return '$courseName · ${_daysLeftText(_daysLeft(nearestDate, today))}';
   }
 
-  DateTime? _parseExamDate(String input) {
+  DateTime? _parseExamDate(String input, {required int fallbackYear}) {
     try {
       if (input.length < 10) {
         return null;
       }
-      final datePart = input.substring(0, 10);
-      final parts = datePart.split('-');
-      if (parts.length != 3) {
-        return null;
+
+      var segmentStart = 0;
+      var segmentIndex = 0;
+      int? year;
+      int? month;
+      int? day;
+      for (var index = 0; index <= 10; index++) {
+        if (index == 10 || input.codeUnitAt(index) == 0x2D) {
+          final value = _parseExamDateSegment(input, segmentStart, index);
+          switch (segmentIndex) {
+            case 0:
+              year = value ?? fallbackYear;
+              break;
+            case 1:
+              month = value ?? 1;
+              break;
+            case 2:
+              day = value ?? 1;
+              break;
+            default:
+              return null;
+          }
+          segmentIndex++;
+          segmentStart = index + 1;
+        }
       }
 
-      final year = int.tryParse(parts[0]) ?? DateTime.now().year;
-      final month = int.tryParse(parts[1]) ?? 1;
-      final day = int.tryParse(parts[2]) ?? 1;
+      if (segmentIndex != 3 || year == null || month == null || day == null) {
+        return null;
+      }
 
       return DateTime(year, month, day);
     } catch (_) {
@@ -255,14 +348,30 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
     }
   }
 
-  String _daysLeftText(DateTime? examDate) {
-    if (examDate == null) {
-      return '日期未知';
+  int? _parseExamDateSegment(String input, int start, int end) {
+    if (start >= end) {
+      return null;
     }
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final daysLeft = examDate.difference(today).inDays;
+    var value = 0;
+    for (var index = start; index < end; index++) {
+      final codeUnit = input.codeUnitAt(index);
+      if (codeUnit < 0x30 || codeUnit > 0x39) {
+        return null;
+      }
+      value = value * 10 + codeUnit - 0x30;
+    }
+    return value;
+  }
+
+  int? _daysLeft(DateTime? examDate, DateTime today) {
+    return examDate?.difference(today).inDays;
+  }
+
+  String _daysLeftText(int? daysLeft) {
+    if (daysLeft == null) {
+      return '日期未知';
+    }
 
     if (daysLeft == 0) {
       return '今天考试';
@@ -273,15 +382,17 @@ class _ExamSchedulePageState extends State<ExamSchedulePage> {
     return '已结束${-daysLeft}天';
   }
 
-  Color _daysLeftColor(String text, BuildContext context) {
+  Color _daysLeftColor(int? daysLeft, BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    if (text.contains('今天')) {
+    if (daysLeft == null) {
+      return colorScheme.onSurfaceVariant;
+    }
+    if (daysLeft == 0) {
       return colorScheme.error;
     }
-    if (text.contains('还有')) {
-      final days = int.tryParse(text.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-      return days <= 3 ? colorScheme.warning : colorScheme.success;
+    if (daysLeft > 0) {
+      return daysLeft <= 3 ? colorScheme.warning : colorScheme.success;
     }
     return colorScheme.onSurfaceVariant;
   }
@@ -294,6 +405,24 @@ String _readScheduleText(
 }) {
   final value = schedule[key]?.toString().trim() ?? '';
   return value.isEmpty ? fallback : value;
+}
+
+class _ExamScheduleCardInfo {
+  const _ExamScheduleCardInfo({
+    required this.courseName,
+    required this.place,
+    required this.time,
+    required this.courseNumber,
+    required this.daysLeftText,
+    required this.daysLeft,
+  });
+
+  final String courseName;
+  final String place;
+  final String time;
+  final String courseNumber;
+  final String daysLeftText;
+  final int? daysLeft;
 }
 
 class _ExamOverviewCard extends StatelessWidget {

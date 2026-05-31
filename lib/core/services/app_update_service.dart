@@ -5,6 +5,8 @@ import 'package:pub_semver/pub_semver.dart';
 
 import 'app_logger.dart';
 
+const String appUpdateCheckFailureMessage = '检查更新失败，请稍后重试';
+
 class AppUpdateInfo {
   const AppUpdateInfo({
     required this.version,
@@ -107,18 +109,21 @@ abstract final class AppUpdateService {
 
       return const AppUpdateCheckResult(status: AppUpdateCheckStatus.upToDate);
     } on DioException catch (error) {
-      final message = error.message ?? error.runtimeType.toString();
-      AppLogger.debug('Skipped GitHub release update check: $message');
-      return AppUpdateCheckResult(
+      final diagnosticMessage = error.message ?? error.runtimeType.toString();
+      AppLogger.debug(
+        'Skipped GitHub release update check: $diagnosticMessage',
+      );
+      return const AppUpdateCheckResult(
         status: AppUpdateCheckStatus.failed,
-        errorMessage: message,
+        errorMessage: appUpdateCheckFailureMessage,
       );
     } catch (error) {
-      final message = error.toString();
-      AppLogger.debug('Skipped GitHub release update check: $message');
-      return AppUpdateCheckResult(
+      AppLogger.debug(
+        'Skipped GitHub release update check: ${error.runtimeType}',
+      );
+      return const AppUpdateCheckResult(
         status: AppUpdateCheckStatus.failed,
-        errorMessage: message,
+        errorMessage: appUpdateCheckFailureMessage,
       );
     }
   }
@@ -207,29 +212,59 @@ abstract final class AppUpdateService {
       return null;
     }
 
-    var suffixStart = rawVersion.length;
-    for (final separator in ['-', '+']) {
-      final index = rawVersion.indexOf(separator);
-      if (index >= 0 && index < suffixStart) {
-        suffixStart = index;
-      }
-    }
-
-    final coreVersion = rawVersion.substring(0, suffixStart);
-    final suffix = rawVersion.substring(suffixStart);
-    final segments = coreVersion.split('.');
-    if (segments.length > 3) {
+    final suffixStart = _versionSuffixStart(rawVersion);
+    final coreVersion = _normalizeVersionCore(rawVersion, suffixStart);
+    if (coreVersion == null) {
       return null;
     }
-    while (segments.length < 3) {
-      segments.add('0');
-    }
+    final suffix = rawVersion.substring(suffixStart);
 
     try {
-      return Version.parse('${segments.join('.')}$suffix');
+      return Version.parse('$coreVersion$suffix');
     } on FormatException {
       return null;
     }
+  }
+
+  static int _versionSuffixStart(String rawVersion) {
+    for (var index = 0; index < rawVersion.length; index++) {
+      final codeUnit = rawVersion.codeUnitAt(index);
+      if (codeUnit == 0x2D || codeUnit == 0x2B) {
+        return index;
+      }
+    }
+    return rawVersion.length;
+  }
+
+  static String? _normalizeVersionCore(String rawVersion, int end) {
+    final buffer = StringBuffer();
+    var segmentStart = 0;
+    var segmentCount = 0;
+
+    for (var index = 0; index <= end; index++) {
+      final isSegmentEnd = index == end || rawVersion.codeUnitAt(index) == 0x2E;
+      if (!isSegmentEnd) {
+        continue;
+      }
+      if (segmentStart == index) {
+        return null;
+      }
+      if (segmentCount > 0) {
+        buffer.writeCharCode(0x2E);
+      }
+      buffer.write(rawVersion.substring(segmentStart, index));
+      segmentCount++;
+      if (segmentCount > 3) {
+        return null;
+      }
+      segmentStart = index + 1;
+    }
+
+    while (segmentCount < 3) {
+      buffer.write('.0');
+      segmentCount++;
+    }
+    return buffer.toString();
   }
 
   static String _extractNotes(Element entry) {
@@ -250,11 +285,13 @@ abstract final class AppUpdateService {
     );
 
     if (blocks.isNotEmpty) {
-      final sections =
-          blocks
-              .map((element) => _normalizeWhitespace(element.text))
-              .where((text) => text.isNotEmpty)
-              .toList();
+      final sections = <String>[];
+      for (final block in blocks) {
+        final section = _normalizeWhitespace(block.text);
+        if (section.isNotEmpty) {
+          sections.add(section);
+        }
+      }
       if (sections.isNotEmpty) {
         return sections.join('\n\n');
       }
@@ -264,10 +301,47 @@ abstract final class AppUpdateService {
   }
 
   static String _normalizeWhitespace(String text) {
-    return text
-        .replaceAll('\r\n', '\n')
-        .replaceAll(RegExp(r'[ \t]+'), ' ')
-        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-        .trim();
+    final buffer = StringBuffer();
+    var previousWasHorizontalSpace = false;
+    var newlineRun = 0;
+
+    for (var index = 0; index < text.length; index++) {
+      final codeUnit = text.codeUnitAt(index);
+      if (codeUnit == 0x0D &&
+          index + 1 < text.length &&
+          text.codeUnitAt(index + 1) == 0x0A) {
+        index++;
+        if (newlineRun < 2) {
+          buffer.writeCharCode(0x0A);
+          newlineRun++;
+        }
+        previousWasHorizontalSpace = false;
+        continue;
+      }
+
+      if (codeUnit == 0x0A) {
+        if (newlineRun < 2) {
+          buffer.writeCharCode(codeUnit);
+          newlineRun++;
+        }
+        previousWasHorizontalSpace = false;
+        continue;
+      }
+
+      if (codeUnit == 0x20 || codeUnit == 0x09) {
+        if (!previousWasHorizontalSpace) {
+          buffer.writeCharCode(0x20);
+          previousWasHorizontalSpace = true;
+        }
+        newlineRun = 0;
+        continue;
+      }
+
+      buffer.write(text[index]);
+      previousWasHorizontalSpace = false;
+      newlineRun = 0;
+    }
+
+    return buffer.toString().trim();
   }
 }

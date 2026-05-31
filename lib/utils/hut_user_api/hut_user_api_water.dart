@@ -53,7 +53,14 @@ mixin _HutWaterMixin on _HutUserApiCore {
     }
 
     final data = response.data;
-    return {'code': 200, 'data': data['resultData']['data'].reversed.toList()};
+    final rawDevices = data['resultData']['data'];
+    final devices = <dynamic>[];
+    if (rawDevices is List) {
+      for (var index = rawDevices.length - 1; index >= 0; index--) {
+        devices.add(rawDevices[index]);
+      }
+    }
+    return {'code': 200, 'data': devices};
   }
 
   Future<List> checkHotWaterDevice() async {
@@ -70,19 +77,21 @@ mixin _HutWaterMixin on _HutUserApiCore {
     final params = <String, dynamic>{'openid': session.openid};
     final data = <String, dynamic>{'openid': session.openid};
 
-    return _request
-        .post(url, params: params, data: data, options: options)
-        .then((value) {
-          if (value.data['result'] != '000000') {
-            return [];
-          }
-          final List data = value.data['data'];
-          final openCodeList = <String>[];
-          for (var i = 0; i < data.length; i++) {
-            openCodeList.add(data[i]['poscode'].toString());
-          }
-          return data.isNotEmpty ? openCodeList : [];
-        });
+    final response = await _request.post(
+      url,
+      params: params,
+      data: data,
+      options: options,
+    );
+    if (response.data['result'] != '000000') {
+      return [];
+    }
+    final List responseData = response.data['data'];
+    final openCodeList = <String>[];
+    for (var i = 0; i < responseData.length; i++) {
+      openCodeList.add(responseData[i]['poscode'].toString());
+    }
+    return responseData.isNotEmpty ? openCodeList : [];
   }
 
   Future<Map> startHotWater({required String device}) async {
@@ -99,16 +108,18 @@ mixin _HutWaterMixin on _HutUserApiCore {
     final params = <String, dynamic>{'openid': session.openid};
     final data = <String, dynamic>{'openid': session.openid, 'poscode': device};
 
-    return _request
-        .post(url, params: params, data: data, options: options)
-        .then((value) {
-          final data = ResponseUtils.transformObj(value);
-          return {
-            'result': data['resultData']['result'],
-            'message': data['resultData']['message'],
-            'success': data['success'],
-          };
-        });
+    final response = await _request.post(
+      url,
+      params: params,
+      data: data,
+      options: options,
+    );
+    final responseData = ResponseUtils.transformObj(response);
+    return {
+      'result': responseData['resultData']['result'],
+      'message': responseData['resultData']['message'],
+      'success': responseData['success'],
+    };
   }
 
   Future<bool> stopHotWater({required String device}) async {
@@ -129,12 +140,14 @@ mixin _HutWaterMixin on _HutUserApiCore {
       'openappid': '',
     };
 
-    return _request
-        .post(url, params: params, data: data, options: options)
-        .then((value) {
-          final data = ResponseUtils.transformObj(value);
-          return data['resultData']['result'] == '000000';
-        });
+    final response = await _request.post(
+      url,
+      params: params,
+      data: data,
+      options: options,
+    );
+    final responseData = ResponseUtils.transformObj(response);
+    return responseData['resultData']['result'] == '000000';
   }
 
   Future<Map> addWaterDevice(String bindCode) async {
@@ -188,16 +201,13 @@ mixin _HutWaterMixin on _HutUserApiCore {
     final options = _createNoCacheOptions(_request);
     final params = <String, dynamic>{'X-Id-Token': token};
 
-    return _request.get(url, params: params, options: options).then((value) {
-      final Document doc = parse(value.data);
-      final list =
-          doc.getElementsByTagName('span').where((element) {
-            return element.attributes['name'] == 'showbalanceid';
-          }).toList();
-      if (list.isNotEmpty) {
-        return list.first.text.replaceAll('主钱包余额:￥', '');
+    final response = await _request.get(url, params: params, options: options);
+    final Document doc = parse(response.data);
+    for (final element in doc.getElementsByTagName('span')) {
+      if (element.attributes['name'] == 'showbalanceid') {
+        return element.text.replaceAll('主钱包余额:￥', '');
       }
-      return 'null';
-    });
+    }
+    return 'null';
   }
 }

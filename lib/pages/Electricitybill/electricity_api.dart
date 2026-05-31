@@ -6,7 +6,43 @@ import 'package:superhut/utils/hut_user_api.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 
-class ElectricityApi {
+abstract class ElectricityApiClient {
+  Future<void> onInit();
+
+  Future<Map> getHistory();
+
+  Future<Map> getSingleRoomInfo(String troomid);
+
+  Future<List> getRoomList();
+
+  Future<bool> checkBeforeRecharge(String payRoomId);
+
+  Future<Map> createOrder(String payRoomId, String count, String payRoomName);
+
+  Future<void> finishRecharge(
+    String payorderno,
+    String count,
+    String payRoomName,
+  );
+}
+
+abstract class ElectricityBalanceClient {
+  Future<String> getCardBalance();
+}
+
+class HutElectricityBalanceClient implements ElectricityBalanceClient {
+  HutElectricityBalanceClient({HutUserApi? hutUserApi})
+    : _hutUserApi = hutUserApi ?? HutUserApi();
+
+  final HutUserApi _hutUserApi;
+
+  @override
+  Future<String> getCardBalance() {
+    return _hutUserApi.getCardBalance();
+  }
+}
+
+class ElectricityApi implements ElectricityApiClient {
   final HutUserApi hutApi = HutUserApi();
   final AppAuthStorage _storage = AppAuthStorage.instance;
   late List<String> openids;
@@ -44,6 +80,7 @@ class ElectricityApi {
   }
 
   //初始化API
+  @override
   Future<void> onInit() async {
     openids = await hutApi.getOpenid();
     if (openids.length < 2) {
@@ -105,6 +142,7 @@ class ElectricityApi {
   }
 
   //获取历史记录
+  @override
   Future<Map> getHistory() async {
     Response response;
     response = await postDio(
@@ -151,6 +189,7 @@ class ElectricityApi {
   }
 
   //获取当个房间信息
+  @override
   Future<Map> getSingleRoomInfo(String troomid) async {
     final Response<dynamic> response =
         await postDio('/channel/queryRoomDetail?openid=$openid', {
@@ -175,6 +214,7 @@ class ElectricityApi {
   }
 
   //获取所有房间列表
+  @override
   Future<List> getRoomList() async {
     final Response<dynamic> response = await postDio(
       '/channel/getAllAccountInfo?openid=$openid',
@@ -190,6 +230,7 @@ class ElectricityApi {
   }
 
   //充值前检测
+  @override
   Future<bool> checkBeforeRecharge(String payRoomId) async {
     Response response;
     response = await postDio('/myaccount/userlastbind?openid=$openid', {
@@ -211,6 +252,7 @@ class ElectricityApi {
   }
 
   //创建订单
+  @override
   Future<Map> createOrder(
     String payRoomId,
     String count,
@@ -247,6 +289,7 @@ class ElectricityApi {
   }
 
   //完成充值
+  @override
   Future<void> finishRecharge(
     String payorderno,
     String count,

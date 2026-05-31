@@ -3,14 +3,15 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
 import 'package:responsive_framework/responsive_framework.dart';
 import 'package:superhut/pages/score/jump_to_score_page.dart';
+import 'core/ui/app_page_route.dart';
 import 'core/ui/app_loading_indicator.dart';
+import 'home/home_route.dart';
 import 'home/homeview/view.dart';
 import 'core/services/app_auth_storage.dart';
 import 'pages/drink/view/view.dart';
@@ -71,7 +72,7 @@ abstract final class AppTheme {
       visualDensity: VisualDensity.standard,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: _AppLightPageTransitionsBuilder(),
+          TargetPlatform.android: AppLightPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
           TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
         },
@@ -246,125 +247,6 @@ abstract final class AppTheme {
   }
 }
 
-class _AppLightPageTransitionsBuilder extends PageTransitionsBuilder {
-  const _AppLightPageTransitionsBuilder();
-
-  @override
-  Widget buildTransitions<T>(
-    PageRoute<T> route,
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations;
-    if (disableAnimations == true) {
-      return child;
-    }
-
-    final curvedAnimation = CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-    final slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.012),
-      end: Offset.zero,
-    ).animate(curvedAnimation);
-
-    final transitionChild = _RouteTransitionRepaintBoundary(
-      animation: animation,
-      child: child,
-    );
-
-    return FadeTransition(
-      opacity: curvedAnimation,
-      child: SlideTransition(position: slideAnimation, child: transitionChild),
-    );
-  }
-}
-
-class _RouteTransitionRepaintBoundary extends SingleChildRenderObjectWidget {
-  const _RouteTransitionRepaintBoundary({
-    required this.animation,
-    required super.child,
-  });
-
-  final Animation<double> animation;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) {
-    return _RenderRouteTransitionRepaintBoundary(animation: animation);
-  }
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    _RenderRouteTransitionRepaintBoundary renderObject,
-  ) {
-    renderObject.animation = animation;
-  }
-}
-
-class _RenderRouteTransitionRepaintBoundary extends RenderProxyBox {
-  _RenderRouteTransitionRepaintBoundary({required Animation<double> animation})
-    : _animation = animation,
-      _isTransitioning = _resolveIsTransitioning(animation);
-
-  Animation<double> get animation => _animation;
-  Animation<double> _animation;
-  set animation(Animation<double> value) {
-    if (_animation == value) {
-      return;
-    }
-    if (attached) {
-      _animation.removeStatusListener(_handleAnimationStatusChanged);
-    }
-    _animation = value;
-    if (attached) {
-      _animation.addStatusListener(_handleAnimationStatusChanged);
-    }
-    _updateTransitioningState();
-  }
-
-  bool _isTransitioning;
-
-  @override
-  bool get isRepaintBoundary => child != null && _isTransitioning;
-
-  static bool _resolveIsTransitioning(Animation<double> animation) {
-    return animation.status == AnimationStatus.forward ||
-        animation.status == AnimationStatus.reverse;
-  }
-
-  void _handleAnimationStatusChanged(AnimationStatus status) {
-    _updateTransitioningState();
-  }
-
-  void _updateTransitioningState() {
-    final nextValue = _resolveIsTransitioning(_animation);
-    if (_isTransitioning == nextValue) {
-      return;
-    }
-    _isTransitioning = nextValue;
-    markNeedsCompositingBitsUpdate();
-    markNeedsPaint();
-  }
-
-  @override
-  void attach(PipelineOwner owner) {
-    super.attach(owner);
-    _animation.addStatusListener(_handleAnimationStatusChanged);
-    _updateTransitioningState();
-  }
-
-  @override
-  void detach() {
-    _animation.removeStatusListener(_handleAnimationStatusChanged);
-    super.detach();
-  }
-}
-
 WebViewEnvironment? webViewEnvironment;
 
 Future<void> main() async {
@@ -415,6 +297,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _isCourseSilentRefreshRunning = false;
   bool _showInitialTrustNotice = false;
   String? _initialWidgetAction;
+  final Set<String> _pendingWidgetActions = <String>{};
+  final Set<String> _activeWidgetActionRoutes = <String>{};
   static const platform = MethodChannel(
     'com.superhut.rice.superhut/widget_actions',
   );
@@ -466,44 +350,62 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _handleWidgetAction(String actionType) {
+    final normalizedAction = actionType.trim();
+    if (normalizedAction.isEmpty ||
+        _pendingWidgetActions.contains(normalizedAction) ||
+        _activeWidgetActionRoutes.contains(normalizedAction)) {
+      return;
+    }
+
+    _pendingWidgetActions.add(normalizedAction);
     // 等待应用完全加载后再导航
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pendingWidgetActions.remove(normalizedAction);
+      if (!mounted) {
+        return;
+      }
+
       final context = navigatorKey.currentContext;
       if (context != null) {
-        if (actionType == 'course') {
+        if (normalizedAction == 'course') {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (context) => const HomeviewPage(initialIndex: 0),
-            ),
+            buildHomePageRoute(initialIndex: 0),
             (route) => false,
           );
           return;
         }
 
-        Widget? targetPage;
-
-        switch (actionType) {
-          case 'drink':
-            targetPage = FunctionDrinkPage();
-            break;
-          case 'bath':
-            targetPage = FunctionHotWaterPage();
-            break;
-          case 'electricity':
-            targetPage = ElectricityPage();
-            break;
-          case 'score':
-            targetPage = JumpToScorePage();
-            break;
-        }
-
+        final targetPage = _buildWidgetActionPage(normalizedAction);
         if (targetPage != null) {
-          Navigator.of(
+          _activeWidgetActionRoutes.add(normalizedAction);
+          final route = Navigator.of(
             context,
-          ).push(MaterialPageRoute(builder: (context) => targetPage!));
+          ).push<void>(buildAppPageRoute<void>(builder: (_) => targetPage));
+          unawaited(_trackWidgetActionRoute(normalizedAction, route));
         }
       }
     });
+  }
+
+  Future<void> _trackWidgetActionRoute(
+    String actionType,
+    Future<void> route,
+  ) async {
+    try {
+      await route;
+    } finally {
+      _activeWidgetActionRoutes.remove(actionType);
+    }
+  }
+
+  Widget? _buildWidgetActionPage(String actionType) {
+    return switch (actionType) {
+      'drink' => FunctionDrinkPage(),
+      'bath' => FunctionHotWaterPage(),
+      'electricity' => ElectricityPage(),
+      'score' => JumpToScorePage(),
+      _ => null,
+    };
   }
 
   Future<String?> _consumeInitialWidgetAction() async {
@@ -520,6 +422,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     } on PlatformException {
       return null;
     }
+  }
+
+  Future<bool> _hasLocalCourseCacheOnStartup() async {
+    if (!widget.resolveCourseStateOnStartup) {
+      return false;
+    }
+    final courseData = await loadClassFromLocal();
+    return courseData.isNotEmpty;
   }
 
   Future<void> _resolveStartupState() async {
@@ -540,9 +450,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
     final results = await Future.wait<Object?>([
       storage.hasAnyCampusSession(),
-      widget.resolveCourseStateOnStartup
-          ? loadClassFromLocal().then((courseData) => courseData.isNotEmpty)
-          : Future<bool>.value(false),
+      _hasLocalCourseCacheOnStartup(),
       _consumeInitialWidgetAction(),
     ]);
     final hasSession = results[0] as bool;

@@ -6,19 +6,22 @@ import 'package:superhut/utils/hut_user_api.dart';
 import '../../../core/services/app_logger.dart';
 import '../../../core/ui/app_loading_indicator.dart';
 import '../../../core/ui/app_snack_bar.dart';
-import '../../../core/ui/color_scheme_ext.dart';
 import '../hut_service_auth.dart';
 
 class Type1Webview extends StatefulWidget {
-  final String serviceId, serviceUrl, serviceName, servicePicUrl;
-
   const Type1Webview({
     super.key,
     required this.serviceId,
     required this.serviceUrl,
     required this.serviceName,
     this.servicePicUrl = '',
+    this.loadPortalSession,
+    this.openLoginPage,
   });
+
+  final String serviceId, serviceUrl, serviceName, servicePicUrl;
+  final HutPortalSessionLoader? loadPortalSession;
+  final HutLoginPageOpener? openLoginPage;
 
   @override
   State<Type1Webview> createState() => _Type1WebviewState();
@@ -28,45 +31,94 @@ class _Type1WebviewState extends State<Type1Webview> {
   final api = HutUserApi();
   String resultUrl = '';
   String token = '';
-  bool _isPageLoading = false;
+  Map<String, String> headerMap = {};
+  final ValueNotifier<bool> _isPageLoadingNotifier = ValueNotifier<bool>(false);
   bool _hasWarnedLoginRedirect = false;
+  bool _isOpeningLogin = false;
   String? _setupErrorMessage;
-  late Future<bool> _initialSetupFuture;
+  int _setupGeneration = 0;
+  late final ValueNotifier<Future<bool>> _initialSetupFutureNotifier;
 
   @override
   void initState() {
     super.initState();
-    _initialSetupFuture = getDetail();
+    _initialSetupFutureNotifier = ValueNotifier<Future<bool>>(getDetail());
   }
 
-  Future<bool> getDetail() async {
+  @override
+  void dispose() {
+    _initialSetupFutureNotifier.dispose();
+    _isPageLoadingNotifier.dispose();
+    super.dispose();
+  }
+
+  bool _isCurrentSetup(int generation) {
+    return mounted && generation == _setupGeneration;
+  }
+
+  Future<bool> getDetail() {
+    final generation = ++_setupGeneration;
+    return _loadDetail(generation);
+  }
+
+  @visibleForTesting
+  Future<bool> debugReloadPortalSession() {
+    return getDetail();
+  }
+
+  @visibleForTesting
+  String get debugToken => token;
+
+  @visibleForTesting
+  String get debugResultUrl => resultUrl;
+
+  @visibleForTesting
+  Map<String, String> get debugHeaderMap => headerMap;
+
+  Future<bool> _loadDetail(int generation) async {
     try {
-      _setupErrorMessage = null;
-      final session = await loadValidHutPortalSession(api);
-      token = session.token;
+      final session =
+          await widget.loadPortalSession?.call(api) ??
+          await loadValidHutPortalSession(api);
+      final nextToken = session.token;
+      final String nextResultUrl;
       if (widget.serviceId.isNotEmpty) {
         final detailUrl = buildHutPortalServiceDetailUrl(
           serviceId: widget.serviceId,
           serviceName: widget.serviceName,
           servicePicUrl: widget.servicePicUrl,
         );
-        resultUrl = buildHutPortalServiceEntryUrl(
+        nextResultUrl = buildHutPortalServiceEntryUrl(
           targetUrl: detailUrl,
           token: session.token,
           ticket: session.ticket,
         );
       } else {
-        resultUrl = buildHutCasLoginUrl(
+        nextResultUrl = buildHutCasLoginUrl(
           serviceUrl: widget.serviceUrl,
           idToken: session.token,
         );
       }
+      if (!_isCurrentSetup(generation)) {
+        return false;
+      }
+
+      final nextHeaders = buildHutWebViewHeaders(
+        token: nextToken,
+        profile: HutWebViewHeaderProfile.type1,
+      );
+      token = nextToken;
+      headerMap = nextHeaders;
+      resultUrl = nextResultUrl;
+      _setupErrorMessage = null;
       AppLogger.debug(
         'Type1 result url prepared: ${describeHutUrlForLog(resultUrl)}',
       );
       return true;
     } catch (error, stackTrace) {
-      _setupErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+      if (_isCurrentSetup(generation)) {
+        _setupErrorMessage = resolveHutServiceAuthErrorMessage(error);
+      }
       AppLogger.error(
         'Failed to prepare HUT type1 service',
         error: error,
@@ -74,31 +126,6 @@ class _Type1WebviewState extends State<Type1Webview> {
       );
       return false;
     }
-  }
-
-  Map<String, String> _initialHeaders() {
-    return {
-      "User-Agent":
-          "Mozilla/5.0 (Linux; Android 15; 24129PN74C Build/AQ3A.240812.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/134.0.6998.39 Mobile Safari/537.36 SuperApp",
-      "Connection": "keep-alive",
-      "Accept":
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-      "Accept-Encoding": "gzip, deflate, br, zstd",
-      "sec-ch-ua":
-          "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Android WebView\";v=\"134\"",
-      "sec-ch-ua-mobile": "?1",
-      "sec-ch-ua-platform": "\"Android\"",
-      "Upgrade-Insecure-Requests": "1",
-      "X-Id-Token": token,
-      "x-id-token": token,
-      "X-Requested-With": "com.supwisdom.hut",
-      "Sec-Fetch-Site": "none",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-User": "?1",
-      "Sec-Fetch-Dest": "document",
-      "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Cookie": "userToken=$token",
-    };
   }
 
   Future<NavigationActionPolicy> _rewriteLegacyPortalNavigation(
@@ -119,28 +146,40 @@ class _Type1WebviewState extends State<Type1Webview> {
       'Type1 rewrite legacy portal url: ${describeHutUrlForLog(normalizedUrl)}',
     );
     await controller.loadUrl(
-      urlRequest: URLRequest(
-        url: WebUri(normalizedUrl),
-        headers: _initialHeaders(),
-      ),
+      urlRequest: URLRequest(url: WebUri(normalizedUrl), headers: headerMap),
     );
     return NavigationActionPolicy.CANCEL;
   }
 
   Future<void> _openLoginAndRetry() async {
-    await openHutLoginPage(context);
-    if (!mounted) {
+    if (!mounted || _isOpeningLogin) {
       return;
     }
-    setState(() {
+
+    _isOpeningLogin = true;
+    try {
+      await (widget.openLoginPage?.call(context) ?? openHutLoginPage(context));
+      if (!mounted) {
+        return;
+      }
       _setupErrorMessage = null;
       _hasWarnedLoginRedirect = false;
-      _initialSetupFuture = getDetail();
-    });
+      _initialSetupFutureNotifier.value = getDetail();
+    } finally {
+      _isOpeningLogin = false;
+    }
+  }
+
+  void _setPageLoading(bool isLoading) {
+    if (!mounted || _isPageLoadingNotifier.value == isLoading) {
+      return;
+    }
+
+    _isPageLoadingNotifier.value = isLoading;
   }
 
   void _handlePossibleLoginRedirect(WebUri? url) {
-    if (_hasWarnedLoginRedirect || !isLikelyHutLoginUrl(url)) {
+    if (!mounted || _hasWarnedLoginRedirect || !isLikelyHutLoginUrl(url)) {
       return;
     }
     final hasIdToken = url?.queryParameters.containsKey('idToken') ?? false;
@@ -165,96 +204,73 @@ class _Type1WebviewState extends State<Type1Webview> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("智慧工大")),
-      body: EnhancedFutureBuilder(
-        future: _initialSetupFuture,
-        rememberFutureResult: true,
-        whenDone: (v) {
-          final colorScheme = Theme.of(context).colorScheme;
-          if (v != true) {
-            return HutServiceAuthErrorPanel(
-              message: _setupErrorMessage ?? '智慧工大登录状态已失效，请重新登录一次。',
-              onLogin: _openLoginAndRetry,
-            );
-          }
+      body: ValueListenableBuilder<Future<bool>>(
+        valueListenable: _initialSetupFutureNotifier,
+        builder: (context, initialSetupFuture, _) {
+          return EnhancedFutureBuilder(
+            future: initialSetupFuture,
+            rememberFutureResult: true,
+            whenDone: (v) {
+              if (v != true) {
+                return HutServiceAuthErrorPanel(
+                  message: _setupErrorMessage ?? '智慧工大登录状态已失效，请重新登录一次。',
+                  onLogin: _openLoginAndRetry,
+                );
+              }
 
-          return Stack(
-            children: [
-              InAppWebView(
-                initialUrlRequest: URLRequest(
-                  url: WebUri(resultUrl),
-                  headers: _initialHeaders(), // 自定义 Header
-                ),
-                initialSettings: InAppWebViewSettings(
-                  useShouldOverrideUrlLoading: true,
-                ),
-
-                onLoadStart: (controller, url) {
-                  setState(() {
-                    _isPageLoading = true;
-                  });
-                  AppLogger.debug(
-                    'Type1 start loading: ${describeHutUrlForLog(url.toString())}',
-                  );
-                },
-
-                onLoadStop: (controller, url) {
-                  _handlePossibleLoginRedirect(url);
-                  setState(() {
-                    _isPageLoading = false;
-                  });
-                },
-                shouldOverrideUrlLoading: (controller, navigationAction) async {
-                  return _rewriteLegacyPortalNavigation(
-                    controller,
-                    navigationAction,
-                  );
-                },
-              ),
-              if (_isPageLoading)
-                Positioned.fill(
-                  child: Container(
-                    color: colorScheme.overlayScrim,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.floatingSurfaceStrong,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: colorScheme.subtleBorder),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AppLoadingIndicator(
-                              color: colorScheme.primary,
-                              size: 40,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              '页面加载中...',
-                              style: TextStyle(
-                                color: colorScheme.onSurface,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+              return Stack(
+                children: [
+                  InAppWebView(
+                    initialUrlRequest: URLRequest(
+                      url: WebUri(resultUrl),
+                      headers: headerMap, // 自定义 Header
                     ),
+                    initialSettings: InAppWebViewSettings(
+                      useShouldOverrideUrlLoading: true,
+                    ),
+
+                    onLoadStart: (controller, url) {
+                      _setPageLoading(true);
+                      AppLogger.debug(
+                        'Type1 start loading: ${describeHutUrlForLog(url.toString())}',
+                      );
+                    },
+
+                    onLoadStop: (controller, url) {
+                      _handlePossibleLoginRedirect(url);
+                      _setPageLoading(false);
+                    },
+                    shouldOverrideUrlLoading: (
+                      controller,
+                      navigationAction,
+                    ) async {
+                      return _rewriteLegacyPortalNavigation(
+                        controller,
+                        navigationAction,
+                      );
+                    },
                   ),
-                ),
-            ],
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _isPageLoadingNotifier,
+                    builder: (context, isPageLoading, _) {
+                      if (!isPageLoading) {
+                        return const SizedBox.shrink();
+                      }
+                      return const Positioned.fill(
+                        child: HutWebViewLoadingOverlay(message: '页面加载中...'),
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
+            whenNotDone: Center(
+              child: AppLoadingIndicator(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
           );
         },
-        whenNotDone: Center(
-          child: AppLoadingIndicator(
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
       ),
     );
   }

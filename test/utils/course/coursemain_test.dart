@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/utils/course/get_course.dart';
 import 'package:superhut/utils/course/course_sync_progress.dart';
 import 'package:superhut/utils/course/coursemain.dart';
+import 'package:superhut/utils/widget_data_helper.dart';
 import 'package:superhut/utils/withhttp.dart';
 
 import '../../support/path_provider_mock.dart';
@@ -269,6 +270,44 @@ void main() {
   });
 
   test(
+    'buildCourseWidgetStore fallback builds actual unordered date payloads',
+    () {
+      final store = buildCourseWidgetStoreFromRawData(
+        firstDay: '',
+        maxWeek: 0,
+        updatedAt: '2026-03-30T07:30:00.000',
+        courseData: {
+          '2026-04-03': [
+            Course(
+              name: '数值分析',
+              teacherName: '赵老师',
+              weekDuration: '1-16',
+              location: '信工楼501',
+              startSection: 1,
+              duration: 2,
+            ),
+          ],
+          '2026-04-01': [
+            Course(
+              name: '编译原理',
+              teacherName: '周老师',
+              weekDuration: '1-16',
+              location: '信工楼201',
+              startSection: 3,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      expect(store.days['2026-04-01']?.weekdayLabel, '周三');
+      expect(store.days['2026-04-01']?.courses.single.name, '10:00 编译原理');
+      expect(store.days['2026-04-03']?.weekdayLabel, '周五');
+      expect(store.dayCourses['2026-04-03']?.single.name, '08:00 数值分析');
+    },
+  );
+
+  test(
     'buildCourseWidgetStore marks tomorrow preview when today has no class',
     () {
       final store = buildCourseWidgetStoreFromRawData(
@@ -340,6 +379,52 @@ void main() {
   });
 
   test(
+    'GetSingleWeekExpClass prefers weekNoteDetail when parsing sections',
+    () {
+      final parser = GetSingleWeekExpClass(
+        orgdata: {
+          'code': '1',
+          'data': [
+            {
+              'date': [
+                {'xqid': 3, 'mxrq': '2026-03-18'},
+              ],
+              'courses': [
+                {
+                  'teacherName': '李老师',
+                  'syxmName': '网络实验',
+                  'weekNoteDetail': '106,\n\t105\u3000bad 000',
+                  'maxClassTime': '第六大节',
+                  'coursesNote': 2,
+                  'courseName': '软件工程',
+                  'classroomName': '实验楼101',
+                  'weekDay': 3,
+                  'pcid': 'pcid-note',
+                  'kkzc': '1',
+                },
+              ],
+            },
+          ],
+          'jcdatalist': [
+            {'XJMC': '11,12', 'DJMC': '第六大节'},
+          ],
+        },
+      );
+
+      parser.initData();
+      parser.getWeekDate();
+      final weekData = parser.getSingleClass();
+      final course = weekData['2026-03-18']?.single;
+
+      expect(course, isNotNull);
+      expect(course?.name, '软件工程 实验：网络实验');
+      expect(course?.startSection, 5);
+      expect(course?.duration, 2);
+      expect(course?.isExp, isTrue);
+    },
+  );
+
+  test(
     'GetSingleWeekExpClass falls back to maxClassTime and coursesNote when weekNoteDetail is missing',
     () {
       final parser = GetSingleWeekExpClass(
@@ -389,6 +474,47 @@ void main() {
       expect(course?.location, '实验楼101');
     },
   );
+
+  test('GetSingleWeekExpClass limits maxClassTime sections by coursesNote', () {
+    final parser = GetSingleWeekExpClass(
+      orgdata: {
+        'code': '1',
+        'data': [
+          {
+            'date': [
+              {'xqid': 2, 'mxrq': '2026-03-17'},
+            ],
+            'courses': [
+              {
+                'teacherName': '李老师',
+                'syxmName': '网络实验',
+                'weekNoteDetail': '',
+                'maxClassTime': '第一大节',
+                'coursesNote': 2,
+                'courseName': '软件工程',
+                'classroomName': '实验楼101',
+                'weekDay': 2,
+                'pcid': 'pcid-limited',
+                'kkzc': '1',
+              },
+            ],
+          },
+        ],
+        'jcdatalist': [
+          {'XJMC': '01,\t02\n03\u3000', 'DJMC': '第一大节'},
+        ],
+      },
+    );
+
+    parser.initData();
+    parser.getWeekDate();
+    final weekData = parser.getSingleClass();
+    final course = weekData['2026-03-17']?.single;
+
+    expect(course, isNotNull);
+    expect(course?.startSection, 1);
+    expect(course?.duration, 2);
+  });
 
   test(
     'GetSingleWeekExpClass falls back to startTime and endTIme when section detail is missing',
@@ -878,6 +1004,48 @@ void main() {
     },
   );
 
+  test(
+    'buildCompactCourseWidgetPayloadFromStore scans unordered store dates for nearest next course',
+    () {
+      const laterCourse = CourseWidgetCourseEntry(
+        name: '08:00 数值分析',
+        meta: '信工楼501',
+        location: '信工楼501',
+        startSection: 1,
+        endSection: 2,
+        startTime: '08:00',
+        sectionLabel: '第1-2节',
+      );
+      const nearerCourse = CourseWidgetCourseEntry(
+        name: '10:00 编译原理',
+        meta: '信工楼201',
+        location: '信工楼201',
+        startSection: 3,
+        endSection: 4,
+        startTime: '10:00',
+        sectionLabel: '第3-4节',
+      );
+      final store = CourseWidgetStore(
+        schemaVersion: 2,
+        updatedAt: '2026-03-30T07:30:00.000',
+        days: const <String, CourseWidgetPayload>{},
+        dayCourses: {
+          '2026-04-03': const [laterCourse],
+          '2026-04-01': const [nearerCourse],
+        },
+      );
+
+      final payload = buildCompactCourseWidgetPayloadFromStore(
+        store,
+        now: DateTime.parse('2026-03-30T09:50:00'),
+      );
+
+      expect(payload.headerTitle, '下次课程');
+      expect(payload.headerSubtitle, contains('周三'));
+      expect(payload.courses.single.name, '10:00 编译原理');
+    },
+  );
+
   test('saveCourseDataToJson writes cache for app and widget readers', () async {
     final now = DateTime.now();
     final dateKey =
@@ -978,6 +1146,39 @@ void main() {
     );
   });
 
+  test('WidgetDataHelper normalizes widget course maps before saving', () async {
+    final now = DateTime.now().add(const Duration(days: 1));
+    final dateKey =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    final saved = await WidgetDataHelper.saveCourseDataForWidget({
+      dateKey: [
+        {'name': '线性代数', 'location': '公共301', 'startSection': 3, 'duration': 2},
+      ],
+    });
+
+    expect(saved, isTrue);
+
+    final loadedCourseData = await loadClassFromLocal();
+    final course = loadedCourseData[dateKey]?.single;
+    expect(course?.name, '线性代数');
+    expect(course?.teacherName, '');
+    expect(course?.weekDuration, '');
+    expect(course?.location, '公共301');
+    expect(course?.startSection, 3);
+    expect(course?.duration, 2);
+    expect(course?.isExp, isFalse);
+    expect(course?.pcid, '');
+
+    final loadedPayload = await loadCourseWidgetPayloadFromLocal();
+    final loadedStore = await loadCourseWidgetStoreFromLocal();
+    expect(loadedPayload?.courses.single.name, '10:00 线性代数');
+    expect(loadedStore?.dayCourses[dateKey]?.single.meta, '公共301');
+    expect(widgetRefreshCalls.map((call) => call.method), [
+      'syncCourseTableWidget',
+    ]);
+  });
+
   test(
     'loadClassFromLocal returns empty data when cache file is missing',
     () async {
@@ -1026,6 +1227,73 @@ void main() {
     expect(imported.courseData['2026-03-16']?.single.pcid, isEmpty);
   });
 
+  test('course share parser ignores pasted whitespace without RegExp', () {
+    final schedule = SavedCourseSchedule(
+      id: 'schedule-whitespace',
+      name: '空白分享码课表',
+      ownerName: '测试用户',
+      termLabel: '2025-2026-2',
+      semesterId: '2025-2026-2',
+      firstDay: '2026-03-16',
+      maxWeek: 20,
+      sourceType: CourseScheduleSourceType.selfSync,
+      isReadOnly: false,
+      createdAt: '2026-03-16T08:00:00.000',
+      updatedAt: '2026-03-16T08:00:00.000',
+      courseData: {
+        '2026-03-16': [
+          Course(
+            name: '编译原理',
+            teacherName: '李老师',
+            weekDuration: '1-16',
+            location: '公共302',
+            startSection: 3,
+            duration: 2,
+          ),
+        ],
+      },
+    );
+    final shareCode = buildCourseScheduleShareCode(schedule);
+    final wrappedShareCode =
+        '${shareCode.substring(0, 10)} \n\t'
+        '${shareCode.substring(10, 24)}\u3000'
+        '${shareCode.substring(24)}\u00A0';
+
+    final imported = parseCourseScheduleShareCode(wrappedShareCode);
+
+    expect(imported.name, '空白分享码课表');
+    expect(imported.courseData['2026-03-16']?.single.name, '编译原理');
+  });
+
+  test('course share parser keeps controlled business messages', () {
+    expect(
+      () => parseCourseScheduleShareCode('not-a-superhut-share-code'),
+      throwsA(
+        isA<CourseScheduleImportException>().having(
+          (error) => error.message,
+          'message',
+          '未识别到工大盒子课表分享码',
+        ),
+      ),
+    );
+  });
+
+  test('course share parser hides raw low-level parse errors', () {
+    const rawShareCode =
+        'SUPERHUT1:bad_payload_with_https://example.com?token=secret-token';
+
+    expect(
+      () => parseCourseScheduleShareCode(rawShareCode),
+      throwsA(
+        isA<CourseScheduleImportException>().having(
+          (error) => error.message,
+          'message',
+          courseScheduleShareCodeParseFailureMessage,
+        ),
+      ),
+    );
+  });
+
   test(
     'buildCourseScheduleExportJsonString round-trips through parser',
     () async {
@@ -1064,6 +1332,22 @@ void main() {
       expect(imported.courseData['2026-03-18']?.single.name, '编译原理');
     },
   );
+
+  test('course file parser hides raw low-level parse errors', () {
+    const rawJson =
+        '{"schemaVersion":1,"token":"secret-token","schedule": "not-map"';
+
+    expect(
+      () => parseCourseScheduleExportJsonString(rawJson),
+      throwsA(
+        isA<CourseScheduleImportException>().having(
+          (error) => error.message,
+          'message',
+          courseScheduleFileParseFailureMessage,
+        ),
+      ),
+    );
+  });
 
   test(
     'saveImportedCourseScheduleFromShareCode stores imported schedule',
@@ -1198,6 +1482,76 @@ void main() {
       'syncCourseTableWidget',
     ]);
   });
+
+  test(
+    'deleteCourseSchedule removes schedule and reassigns active schedule',
+    () async {
+      final activeSchedule = SavedCourseSchedule(
+        id: 'schedule-delete-active',
+        name: '当前课表',
+        ownerName: '测试用户',
+        termLabel: '2025-2026-2',
+        semesterId: '2025-2026-2',
+        firstDay: '2026-03-16',
+        maxWeek: 20,
+        sourceType: CourseScheduleSourceType.manual,
+        isReadOnly: false,
+        createdAt: '2026-03-16T08:00:00.000',
+        updatedAt: '2026-03-16T08:00:00.000',
+        courseData: {
+          '2026-03-17': [
+            Course(
+              name: '数据库原理',
+              teacherName: '周老师',
+              weekDuration: '1-16',
+              location: '信工楼201',
+              startSection: 1,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+      final retainedSchedule = SavedCourseSchedule(
+        id: 'schedule-delete-retained',
+        name: '保留课表',
+        ownerName: '测试用户',
+        termLabel: '2025-2026-2',
+        semesterId: '2025-2026-2',
+        firstDay: '2026-03-16',
+        maxWeek: 20,
+        sourceType: CourseScheduleSourceType.manual,
+        isReadOnly: false,
+        createdAt: '2026-03-16T09:00:00.000',
+        updatedAt: '2026-03-16T09:00:00.000',
+        courseData: {
+          '2026-03-18': [
+            Course(
+              name: '操作系统',
+              teacherName: '李老师',
+              weekDuration: '1-16',
+              location: '信工楼301',
+              startSection: 3,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      await saveCourseSchedule(activeSchedule, setActive: true);
+      await saveCourseSchedule(retainedSchedule, setActive: false);
+
+      final deleted = await deleteCourseSchedule(activeSchedule.id);
+      final archive = await loadCourseScheduleArchive();
+      final activeAfterDelete = await loadActiveCourseSchedule();
+
+      expect(deleted, isTrue);
+      expect(archive.schedules.map((schedule) => schedule.id), [
+        retainedSchedule.id,
+      ]);
+      expect(archive.activeScheduleId, retainedSchedule.id);
+      expect(activeAfterDelete?.id, retainedSchedule.id);
+    },
+  );
 
   test(
     'deleteCourseFromActiveSchedule removes target course and persists',
@@ -1971,4 +2325,60 @@ void main() {
       expect(course['pcid'], 'pcid-1');
     },
   );
+
+  test('GetOrgDataWeb records stable experiment week failure reason', () async {
+    SharedPreferences.setMockInitialValues({
+      'token': 'jwxt-token',
+      'my_client_ticket': '',
+    });
+
+    final originalAdapter = dio.httpClientAdapter;
+    dio.httpClientAdapter = _FakeCourseHttpClientAdapter((options) {
+      final path = options.path;
+      if (path == '/njwhd/semesterList') {
+        return _jsonResponse({
+          'code': '1',
+          'data': [
+            {'nowXq': '1', 'semesterId': '2025-2026-2'},
+          ],
+        });
+      }
+      if (path ==
+          '/njwhd/teacher/courseScheduleExp?xnxq01id=2025-2026-2&week=1') {
+        throw StateError(
+          'raw failure https://example.com/callback?token=secret-token',
+        );
+      }
+      if (path.startsWith('/njwhd/teacher/courseScheduleExp?')) {
+        return _jsonResponse({'code': '1', 'data': []});
+      }
+      throw StateError('Unexpected request path: $path');
+    });
+    addTearDown(() {
+      dio.httpClientAdapter = originalAdapter;
+    });
+
+    final getOrgDataWeb = GetOrgDataWeb(token: 'jwxt-token')..maxWeek = 1;
+    getOrgDataWeb.initData();
+
+    await expectLater(
+      getOrgDataWeb.getAllWeekExpClass(
+        null,
+        completedUnitsOffset: 0,
+        totalUnits: 1,
+      ),
+      throwsA(isA<StateError>()),
+    );
+    await saveExperimentRawDataToJson(getOrgDataWeb.expRawWeeklyResponses);
+
+    final rawFile = File('${tempDirectory.path}/experiment_course_raw.json');
+    final rawJson =
+        jsonDecode(await rawFile.readAsString()) as Map<String, dynamic>;
+    final weeks = rawJson['weeks'] as Map<String, dynamic>;
+    final weekOne = weeks['1'] as Map<String, dynamic>;
+
+    expect(weekOne['error'], courseExperimentWeekFetchFailureMessage);
+    expect(jsonEncode(rawJson), isNot(contains('secret-token')));
+    expect(jsonEncode(rawJson), isNot(contains('https://example.com')));
+  });
 }

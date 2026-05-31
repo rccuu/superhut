@@ -391,8 +391,6 @@ class HotWaterControlButton extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final isDisabled = isLoading || !deviceCheckComplete || !hasSelectedDevice;
     final bool isDark = colorScheme.isDarkMode;
-    final bool reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final bool useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
     final Color accent =
         isDisabled
@@ -418,18 +416,10 @@ class HotWaterControlButton extends StatelessWidget {
             : waterStatus
             ? '结束'
             : '开始';
-    final animationDuration =
-        reduceMotion
-            ? Duration.zero
-            : useLiteEffects
-            ? const Duration(milliseconds: 140)
-            : const Duration(milliseconds: 300);
 
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: animationDuration,
-        curve: Curves.easeOutCubic,
+      child: Container(
         width: 176,
         height: 176,
         decoration: BoxDecoration(
@@ -1090,12 +1080,14 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
   const WaterDeviceSelectionSheet({
     super.key,
     required this.devices,
+    required this.deviceCount,
     required this.selectedIndex,
     required this.onManageDevices,
     required this.onSelectDevice,
   });
 
   final List<dynamic> devices;
+  final int deviceCount;
   final int selectedIndex;
   final VoidCallback onManageDevices;
   final ValueChanged<int> onSelectDevice;
@@ -1105,7 +1097,7 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final Color accent = HotWaterPalette.accentStrong(context);
     final maxListHeight = MediaQuery.sizeOf(context).height * 0.5;
-    final listHeight = min(maxListHeight, devices.length * 64.0);
+    final listHeight = min(maxListHeight, deviceCount * 64.0);
 
     return WaterBottomSheetScaffold(
       child: Column(
@@ -1133,7 +1125,7 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
               ],
             ),
           ),
-          if (devices.isEmpty)
+          if (deviceCount == 0)
             const Padding(
               padding: EdgeInsets.all(20),
               child: _EmptyDeviceState(message: '暂无可用设备，请先添加设备'),
@@ -1145,11 +1137,10 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
               child: ListView.builder(
                 padding: EdgeInsets.zero,
                 addAutomaticKeepAlives: false,
-                itemCount: devices.length,
+                addRepaintBoundaries: false,
+                itemCount: deviceCount,
                 itemBuilder: (context, index) {
-                  final Map<String, dynamic> device = Map<String, dynamic>.from(
-                    devices[index] as Map,
-                  );
+                  final device = devices[index] as Map;
                   final bool isSelected = selectedIndex == index;
                   return ListTile(
                     shape: RoundedRectangleBorder(
@@ -1185,11 +1176,13 @@ class WaterDeviceManagementSheet extends StatelessWidget {
   const WaterDeviceManagementSheet({
     super.key,
     required this.devices,
+    required this.deviceCount,
     required this.onAddDevice,
     required this.onDeleteDevice,
   });
 
   final List<dynamic> devices;
+  final int deviceCount;
   final VoidCallback onAddDevice;
   final ValueChanged<int> onDeleteDevice;
 
@@ -1198,7 +1191,7 @@ class WaterDeviceManagementSheet extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final Color accent = HotWaterPalette.accentStrong(context);
     final maxListHeight = MediaQuery.sizeOf(context).height * 0.3;
-    final listHeight = min(maxListHeight, devices.length * 72.0);
+    final listHeight = min(maxListHeight, deviceCount * 72.0);
 
     return WaterBottomSheetScaffold(
       child: Column(
@@ -1240,7 +1233,7 @@ class WaterDeviceManagementSheet extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                if (devices.isEmpty)
+                if (deviceCount == 0)
                   const Padding(
                     padding: EdgeInsets.all(20),
                     child: _EmptyDeviceState(message: '暂无设备，请先添加设备'),
@@ -1251,10 +1244,10 @@ class WaterDeviceManagementSheet extends StatelessWidget {
                     child: ListView.builder(
                       padding: EdgeInsets.zero,
                       addAutomaticKeepAlives: false,
-                      itemCount: devices.length,
+                      addRepaintBoundaries: false,
+                      itemCount: deviceCount,
                       itemBuilder: (context, index) {
-                        final Map<String, dynamic> device =
-                            Map<String, dynamic>.from(devices[index] as Map);
+                        final device = devices[index] as Map;
                         final deviceName =
                             device['posname']?.toString() ?? '未知设备';
                         final deviceCode =
@@ -1303,7 +1296,7 @@ class AddWaterDeviceSheet extends StatefulWidget {
   });
 
   final VoidCallback onClose;
-  final Future<void> Function(String deviceCode) onSubmit;
+  final Future<bool> Function(String deviceCode) onSubmit;
 
   @override
   State<AddWaterDeviceSheet> createState() => _AddWaterDeviceSheetState();
@@ -1311,32 +1304,41 @@ class AddWaterDeviceSheet extends StatefulWidget {
 
 class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
   final TextEditingController _deviceCodeController = TextEditingController();
-  bool _isSubmitting = false;
+  final ValueNotifier<bool> _isSubmitting = ValueNotifier<bool>(false);
 
   @override
   void dispose() {
     _deviceCodeController.dispose();
+    _isSubmitting.dispose();
     super.dispose();
   }
 
   Future<void> _handleSubmit() async {
-    if (_isSubmitting) {
+    if (_isSubmitting.value) {
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
+    _setSubmitting(true);
 
+    var shouldRestoreSubmitting = true;
     try {
-      await widget.onSubmit(_deviceCodeController.text.trim());
+      final closesSheet = await widget.onSubmit(
+        _deviceCodeController.text.trim(),
+      );
+      shouldRestoreSubmitting = !closesSheet;
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
+      if (shouldRestoreSubmitting) {
+        _setSubmitting(false);
       }
     }
+  }
+
+  void _setSubmitting(bool isSubmitting) {
+    if (!mounted || _isSubmitting.value == isSubmitting) {
+      return;
+    }
+
+    _isSubmitting.value = isSubmitting;
   }
 
   @override
@@ -1413,25 +1415,28 @@ class _AddWaterDeviceSheetState extends State<AddWaterDeviceSheet> {
                 SizedBox(
                   width: double.infinity,
                   height: 50,
-                  child: FilledButton(
-                    onPressed: _handleSubmit,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: accent,
-                      foregroundColor: buttonForeground,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child:
-                        _isSubmitting
-                            ? AppLoadingIndicator(
-                              size: 20,
-                              color: buttonForeground,
-                            )
-                            : const Text(
-                              '添加设备',
-                              style: TextStyle(fontSize: 18),
-                            ),
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: _isSubmitting,
+                    child: const Text('添加设备', style: TextStyle(fontSize: 18)),
+                    builder: (context, isSubmitting, submitLabel) {
+                      return FilledButton(
+                        onPressed: _handleSubmit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          foregroundColor: buttonForeground,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child:
+                            isSubmitting
+                                ? AppLoadingIndicator(
+                                  size: 20,
+                                  color: buttonForeground,
+                                )
+                                : submitLabel,
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -1553,159 +1558,5 @@ class _EmptyDeviceState extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class BubbleAnimation extends StatefulWidget {
-  const BubbleAnimation({
-    super.key,
-    required this.isActive,
-    this.color = Colors.blue,
-  });
-
-  final bool isActive;
-  final Color color;
-
-  @override
-  State<BubbleAnimation> createState() => _BubbleAnimationState();
-}
-
-class _BubbleAnimationState extends State<BubbleAnimation>
-    with SingleTickerProviderStateMixin {
-  static const List<_BubbleSpec> _bubbleSpecs = [
-    _BubbleSpec(xFactor: 0.12, size: 10, speed: 0.44, drift: 18, phase: 0.02),
-    _BubbleSpec(xFactor: 0.23, size: 18, speed: 0.36, drift: -22, phase: 0.20),
-    _BubbleSpec(xFactor: 0.35, size: 12, speed: 0.50, drift: 12, phase: 0.38),
-    _BubbleSpec(xFactor: 0.47, size: 22, speed: 0.32, drift: -16, phase: 0.56),
-    _BubbleSpec(xFactor: 0.60, size: 14, speed: 0.48, drift: 20, phase: 0.72),
-    _BubbleSpec(xFactor: 0.74, size: 20, speed: 0.34, drift: -14, phase: 0.12),
-    _BubbleSpec(xFactor: 0.88, size: 11, speed: 0.54, drift: 16, phase: 0.84),
-  ];
-
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 14),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.isActive) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void didUpdateWidget(BubbleAnimation oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) {
-      _controller.repeat();
-    } else if (!widget.isActive && oldWidget.isActive) {
-      _controller.stop();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.isActive) {
-      return const SizedBox.shrink();
-    }
-
-    return IgnorePointer(
-      child: RepaintBoundary(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return CustomPaint(
-              size: Size.infinite,
-              isComplex: true,
-              willChange: true,
-              painter: _BubblePainter(
-                progress: _controller.value,
-                color: widget.color,
-                bubbles: _bubbleSpecs,
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _BubbleSpec {
-  const _BubbleSpec({
-    required this.xFactor,
-    required this.size,
-    required this.speed,
-    required this.drift,
-    required this.phase,
-  });
-
-  final double xFactor;
-  final double size;
-  final double speed;
-  final double drift;
-  final double phase;
-}
-
-class _BubblePainter extends CustomPainter {
-  const _BubblePainter({
-    required this.progress,
-    required this.color,
-    required this.bubbles,
-  });
-
-  final double progress;
-  final Color color;
-  final List<_BubbleSpec> bubbles;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) {
-      return;
-    }
-
-    final fillPaint = Paint()..style = PaintingStyle.fill;
-    final strokePaint =
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1;
-    final travel = size.height + 120;
-
-    for (final bubble in bubbles) {
-      final cycle = (progress * bubble.speed + bubble.phase) % 1.0;
-      final fadeIn = (cycle / 0.16).clamp(0.0, 1.0);
-      final fadeOut = ((1.0 - cycle) / 0.30).clamp(0.0, 1.0);
-      final opacity = fadeIn < fadeOut ? fadeIn : fadeOut;
-      if (opacity <= 0.01) {
-        continue;
-      }
-
-      final wave = sin((cycle + bubble.phase) * pi * 2);
-      final center = Offset(
-        size.width * bubble.xFactor + wave * bubble.drift,
-        size.height + bubble.size - cycle * travel,
-      );
-      final radius = bubble.size / 2;
-
-      fillPaint.color = color.withValues(alpha: opacity * 0.26);
-      strokePaint.color = color.withValues(alpha: opacity * 0.38);
-      canvas.drawCircle(center, radius, fillPaint);
-      canvas.drawCircle(center, radius, strokePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _BubblePainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.color != color ||
-        oldDelegate.bubbles != bubbles;
   }
 }

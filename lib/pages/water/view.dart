@@ -1,14 +1,37 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/ui/ambient_bubble_field.dart';
+import '../../core/ui/app_bottom_sheet.dart';
 import '../../core/ui/app_snack_bar.dart';
 import 'logic.dart';
 import 'widgets/water_page_widgets.dart';
 
+typedef HotWaterBottomSheetPresenter =
+    Future<T?> Function<T>({
+      required BuildContext context,
+      required WidgetBuilder builder,
+      bool expand,
+      Color? backgroundColor,
+      Radius? topRadius,
+      BoxShadow? shadow,
+    });
+typedef HotWaterUrlOpener = Future<bool> Function(Uri url);
+
 class FunctionHotWaterPage extends StatefulWidget {
-  const FunctionHotWaterPage({super.key});
+  const FunctionHotWaterPage({
+    super.key,
+    this.logic,
+    this.showBottomSheet,
+    this.openRechargePage,
+  });
+
+  final FunctionHotWaterLogic? logic;
+  final HotWaterBottomSheetPresenter? showBottomSheet;
+  final HotWaterUrlOpener? openRechargePage;
 
   @override
   State<FunctionHotWaterPage> createState() => _FunctionHotWaterPageState();
@@ -16,14 +39,46 @@ class FunctionHotWaterPage extends StatefulWidget {
 
 class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
   static const Radius _hotWaterSheetTopRadius = Radius.circular(28);
-  final FunctionHotWaterLogic logic = Get.put(FunctionHotWaterLogic());
+  late final FunctionHotWaterLogic logic;
+  late final bool _ownsLogic;
   final Uri _url = Uri.parse(
     'alipays://platformapi/startapp?appId=2019030163398604&page=pages/index/index',
   );
+  bool _isDeviceSelectionSheetOpen = false;
+  bool _isDeviceManagementSheetOpen = false;
+  bool _isAddDeviceSheetOpen = false;
+  bool _isOpeningRechargePage = false;
+  bool _isDeleteConfirmationOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final injectedLogic = widget.logic;
+    if (injectedLogic != null) {
+      logic = injectedLogic;
+      _ownsLogic = false;
+    } else {
+      logic = Get.put(FunctionHotWaterLogic());
+      _ownsLogic = true;
+    }
+  }
 
   Future<void> _launchUrl() async {
-    if (!await launchUrl(_url)) {
+    if (_isOpeningRechargePage) {
+      return;
+    }
+
+    _isOpeningRechargePage = true;
+    try {
+      final openRechargePage =
+          widget.openRechargePage ?? (Uri url) => launchUrl(url);
+      if (!await openRechargePage(_url)) {
+        _showSnackBar('无法打开校园卡页面', type: AppSnackBarType.error);
+      }
+    } catch (_) {
       _showSnackBar('无法打开校园卡页面', type: AppSnackBarType.error);
+    } finally {
+      _isOpeningRechargePage = false;
     }
   }
 
@@ -54,6 +109,18 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     );
   }
 
+  Future<T?> _showHotWaterSheet<T>({required WidgetBuilder builder}) {
+    final presenter = widget.showBottomSheet ?? showAppAdaptiveBottomSheet;
+    return presenter<T>(
+      context: context,
+      expand: false,
+      backgroundColor: _hotWaterSheetBackgroundColor(),
+      topRadius: _hotWaterSheetTopRadius,
+      shadow: _hotWaterSheetShadow(),
+      builder: builder,
+    );
+  }
+
   void _handleWaterToggle() {
     final isDisabled =
         logic.state.isLoading.value || !logic.state.deviceCheckComplete.value;
@@ -78,18 +145,20 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
   }
 
   void _showDeviceSelectionDialog() {
-    showCupertinoModalBottomSheet(
-      context: context,
-      expand: false,
-      backgroundColor: _hotWaterSheetBackgroundColor(),
-      topRadius: _hotWaterSheetTopRadius,
-      shadow: _hotWaterSheetShadow(),
+    if (_isDeviceSelectionSheetOpen) {
+      return;
+    }
+
+    _isDeviceSelectionSheetOpen = true;
+    final sheet = _showHotWaterSheet<void>(
       builder:
           (sheetContext) => Obx(() {
-            final devices = List<dynamic>.from(logic.state.deviceList);
+            final devices = logic.state.deviceList;
+            final deviceCount = devices.length;
 
             return WaterDeviceSelectionSheet(
               devices: devices,
+              deviceCount: deviceCount,
               selectedIndex: logic.state.choiceDevice.value,
               onManageDevices: () {
                 Navigator.of(sheetContext).pop();
@@ -107,6 +176,15 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
             );
           }),
     );
+    unawaited(_trackWaterDeviceSelectionSheet(sheet));
+  }
+
+  Future<void> _trackWaterDeviceSelectionSheet(Future<void> sheet) async {
+    try {
+      await sheet;
+    } finally {
+      _isDeviceSelectionSheetOpen = false;
+    }
   }
 
   Future<void> _confirmDeleteDevice(
@@ -114,72 +192,81 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     String deviceName,
     String deviceCode,
   ) async {
-    final shouldDelete =
-        await showDialog<bool>(
-          context: sheetContext,
-          builder:
-              (dialogContext) => AlertDialog(
-                title: const Text('删除设备'),
-                content: Text('确定要删除设备 "$deviceName" 吗？'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(false),
-                    child: const Text('取消'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(true),
-                    child: Text(
-                      '确定',
-                      style: TextStyle(
-                        color: Theme.of(dialogContext).colorScheme.error,
+    if (_isDeleteConfirmationOpen) {
+      return;
+    }
+
+    _isDeleteConfirmationOpen = true;
+    try {
+      final shouldDelete =
+          await showDialog<bool>(
+            context: sheetContext,
+            builder:
+                (dialogContext) => AlertDialog(
+                  title: const Text('删除设备'),
+                  content: Text('确定要删除设备 "$deviceName" 吗？'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(true),
+                      child: Text(
+                        '确定',
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-        ) ??
-        false;
+                  ],
+                ),
+          ) ??
+          false;
 
-    if (!shouldDelete || !mounted) {
-      return;
-    }
+      if (!shouldDelete || !mounted) {
+        return;
+      }
 
-    await logic.deleteDevice(deviceCode);
-    if (!mounted) {
-      return;
-    }
+      final success = await logic.deleteDevice(deviceCode);
+      if (!mounted || !success) {
+        return;
+      }
 
-    if (sheetContext.mounted) {
-      Navigator.of(sheetContext).pop();
+      if (sheetContext.mounted) {
+        Navigator.of(sheetContext).pop();
+      }
+      _showDeviceSelectionDialog();
+    } finally {
+      _isDeleteConfirmationOpen = false;
     }
-    _showDeviceSelectionDialog();
   }
 
   void _showDeviceManagementDialog() {
-    showCupertinoModalBottomSheet(
-      context: context,
-      expand: false,
-      backgroundColor: _hotWaterSheetBackgroundColor(),
-      topRadius: _hotWaterSheetTopRadius,
-      shadow: _hotWaterSheetShadow(),
+    if (_isDeviceManagementSheetOpen) {
+      return;
+    }
+
+    _isDeviceManagementSheetOpen = true;
+    final sheet = _showHotWaterSheet<void>(
       builder:
           (sheetContext) => Obx(() {
-            final devices = List<dynamic>.from(logic.state.deviceList);
+            final devices = logic.state.deviceList;
+            final deviceCount = devices.length;
 
             return WaterDeviceManagementSheet(
               devices: devices,
+              deviceCount: deviceCount,
               onAddDevice: () {
                 Navigator.of(sheetContext).pop();
                 _showAddDevicePage();
               },
               onDeleteDevice: (index) {
-                if (index < 0 || index >= devices.length) {
+                if (index < 0 || index >= deviceCount) {
                   return;
                 }
 
-                final Map<String, dynamic> device = Map<String, dynamic>.from(
-                  devices[index] as Map,
-                );
+                final device = devices[index] as Map;
                 _confirmDeleteDevice(
                   sheetContext,
                   device['posname']?.toString() ?? '未知设备',
@@ -189,41 +276,62 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
             );
           }),
     );
+    unawaited(_trackWaterDeviceManagementSheet(sheet));
+  }
+
+  Future<void> _trackWaterDeviceManagementSheet(Future<void> sheet) async {
+    try {
+      await sheet;
+    } finally {
+      _isDeviceManagementSheetOpen = false;
+    }
   }
 
   void _showAddDevicePage() {
-    showCupertinoModalBottomSheet(
-      context: context,
-      expand: false,
-      backgroundColor: _hotWaterSheetBackgroundColor(),
-      topRadius: _hotWaterSheetTopRadius,
-      shadow: _hotWaterSheetShadow(),
+    if (_isAddDeviceSheetOpen) {
+      return;
+    }
+
+    _isAddDeviceSheetOpen = true;
+    final sheet = _showHotWaterSheet<void>(
       builder:
           (sheetContext) => AddWaterDeviceSheet(
             onClose: () => Navigator.of(sheetContext).pop(),
             onSubmit: (deviceCode) async {
               if (deviceCode.isEmpty) {
                 _showSnackBar('请输入设备号', type: AppSnackBarType.warning);
-                return;
+                return false;
               }
 
               final success = await logic.addDevice(deviceCode);
               if (!mounted || !success) {
-                return;
+                return false;
               }
 
               if (sheetContext.mounted) {
                 Navigator.of(sheetContext).pop();
               }
               _showDeviceSelectionDialog();
+              return true;
             },
           ),
     );
+    unawaited(_trackAddWaterDeviceSheet(sheet));
+  }
+
+  Future<void> _trackAddWaterDeviceSheet(Future<void> sheet) async {
+    try {
+      await sheet;
+    } finally {
+      _isAddDeviceSheetOpen = false;
+    }
   }
 
   @override
   void dispose() {
-    Get.delete<FunctionHotWaterLogic>();
+    if (_ownsLogic) {
+      Get.delete<FunctionHotWaterLogic>();
+    }
     super.dispose();
   }
 
@@ -257,104 +365,115 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
         children: [
           Positioned.fill(
             child: Obx(
-              () => RepaintBoundary(
-                child: WaterBackground(
-                  waterStatus: logic.state.waterStatus.value,
-                ),
-              ),
+              () => WaterBackground(waterStatus: logic.state.waterStatus.value),
             ),
           ),
           SafeArea(
             child: RepaintBoundary(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Obx(() {
-                      final state = logic.state;
-                      final selectedIndex = state.choiceDevice.value;
-                      final hasSelectedDevice =
-                          state.deviceList.isNotEmpty &&
-                          selectedIndex >= 0 &&
-                          selectedIndex < state.deviceList.length;
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compactHeight = constraints.maxHeight < 680;
+                  final minContentHeight =
+                      (constraints.maxHeight - 36)
+                          .clamp(0.0, double.infinity)
+                          .toDouble();
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: minContentHeight),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Obx(() {
+                            final state = logic.state;
+                            final selectedIndex = state.choiceDevice.value;
+                            final hasSelectedDevice =
+                                state.deviceList.isNotEmpty &&
+                                selectedIndex >= 0 &&
+                                selectedIndex < state.deviceList.length;
 
-                      return HotWaterStatusHeader(
-                        waterStatus: state.waterStatus.value,
-                        hasSelectedDevice: hasSelectedDevice,
-                      );
-                    }),
-                    const SizedBox(height: 16),
-                    Obx(() {
-                      final state = logic.state;
-                      final selectedIndex = state.choiceDevice.value;
-                      final hasSelectedDevice =
-                          state.deviceList.isNotEmpty &&
-                          selectedIndex >= 0 &&
-                          selectedIndex < state.deviceList.length;
-                      final deviceName =
-                          hasSelectedDevice
-                              ? state.deviceList[selectedIndex]['posname']
-                                  ?.toString()
-                              : null;
-
-                      return HotWaterCurrentDeviceCard(
-                        deviceName: deviceName,
-                        hasSelectedDevice: hasSelectedDevice,
-                        onTap: _showDeviceSelectionDialog,
-                      );
-                    }),
-                    Expanded(
-                      child: Obx(() {
-                        final state = logic.state;
-                        final selectedIndex = state.choiceDevice.value;
-                        final hasSelectedDevice =
-                            state.deviceList.isNotEmpty &&
-                            selectedIndex >= 0 &&
-                            selectedIndex < state.deviceList.length;
-                        final isLoading = state.isLoading.value;
-                        final deviceCheckComplete =
-                            state.deviceCheckComplete.value;
-
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            HotWaterControlButton(
-                              isLoading: isLoading,
-                              deviceCheckComplete: deviceCheckComplete,
+                            return HotWaterStatusHeader(
                               waterStatus: state.waterStatus.value,
                               hasSelectedDevice: hasSelectedDevice,
-                              onTap: _handleWaterToggle,
-                            ),
-                            HotWaterActionHint(
-                              isLoading: isLoading,
-                              deviceCheckComplete: deviceCheckComplete,
-                              hasSelectedDevice: hasSelectedDevice,
-                            ),
-                          ],
-                        );
-                      }),
-                    ),
-                    Obx(() {
-                      final balance = logic.state.balance.value;
-                      if (balance == 'null') {
-                        return const SizedBox.shrink();
-                      }
+                            );
+                          }),
+                          const SizedBox(height: 16),
+                          Obx(() {
+                            final state = logic.state;
+                            final selectedIndex = state.choiceDevice.value;
+                            final hasSelectedDevice =
+                                state.deviceList.isNotEmpty &&
+                                selectedIndex >= 0 &&
+                                selectedIndex < state.deviceList.length;
+                            final deviceName =
+                                hasSelectedDevice
+                                    ? state.deviceList[selectedIndex]['posname']
+                                        ?.toString()
+                                    : null;
 
-                      return HotWaterBalanceCard(
-                        balance: balance,
-                        onTap: _launchUrl,
-                      );
-                    }),
-                  ],
-                ),
+                            return HotWaterCurrentDeviceCard(
+                              deviceName: deviceName,
+                              hasSelectedDevice: hasSelectedDevice,
+                              onTap: _showDeviceSelectionDialog,
+                            );
+                          }),
+                          SizedBox(height: compactHeight ? 20 : 28),
+                          Obx(() {
+                            final state = logic.state;
+                            final selectedIndex = state.choiceDevice.value;
+                            final hasSelectedDevice =
+                                state.deviceList.isNotEmpty &&
+                                selectedIndex >= 0 &&
+                                selectedIndex < state.deviceList.length;
+                            final isLoading = state.isLoading.value;
+                            final deviceCheckComplete =
+                                state.deviceCheckComplete.value;
+
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                HotWaterControlButton(
+                                  isLoading: isLoading,
+                                  deviceCheckComplete: deviceCheckComplete,
+                                  waterStatus: state.waterStatus.value,
+                                  hasSelectedDevice: hasSelectedDevice,
+                                  onTap: _handleWaterToggle,
+                                ),
+                                HotWaterActionHint(
+                                  isLoading: isLoading,
+                                  deviceCheckComplete: deviceCheckComplete,
+                                  hasSelectedDevice: hasSelectedDevice,
+                                ),
+                              ],
+                            );
+                          }),
+                          SizedBox(height: compactHeight ? 16 : 28),
+                          Obx(() {
+                            final balance = logic.state.balance.value;
+                            if (balance == 'null') {
+                              return const SizedBox.shrink();
+                            }
+
+                            return HotWaterBalanceCard(
+                              balance: balance,
+                              onTap: _launchUrl,
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
           Positioned.fill(
             child: Obx(() {
               final isActive = logic.state.waterStatus.value;
-              return BubbleAnimation(
+              return AmbientBubbleField.hotWater(
                 isActive: isActive,
                 color: HotWaterPalette.accentStrong(context, active: isActive),
               );

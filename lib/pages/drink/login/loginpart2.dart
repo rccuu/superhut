@@ -10,6 +10,7 @@ class DrinkLoginPage2 extends StatefulWidget {
   final String doubleRandom;
   final String timestamp;
   final String imageCode;
+  final DrinkLoginCommand? command;
 
   const DrinkLoginPage2({
     super.key,
@@ -17,6 +18,7 @@ class DrinkLoginPage2 extends StatefulWidget {
     required this.doubleRandom,
     required this.timestamp,
     required this.imageCode,
+    this.command,
   });
 
   @override
@@ -25,16 +27,34 @@ class DrinkLoginPage2 extends StatefulWidget {
 
 class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
   final TextEditingController _codeController = TextEditingController();
-  final DrinkLoginCommand _command = DrinkLoginCommand();
-  bool _isSubmitting = false;
+  final ValueNotifier<bool> _isSubmitting = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isReturningForCode = ValueNotifier<bool>(false);
+  late final DrinkLoginCommand _command;
+  late final bool _ownsCommand;
+
+  @override
+  void initState() {
+    super.initState();
+    _command = widget.command ?? DrinkLoginCommand();
+    _ownsCommand = widget.command == null;
+  }
 
   @override
   void dispose() {
     _codeController.dispose();
+    _isSubmitting.dispose();
+    _isReturningForCode.dispose();
+    if (_ownsCommand) {
+      _command.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _submitLogin() async {
+    if (_isSubmitting.value) {
+      return;
+    }
+
     if (_codeController.text.isEmpty) {
       showAppSnackBar(
         context,
@@ -44,19 +64,41 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
+    _setSubmitting(true);
 
     try {
       await _command.login(widget.phoneNumber, _codeController.text, context);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+      _setSubmitting(false);
     }
+  }
+
+  Future<void> _returnForCode() async {
+    if (_isReturningForCode.value) {
+      return;
+    }
+
+    _setReturningForCode(true);
+    final didPop = await Navigator.maybePop(context);
+    if (!didPop) {
+      _setReturningForCode(false);
+    }
+  }
+
+  void _setSubmitting(bool isSubmitting) {
+    if (!mounted || _isSubmitting.value == isSubmitting) {
+      return;
+    }
+
+    _isSubmitting.value = isSubmitting;
+  }
+
+  void _setReturningForCode(bool isReturningForCode) {
+    if (!mounted || _isReturningForCode.value == isReturningForCode) {
+      return;
+    }
+
+    _isReturningForCode.value = isReturningForCode;
   }
 
   @override
@@ -92,27 +134,39 @@ class _DrinkLoginPage2State extends State<DrinkLoginPage2> {
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => Navigator.maybePop(context),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _isReturningForCode,
               child: const Text('重新获取验证码'),
+              builder: (context, isReturningForCode, label) {
+                return TextButton(
+                  onPressed: isReturningForCode ? null : _returnForCode,
+                  child: label!,
+                );
+              },
             ),
           ),
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             height: 52,
-            child: FilledButton(
-              onPressed: _isSubmitting ? null : _submitLogin,
-              child:
-                  _isSubmitting
-                      ? const AppLoadingIndicator(size: 22, color: Colors.white)
-                      : const Text(
-                        '完成登录',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _isSubmitting,
+              child: const Text(
+                '完成登录',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              builder: (context, isSubmitting, label) {
+                return FilledButton(
+                  onPressed: isSubmitting ? null : _submitLogin,
+                  child:
+                      isSubmitting
+                          ? const AppLoadingIndicator(
+                            size: 22,
+                            color: Colors.white,
+                          )
+                          : label,
+                );
+              },
             ),
           ),
           const SizedBox(height: 10),

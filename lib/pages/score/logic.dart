@@ -116,7 +116,10 @@ Future<SemesterListResult> semesterIdfc() async {
   }
 }
 
-Future<ScoreLoadResult> getScore(String semesterId) async {
+Future<ScoreLoadResult> getScore(
+  String semesterId, {
+  bool persistSummary = true,
+}) async {
   try {
     final Response<dynamic> response = await postDioWithCookie(
       '/njwhd/student/termGPA?semester=$semesterId&type=1',
@@ -183,10 +186,12 @@ Future<ScoreLoadResult> getScore(String semesterId) async {
       );
     }
     AppLogger.debug('Loaded ${reList.length} score items');
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('yxzxf', yxzxf);
-    await prefs.setString('zxfjd', zxfjd);
-    await prefs.setString('pjxfjd', pjxfjd);
+    if (persistSummary) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('yxzxf', yxzxf);
+      await prefs.setString('zxfjd', zxfjd);
+      await prefs.setString('pjxfjd', pjxfjd);
+    }
 
     return ScoreLoadResult(
       achievement: reList,

@@ -36,4 +36,24 @@ void main() {
       expect(token, jwxtToken);
     });
   });
+
+  group('HUT login error messages', () {
+    test('credential extraction failure hides raw exception', () {
+      final message = hutLoginCredentialExtractionFailureMessage(
+        StateError('cookie unavailable'),
+      );
+
+      expect(message, '提取登录凭据失败，请稍后重试');
+      expect(message, isNot(contains('cookie unavailable')));
+    });
+
+    test('page load failure hides raw webview description', () {
+      final message = hutLoginPageLoadFailureMessage(
+        Exception('net::ERR_NAME_NOT_RESOLVED'),
+      );
+
+      expect(message, '页面加载失败，请稍后重试');
+      expect(message, isNot(contains('ERR_NAME_NOT_RESOLVED')));
+    });
+  });
 }

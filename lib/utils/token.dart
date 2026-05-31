@@ -8,7 +8,14 @@ import '../core/services/app_logger.dart';
 import '../login/hut_cas_login_page.dart';
 import '../login/unified_login_page.dart';
 
+typedef TokenValidityChecker = Future<bool> Function();
+typedef JwxtCredentialRenewer =
+    Future<bool> Function(String userNo, String password);
+
 bool _isReauthPromptShowing = false;
+Future<bool>? _renewTokenLoad;
+TokenValidityChecker? _checkTokenValidForTest;
+JwxtCredentialRenewer? _loginHutForTest;
 
 Future<void> saveToken(String token) async {
   final storage = AppAuthStorage.instance;
@@ -39,10 +46,35 @@ Future<bool> checkTokenValid() async {
   }
 }
 
-Future<bool> renewToken(BuildContext context) async {
+Future<bool> renewToken(BuildContext context) {
+  final inFlight = _renewTokenLoad;
+  if (inFlight != null) {
+    return inFlight;
+  }
+
+  late final Future<bool> load;
+  load = _runRenewTokenLoad(context, () => load);
+  _renewTokenLoad = load;
+  return load;
+}
+
+Future<bool> _runRenewTokenLoad(
+  BuildContext context,
+  Future<bool> Function() currentLoad,
+) async {
+  try {
+    return await _renewToken(context);
+  } finally {
+    if (identical(_renewTokenLoad, currentLoad())) {
+      _renewTokenLoad = null;
+    }
+  }
+}
+
+Future<bool> _renewToken(BuildContext context) async {
   final storage = AppAuthStorage.instance;
   final type = await storage.readLoginType();
-  final isValid = await checkTokenValid();
+  final isValid = await (_checkTokenValidForTest ?? checkTokenValid)();
   if (isValid) {
     return true;
   }
@@ -58,7 +90,7 @@ Future<bool> renewToken(BuildContext context) async {
     }
 
     try {
-      final renewed = await loginHut(user, password);
+      final renewed = await (_loginHutForTest ?? loginHut)(user, password);
       if (!renewed) {
         if (context.mounted) {
           await _showReauthPrompt(context);
@@ -133,4 +165,21 @@ Future<void> _showReauthPrompt(BuildContext context) async {
   } finally {
     _isReauthPromptShowing = false;
   }
+}
+
+@visibleForTesting
+void setRenewTokenTestOverrides({
+  TokenValidityChecker? checkTokenValid,
+  JwxtCredentialRenewer? loginHut,
+}) {
+  _checkTokenValidForTest = checkTokenValid;
+  _loginHutForTest = loginHut;
+}
+
+@visibleForTesting
+void resetRenewTokenForTest() {
+  _renewTokenLoad = null;
+  _isReauthPromptShowing = false;
+  _checkTokenValidForTest = null;
+  _loginHutForTest = null;
 }

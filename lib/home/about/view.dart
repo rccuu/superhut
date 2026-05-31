@@ -1,48 +1,45 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/services/app_logger.dart';
 import '../../core/services/app_update_service.dart';
 import '../../core/ui/app_loading_indicator.dart';
+import '../../core/ui/app_page_route.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import 'support_page.dart';
 import 'trust_page.dart';
 
+typedef AboutPageRouteOpener = Future<void> Function(BuildContext context);
+typedef AboutUrlOpener = Future<bool> Function(Uri url);
+typedef AboutUpdateChecker =
+    Future<AppUpdateCheckResult> Function({required String currentVersion});
+typedef AboutVersionLoader = Future<String> Function();
+
 class AboutPage extends StatefulWidget {
-  const AboutPage({super.key});
+  const AboutPage({
+    super.key,
+    this.openTrustPage,
+    this.openSupportPage,
+    this.openUrl,
+    this.checkForUpdate,
+    this.loadVersion,
+  });
+
+  final AboutPageRouteOpener? openTrustPage;
+  final AboutPageRouteOpener? openSupportPage;
+  final AboutUrlOpener? openUrl;
+  final AboutUpdateChecker? checkForUpdate;
+  final AboutVersionLoader? loadVersion;
 
   static Route<void> route() {
-    final isAndroid =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-    if (!isAndroid) {
-      return MaterialPageRoute<void>(builder: (context) => const AboutPage());
-    }
-
-    return PageRouteBuilder<void>(
-      transitionDuration: const Duration(milliseconds: 160),
-      reverseTransitionDuration: const Duration(milliseconds: 140),
-      pageBuilder:
-          (context, animation, secondaryAnimation) => const AboutPage(),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curve = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curve,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.02),
-              end: Offset.zero,
-            ).animate(curve),
-            child: child,
-          ),
-        );
-      },
+    return buildAppPageRoute<void>(
+      builder: (context) => const AboutPage(),
+      androidTransitionDuration: const Duration(milliseconds: 160),
+      androidReverseTransitionDuration: const Duration(milliseconds: 140),
+      androidSlideOffset: const Offset(0, 0.02),
     );
   }
 
@@ -61,8 +58,11 @@ class _AboutPageState extends State<AboutPage> {
     'https://github.com/rccuu/superhut/releases',
   );
 
-  String _version = '--';
-  bool _isCheckingUpdate = false;
+  final ValueNotifier<_AboutHeroState> _heroState =
+      ValueNotifier<_AboutHeroState>(const _AboutHeroState());
+  bool _isOpeningTrustPage = false;
+  bool _isOpeningSupportPage = false;
+  bool _isOpeningUrl = false;
 
   @override
   void initState() {
@@ -73,47 +73,104 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   Future<void> _loadVersion() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _version = packageInfo.version;
-    });
-  }
-
-  Future<void> _openUrl(Uri url) async {
-    final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
-    if (!opened && mounted) {
-      showAppSnackBar(
-        context,
-        message: '无法打开链接：$url',
-        type: AppSnackBarType.error,
+    try {
+      final versionLoader = widget.loadVersion;
+      final version =
+          versionLoader != null
+              ? await versionLoader()
+              : (await PackageInfo.fromPlatform()).version;
+      _applyVersionIfChanged(version);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to read app version from about page',
+        error: error,
+        stackTrace: stackTrace,
       );
     }
   }
 
-  Future<void> _checkForUpdates() async {
-    if (_isCheckingUpdate) {
+  void _applyVersionIfChanged(String version) {
+    final currentState = _heroState.value;
+    if (!mounted || currentState.version == version) {
       return;
     }
 
-    setState(() {
-      _isCheckingUpdate = true;
-    });
+    _heroState.value = currentState.copyWith(version: version);
+  }
 
-    final result = await AppUpdateService.checkForUpdate(
-      currentVersion: _version,
-    );
+  Future<void> _openUrl(Uri url) async {
+    if (_isOpeningUrl) {
+      return;
+    }
 
+    _isOpeningUrl = true;
+    try {
+      final opener = widget.openUrl;
+      final opened =
+          opener != null
+              ? await opener(url)
+              : await launchUrl(url, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开链接，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open about page link',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开链接，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } finally {
+      _isOpeningUrl = false;
+    }
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (_heroState.value.isCheckingUpdate) {
+      return;
+    }
+
+    _setCheckingUpdate(true);
+    final result = await _runUpdateCheckSafely();
+    if (!mounted) {
+      return;
+    }
+    _setCheckingUpdate(false);
+    _handleUpdateCheckResult(result);
+  }
+
+  Future<AppUpdateCheckResult> _runUpdateCheckSafely() async {
+    try {
+      final checker = widget.checkForUpdate ?? AppUpdateService.checkForUpdate;
+      return await checker(currentVersion: _heroState.value.version);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to check app update from about page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return const AppUpdateCheckResult(status: AppUpdateCheckStatus.failed);
+    }
+  }
+
+  void _handleUpdateCheckResult(AppUpdateCheckResult result) {
     if (!mounted) {
       return;
     }
 
-    setState(() {
-      _isCheckingUpdate = false;
-    });
+    if (_heroState.value.isCheckingUpdate) {
+      _setCheckingUpdate(false);
+    }
 
     switch (result.status) {
       case AppUpdateCheckStatus.available:
@@ -125,8 +182,19 @@ class _AboutPageState extends State<AboutPage> {
       case AppUpdateCheckStatus.invalidVersion:
         _showMessage('当前版本号格式无效，暂时无法检查更新');
       case AppUpdateCheckStatus.failed:
-        _showMessage(result.errorMessage ?? '检查更新失败，请稍后重试');
+        _showMessage(appUpdateCheckFailureMessage);
     }
+  }
+
+  void _setCheckingUpdate(bool isCheckingUpdate) {
+    final currentState = _heroState.value;
+    if (!mounted || currentState.isCheckingUpdate == isCheckingUpdate) {
+      return;
+    }
+
+    _heroState.value = currentState.copyWith(
+      isCheckingUpdate: isCheckingUpdate,
+    );
   }
 
   void _showMessage(String message) {
@@ -189,11 +257,69 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   Future<void> _openTrustPage() async {
-    await Navigator.of(context).push(TrustCenterPage.route());
+    if (_isOpeningTrustPage) {
+      return;
+    }
+
+    _isOpeningTrustPage = true;
+    try {
+      await (widget.openTrustPage ?? _pushTrustPage)(context);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open trust page from about page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开信任说明，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } finally {
+      _isOpeningTrustPage = false;
+    }
   }
 
   Future<void> _openSupportPage() async {
+    if (_isOpeningSupportPage) {
+      return;
+    }
+
+    _isOpeningSupportPage = true;
+    try {
+      await (widget.openSupportPage ?? _pushSupportPage)(context);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open support page from about page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开支持方式，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } finally {
+      _isOpeningSupportPage = false;
+    }
+  }
+
+  Future<void> _pushTrustPage(BuildContext context) async {
+    await Navigator.of(context).push(TrustCenterPage.route());
+  }
+
+  Future<void> _pushSupportPage(BuildContext context) async {
     await Navigator.of(context).push(SupportPage.route());
+  }
+
+  @override
+  void dispose() {
+    _heroState.dispose();
+    super.dispose();
   }
 
   @override
@@ -201,8 +327,9 @@ class _AboutPageState extends State<AboutPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final topInset = MediaQuery.paddingOf(context).top;
-    final useLiteLayout =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final useLiteLayout = AppGlassPerformanceScope.shouldUseLiteLayoutOf(
+      context,
+    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -213,130 +340,126 @@ class _AboutPageState extends State<AboutPage> {
             ListView(
               padding: EdgeInsets.fromLTRB(16, topInset + 74, 16, 28),
               children: [
-                RepaintBoundary(
-                  child: _AboutHeroCard(
-                    version: _version,
-                    isCheckingUpdate: _isCheckingUpdate,
-                    useLiteEffects: useLiteLayout,
-                    onCheckUpdates:
-                        _isCheckingUpdate || _version == '--'
-                            ? null
-                            : _checkForUpdates,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                RepaintBoundary(
-                  child: _AboutSectionPanel(
-                    icon: Ionicons.shield_checkmark_outline,
-                    title: '信任与隐私',
-                    tint: colorScheme.secondary,
-                    useLiteEffects: useLiteLayout,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _AboutFactLine(text: '当前仓库、上游仓库和版本发布页都公开可见。'),
-                        const SizedBox(height: 10),
-                        _AboutFactLine(text: '应用内更新检查直接读取 GitHub Releases 信息。'),
-                        const SizedBox(height: 10),
-                        _AboutFactLine(
-                          text: '当前公开代码里，主要业务域名是学校系统、服务提供方和 GitHub。',
-                        ),
-                        const SizedBox(height: 10),
-                        _AboutFactLine(text: '密码优先走系统安全存储，登录态和缓存默认保存在本机。'),
-                        const SizedBox(height: 18),
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: [
-                            FilledButton.tonalIcon(
-                              onPressed: _openTrustPage,
-                              icon: const Icon(
-                                Ionicons.shield_checkmark_outline,
-                                size: 18,
-                              ),
-                              label: const Text('查看完整说明'),
-                            ),
-                            FilledButton.tonalIcon(
-                              onPressed: () => _openUrl(_releaseUrl),
-                              icon: const Icon(
-                                Ionicons.download_outline,
-                                size: 18,
-                              ),
-                              label: const Text('打开版本发布'),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                RepaintBoundary(
-                  child: _AboutSectionPanel(
-                    icon: Ionicons.heart_outline,
-                    title: '支持项目',
-                    tint: const Color(0xFF199A7A),
-                    useLiteEffects: useLiteLayout,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _AboutFactLine(text: '想支持的话，这里有个入口。'),
-                        const SizedBox(height: 18),
-                        FilledButton.tonalIcon(
-                          onPressed: _openSupportPage,
-                          icon: const Icon(Ionicons.heart_outline, size: 18),
-                          label: const Text('查看支持方式'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                RepaintBoundary(
-                  child: _AboutSectionPanel(
-                    icon: Ionicons.logo_github,
-                    title: '仓库',
-                    tint: colorScheme.primary,
-                    useLiteEffects: useLiteLayout,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _RepoTile(
-                          title: '当前仓库',
-                          subtitle: 'rccuu/superhut',
-                          url: _forkRepoUrl.toString(),
-                          icon: Ionicons.git_branch_outline,
-                          accent: colorScheme.primary,
-                          useLiteEffects: useLiteLayout,
-                          onTap: () => _openUrl(_forkRepoUrl),
-                        ),
-                        const SizedBox(height: 12),
-                        _RepoTile(
-                          title: '原作仓库',
-                          subtitle: 'cc2562/superhut',
-                          url: _upstreamRepoUrl.toString(),
-                          icon: Ionicons.logo_github,
-                          accent: colorScheme.secondary,
-                          useLiteEffects: useLiteLayout,
-                          onTap: () => _openUrl(_upstreamRepoUrl),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                RepaintBoundary(
-                  child: _AboutSectionPanel(
-                    icon: Ionicons.person_outline,
-                    title: '开发者',
-                    tint: colorScheme.tertiary,
-                    useLiteEffects: useLiteLayout,
-                    child: _ContributorTile(
-                      name: 'CC米饭',
-                      role: '原项目作者',
-                      accent: colorScheme.tertiary,
+                ValueListenableBuilder<_AboutHeroState>(
+                  valueListenable: _heroState,
+                  builder: (context, heroState, child) {
+                    return _AboutHeroCard(
+                      version: heroState.version,
+                      isCheckingUpdate: heroState.isCheckingUpdate,
                       useLiteEffects: useLiteLayout,
-                    ),
+                      onCheckUpdates:
+                          heroState.isCheckingUpdate ||
+                                  heroState.version == '--'
+                              ? null
+                              : _checkForUpdates,
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                _AboutSectionPanel(
+                  icon: Ionicons.shield_checkmark_outline,
+                  title: '信任与隐私',
+                  tint: colorScheme.secondary,
+                  useLiteEffects: useLiteLayout,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _AboutFactLine(text: '当前仓库、上游仓库和版本发布页都公开可见。'),
+                      const SizedBox(height: 10),
+                      _AboutFactLine(text: '应用内更新检查直接读取 GitHub Releases 信息。'),
+                      const SizedBox(height: 10),
+                      _AboutFactLine(
+                        text: '当前公开代码里，主要业务域名是学校系统、服务提供方和 GitHub。',
+                      ),
+                      const SizedBox(height: 10),
+                      _AboutFactLine(text: '密码优先走系统安全存储，登录态和缓存默认保存在本机。'),
+                      const SizedBox(height: 18),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          FilledButton.tonalIcon(
+                            onPressed: _openTrustPage,
+                            icon: const Icon(
+                              Ionicons.shield_checkmark_outline,
+                              size: 18,
+                            ),
+                            label: const Text('查看完整说明'),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: () => _openUrl(_releaseUrl),
+                            icon: const Icon(
+                              Ionicons.download_outline,
+                              size: 18,
+                            ),
+                            label: const Text('打开版本发布'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _AboutSectionPanel(
+                  icon: Ionicons.heart_outline,
+                  title: '支持项目',
+                  tint: const Color(0xFF199A7A),
+                  useLiteEffects: useLiteLayout,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _AboutFactLine(text: '想支持的话，这里有个入口。'),
+                      const SizedBox(height: 18),
+                      FilledButton.tonalIcon(
+                        onPressed: _openSupportPage,
+                        icon: const Icon(Ionicons.heart_outline, size: 18),
+                        label: const Text('查看支持方式'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _AboutSectionPanel(
+                  icon: Ionicons.logo_github,
+                  title: '仓库',
+                  tint: colorScheme.primary,
+                  useLiteEffects: useLiteLayout,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _RepoTile(
+                        title: '当前仓库',
+                        subtitle: 'rccuu/superhut',
+                        url: _forkRepoUrl.toString(),
+                        icon: Ionicons.git_branch_outline,
+                        accent: colorScheme.primary,
+                        useLiteEffects: useLiteLayout,
+                        onTap: () => _openUrl(_forkRepoUrl),
+                      ),
+                      const SizedBox(height: 12),
+                      _RepoTile(
+                        title: '原作仓库',
+                        subtitle: 'cc2562/superhut',
+                        url: _upstreamRepoUrl.toString(),
+                        icon: Ionicons.logo_github,
+                        accent: colorScheme.secondary,
+                        useLiteEffects: useLiteLayout,
+                        onTap: () => _openUrl(_upstreamRepoUrl),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _AboutSectionPanel(
+                  icon: Ionicons.person_outline,
+                  title: '开发者',
+                  tint: colorScheme.tertiary,
+                  useLiteEffects: useLiteLayout,
+                  child: _ContributorTile(
+                    name: 'CC米饭',
+                    role: '原项目作者',
+                    accent: colorScheme.tertiary,
+                    useLiteEffects: useLiteLayout,
                   ),
                 ),
               ],
@@ -345,8 +468,8 @@ class _AboutPageState extends State<AboutPage> {
               top: topInset + 12,
               left: 16,
               child: _AboutBackButton(
-                useLiteEffects: useLiteLayout,
                 onTap: () => Navigator.of(context).maybePop(),
+                useLiteEffects: useLiteLayout,
               ),
             ),
           ],
@@ -359,6 +482,20 @@ class _AboutPageState extends State<AboutPage> {
     return AppGlassBackground(
       style: AppGlassBackgroundStyle.soft,
       child: child,
+    );
+  }
+}
+
+class _AboutHeroState {
+  const _AboutHeroState({this.version = '--', this.isCheckingUpdate = false});
+
+  final String version;
+  final bool isCheckingUpdate;
+
+  _AboutHeroState copyWith({String? version, bool? isCheckingUpdate}) {
+    return _AboutHeroState(
+      version: version ?? this.version,
+      isCheckingUpdate: isCheckingUpdate ?? this.isCheckingUpdate,
     );
   }
 }

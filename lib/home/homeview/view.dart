@@ -17,6 +17,8 @@ import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/services/app_update_service.dart';
 import '../../core/services/course_sync_service.dart';
+import '../../core/ui/app_page_route.dart';
+import '../../core/ui/app_progress_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../about/first_open_trust_dialog.dart';
@@ -24,17 +26,105 @@ import '../about/trust_page.dart';
 import '../../pages/Electricitybill/electricity_api.dart';
 import '../../pages/Electricitybill/electricity_page.dart';
 
+typedef HomeElectricityApiFactory = ElectricityApiClient Function();
+typedef HomeElectricityPageOpener = Future<void> Function(BuildContext context);
+typedef HomeUpdateFetcher =
+    Future<AppUpdateInfo?> Function({required String currentVersion});
+typedef HomeUpdateReleaseOpener = Future<bool> Function(Uri releaseUrl);
+typedef HomeCurrentVersionLoader = Future<String> Function();
+
+class HomeElectricityAlert {
+  const HomeElectricityAlert({
+    required this.roomCount,
+    required this.bill,
+    required this.roomName,
+  });
+
+  final String roomCount;
+  final double bill;
+  final String roomName;
+
+  String get description => '当前电费：$roomCount元\n设置电费：$bill元\n房间：$roomName';
+}
+
+class HomeElectricityAlertChecker {
+  HomeElectricityAlertChecker({
+    HomeElectricityApiFactory? electricityApiFactory,
+  }) : _electricityApiFactory = electricityApiFactory ?? ElectricityApi.new;
+
+  final HomeElectricityApiFactory _electricityApiFactory;
+
+  Future<HomeElectricityAlert?> check() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isEnable = prefs.getBool('enableBillWarning') ?? false;
+    if (!isEnable) {
+      return null;
+    }
+
+    final checkRoomId = prefs.getString('enableRoomId') ?? '';
+    if (checkRoomId.isEmpty) {
+      return null;
+    }
+
+    final electricityApi = _electricityApiFactory();
+    await electricityApi.onInit();
+    await electricityApi.getHistory();
+    final nowRoomInfo = await electricityApi.getSingleRoomInfo(checkRoomId);
+    final roomCount = nowRoomInfo["eleTail"]?.toString() ?? '';
+    final setRoomName = nowRoomInfo["roomName"]?.toString() ?? '';
+    final bill = prefs.getDouble('enableBill') ?? 0;
+    if (double.tryParse(roomCount) case final roomBalance?
+        when roomBalance < bill) {
+      return HomeElectricityAlert(
+        roomCount: roomCount,
+        bill: bill,
+        roomName: setRoomName,
+      );
+    }
+
+    return null;
+  }
+}
+
+class _HomeTabState {
+  const _HomeTabState({
+    required this.selectedIndex,
+    required this.loadedPages,
+    required this.animationSeed,
+    required this.animationDirection,
+  });
+
+  final int selectedIndex;
+  final List<bool> loadedPages;
+  final int animationSeed;
+  final int animationDirection;
+
+  bool isLoaded(int index) {
+    return index >= 0 && index < loadedPages.length && loadedPages[index];
+  }
+}
+
 class HomeviewPage extends StatefulWidget {
   const HomeviewPage({
     super.key,
     this.initialIndex = 0,
     this.showInitialTrustNotice = false,
     this.checkUpdatesOnStartup = true,
+    this.electricityAlertChecker,
+    this.openElectricityPage,
+    this.loadCurrentVersion,
+    this.fetchUpdate,
+    this.openUpdateRelease,
   });
 
   final int initialIndex;
   final bool showInitialTrustNotice;
   final bool checkUpdatesOnStartup;
+  final HomeElectricityAlertChecker? electricityAlertChecker;
+  final HomeElectricityPageOpener? openElectricityPage;
+  final HomeCurrentVersionLoader? loadCurrentVersion;
+  final HomeUpdateFetcher? fetchUpdate;
+  final HomeUpdateReleaseOpener? openUpdateRelease;
 
   @override
   State<HomeviewPage> createState() => _HomeviewPageState();
@@ -48,15 +138,32 @@ class _HomeviewPageState extends State<HomeviewPage> {
     _DockItemData(icon: CupertinoIcons.square_grid_2x2, label: '功能'),
     _DockItemData(icon: CupertinoIcons.person, label: '我的'),
   ];
+  static const List<GButton> _dockTabs = [
+    GButton(
+      key: ValueKey<String>('home-tab-课表'),
+      icon: CupertinoIcons.calendar,
+      text: '课表',
+    ),
+    GButton(
+      key: ValueKey<String>('home-tab-功能'),
+      icon: CupertinoIcons.square_grid_2x2,
+      text: '功能',
+    ),
+    GButton(
+      key: ValueKey<String>('home-tab-我的'),
+      icon: CupertinoIcons.person,
+      text: '我的',
+    ),
+  ];
   String _currentVersion = '0.0.1'; // 默认版本号
-  late int _selectedIndex;
-  late final List<bool> _loadedPages;
+  late final ValueNotifier<_HomeTabState> _tabStateNotifier;
   late final ValueNotifier<bool> _courseTransitionLiteMode;
   late final List<Widget> _pages;
-  int _tabAnimationSeed = 0;
-  int _tabAnimationDirection = 1;
   int _handledCourseSyncEventId = 0;
   bool _hasHandledStartupDialogs = false;
+  bool _isOpeningElectricityPageFromAlert = false;
+  bool _isOpeningUpdateRelease = false;
+  bool _hasLoadedCurrentVersion = false;
 
   @override
   void initState() {
@@ -67,12 +174,20 @@ class _HomeviewPageState extends State<HomeviewPage> {
       const FunctionPage(),
       const UserPage(),
     ];
-    _selectedIndex = widget.initialIndex.clamp(0, _pages.length - 1);
-    _loadedPages = List<bool>.filled(_pages.length, false);
-    _loadedPages[_selectedIndex] = true;
-    if (_selectedIndex != _courseTabIndex) {
-      _loadedPages[_courseTabIndex] = true;
+    final selectedIndex = widget.initialIndex.clamp(0, _pages.length - 1);
+    final loadedPages = List<bool>.filled(_pages.length, false);
+    loadedPages[selectedIndex] = true;
+    if (selectedIndex != _courseTabIndex) {
+      loadedPages[_courseTabIndex] = true;
     }
+    _tabStateNotifier = ValueNotifier<_HomeTabState>(
+      _HomeTabState(
+        selectedIndex: selectedIndex,
+        loadedPages: List<bool>.unmodifiable(loadedPages),
+        animationSeed: 0,
+        animationDirection: 1,
+      ),
+    );
     CourseSyncService.instance.stateListenable.addListener(
       _handleCourseSyncStateChanged,
     );
@@ -87,6 +202,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
       _handleCourseSyncStateChanged,
     );
     _courseTransitionLiteMode.dispose();
+    _tabStateNotifier.dispose();
     super.dispose();
   }
 
@@ -119,13 +235,31 @@ class _HomeviewPageState extends State<HomeviewPage> {
   }
 
   Future<void> _getCurrentVersion() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
+    try {
+      final versionLoader = widget.loadCurrentVersion;
+      if (versionLoader != null) {
+        final version = await versionLoader();
+        if (!mounted) {
+          return;
+        }
+        _currentVersion = version;
+        _hasLoadedCurrentVersion = true;
+        return;
+      }
+
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (!mounted) {
+        return;
+      }
       _currentVersion = packageInfo.version;
-    });
+      _hasLoadedCurrentVersion = true;
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to read current app version on home startup',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> _runStartupDialogs() async {
@@ -150,9 +284,11 @@ class _HomeviewPageState extends State<HomeviewPage> {
       if (!mounted) {
         return;
       }
-      await _checkVersion();
-      if (!mounted) {
-        return;
+      if (_hasLoadedCurrentVersion) {
+        await _checkVersion();
+        if (!mounted) {
+          return;
+        }
       }
     }
     await checkAlert();
@@ -160,29 +296,15 @@ class _HomeviewPageState extends State<HomeviewPage> {
 
   Future<void> checkAlert() async {
     try {
-      final electricityApi = ElectricityApi();
-      final prefs = await SharedPreferences.getInstance();
-      final isEnable = prefs.getBool('enableBillWarning') ?? false;
-      if (!isEnable) {
-        return;
-      }
-      final checkRoomId = prefs.getString('enableRoomId') ?? '';
-      if (checkRoomId.isEmpty) {
-        return;
-      }
-
-      await electricityApi.onInit();
-      await electricityApi.getHistory();
-      final nowRoomInfo = await electricityApi.getSingleRoomInfo(checkRoomId);
-      final roomCount = nowRoomInfo["eleTail"];
-      final setRoomName = nowRoomInfo["roomName"];
-      final bill = prefs.getDouble('enableBill') ?? 0;
+      final alert =
+          await (widget.electricityAlertChecker ??
+                  HomeElectricityAlertChecker())
+              .check();
       if (!mounted) {
         return;
       }
-      if (double.tryParse(roomCount) case final roomBalance?
-          when roomBalance < bill) {
-        _showAlert('当前电费：$roomCount元\n设置电费：$bill元\n房间：$setRoomName');
+      if (alert != null) {
+        _showAlert(alert.description);
       }
     } catch (error, stackTrace) {
       AppLogger.error(
@@ -211,9 +333,8 @@ class _HomeviewPageState extends State<HomeviewPage> {
             TextButton(
               child: Text('立即充值'),
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => ElectricityPage()),
+                unawaited(
+                  _openElectricityPageFromAlert(dialogContext: context),
                 );
               },
             ),
@@ -223,10 +344,58 @@ class _HomeviewPageState extends State<HomeviewPage> {
     );
   }
 
+  Future<void> _openElectricityPageFromAlert({
+    required BuildContext dialogContext,
+  }) async {
+    if (_isOpeningElectricityPageFromAlert) {
+      return;
+    }
+
+    _isOpeningElectricityPageFromAlert = true;
+    try {
+      await Navigator.of(dialogContext).maybePop();
+      if (!mounted) {
+        return;
+      }
+
+      final openPage =
+          widget.openElectricityPage ??
+          (BuildContext context) {
+            return Navigator.of(
+              context,
+            ).push(buildAppPageRoute(builder: (_) => const ElectricityPage()));
+          };
+      await openPage(context);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      showAppSnackBar(
+        context,
+        message: '打开电费页面失败，请稍后重试',
+        type: AppSnackBarType.error,
+        icon: CupertinoIcons.exclamationmark_circle_fill,
+        duration: const Duration(seconds: 2),
+      );
+    } finally {
+      _isOpeningElectricityPageFromAlert = false;
+    }
+  }
+
   Future<void> _checkVersion() async {
-    final update = await AppUpdateService.fetchUpdate(
-      currentVersion: _currentVersion,
-    );
+    final fetchUpdate = widget.fetchUpdate ?? AppUpdateService.fetchUpdate;
+    final AppUpdateInfo? update;
+    try {
+      update = await fetchUpdate(currentVersion: _currentVersion);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to check app update on home startup',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return;
+    }
     if (!mounted || update == null) {
       return;
     }
@@ -277,8 +446,12 @@ class _HomeviewPageState extends State<HomeviewPage> {
             TextButton(
               child: Text('前往更新'),
               onPressed: () {
-                Navigator.of(context).pop();
-                _openUpdateRelease(update.releaseUrl);
+                unawaited(
+                  _openUpdateReleaseFromDialog(
+                    dialogContext: context,
+                    releaseUrl: update.releaseUrl,
+                  ),
+                );
               },
             ),
           ],
@@ -301,20 +474,52 @@ class _HomeviewPageState extends State<HomeviewPage> {
     return '${releaseNotes.substring(0, maxLength).trimRight()}\n\n……';
   }
 
-  Future<void> _openUpdateRelease(Uri releaseUrl) async {
-    final opened = await launchUrl(
-      releaseUrl,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened && mounted) {
+  Future<void> _openUpdateReleaseFromDialog({
+    required BuildContext dialogContext,
+    required Uri releaseUrl,
+  }) async {
+    if (_isOpeningUpdateRelease) {
+      return;
+    }
+
+    _isOpeningUpdateRelease = true;
+    try {
+      await Navigator.of(dialogContext).maybePop();
+      final openRelease = widget.openUpdateRelease ?? _launchUpdateRelease;
+      final opened = await openRelease(releaseUrl);
+      if (!opened && mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开更新链接，请稍后重试',
+          type: AppSnackBarType.error,
+          icon: CupertinoIcons.exclamationmark_circle_fill,
+          duration: const Duration(seconds: 2),
+        );
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open update release from home dialog',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) {
+        return;
+      }
+
       showAppSnackBar(
         context,
-        message: '无法打开更新链接：$releaseUrl',
+        message: '无法打开更新链接，请稍后重试',
         type: AppSnackBarType.error,
         icon: CupertinoIcons.exclamationmark_circle_fill,
         duration: const Duration(seconds: 2),
       );
+    } finally {
+      _isOpeningUpdateRelease = false;
     }
+  }
+
+  Future<bool> _launchUpdateRelease(Uri releaseUrl) {
+    return launchUrl(releaseUrl, mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -329,10 +534,18 @@ class _HomeviewPageState extends State<HomeviewPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          _ActiveOnlyIndexedStack(
-            key: const ValueKey<String>('home-tab-stage'),
-            index: _selectedIndex,
-            children: List.generate(_pages.length, _buildPageSlot),
+          ValueListenableBuilder<_HomeTabState>(
+            valueListenable: _tabStateNotifier,
+            builder: (context, tabState, child) {
+              return _ActiveOnlyIndexedStack(
+                key: const ValueKey<String>('home-tab-stage'),
+                index: tabState.selectedIndex,
+                children: [
+                  for (var index = 0; index < _pages.length; index++)
+                    _buildPageSlot(index, tabState),
+                ],
+              );
+            },
           ),
           Positioned(
             top: topInset + 10,
@@ -351,11 +564,17 @@ class _HomeviewPageState extends State<HomeviewPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 390),
-                  child: _ClassicTabBar(
-                    key: const ValueKey<String>('home-bottom-nav'),
-                    items: _dockItems,
-                    selectedIndex: _selectedIndex,
-                    onSelected: _onTabChange,
+                  child: ValueListenableBuilder<_HomeTabState>(
+                    valueListenable: _tabStateNotifier,
+                    builder: (context, tabState, child) {
+                      return _ClassicTabBar(
+                        key: const ValueKey<String>('home-bottom-nav'),
+                        items: _dockItems,
+                        tabs: _dockTabs,
+                        selectedIndex: tabState.selectedIndex,
+                        onSelected: _onTabChange,
+                      );
+                    },
                   ),
                 ),
               ),
@@ -366,22 +585,22 @@ class _HomeviewPageState extends State<HomeviewPage> {
     );
   }
 
-  Widget _buildPageSlot(int index) {
-    if (!_loadedPages[index]) {
+  Widget _buildPageSlot(int index, _HomeTabState tabState) {
+    if (!tabState.isLoaded(index)) {
       return const SizedBox.expand();
     }
 
     return RepaintBoundary(
       key: ValueKey<String>('home-loaded-tab-$index'),
       child: _AnimatedTabPage(
-        isActive: _selectedIndex == index,
-        animationSeed: _tabAnimationSeed,
-        slideDirection: _tabAnimationDirection,
+        isActive: tabState.selectedIndex == index,
+        animationSeed: tabState.animationSeed,
+        slideDirection: tabState.animationDirection,
         pageIndex: index,
         transitionNotifier:
             index == _courseTabIndex ? _courseTransitionLiteMode : null,
         child: TickerMode(
-          enabled: _selectedIndex == index,
+          enabled: tabState.selectedIndex == index,
           child: KeyedSubtree(
             key: PageStorageKey<String>('home-tab-$index'),
             child: _pages[index],
@@ -392,17 +611,21 @@ class _HomeviewPageState extends State<HomeviewPage> {
   }
 
   void _onTabChange(int index) {
-    if (_selectedIndex == index) {
+    final tabState = _tabStateNotifier.value;
+    if (index < 0 ||
+        index >= _pages.length ||
+        tabState.selectedIndex == index) {
       return;
     }
 
-    final previousIndex = _selectedIndex;
-    setState(() {
-      _tabAnimationDirection = index > previousIndex ? 1 : -1;
-      _selectedIndex = index;
-      _loadedPages[index] = true;
-      _tabAnimationSeed++;
-    });
+    final loadedPages = List<bool>.of(tabState.loadedPages);
+    loadedPages[index] = true;
+    _tabStateNotifier.value = _HomeTabState(
+      selectedIndex: index,
+      loadedPages: List<bool>.unmodifiable(loadedPages),
+      animationSeed: tabState.animationSeed + 1,
+      animationDirection: index > tabState.selectedIndex ? 1 : -1,
+    );
   }
 }
 
@@ -562,7 +785,12 @@ class _RenderActiveOnlyIndexedStack extends RenderBox
     }
 
     final childParentData = child.parentData! as StackParentData;
-    transform.translate(childParentData.offset.dx, childParentData.offset.dy);
+    transform.translateByDouble(
+      childParentData.offset.dx,
+      childParentData.offset.dy,
+      0,
+      1,
+    );
   }
 
   @override
@@ -668,7 +896,7 @@ class _CourseSyncOverlay extends StatelessWidget {
                         const SizedBox(height: 10),
                         ClipRRect(
                           borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
+                          child: AppLinearProgressIndicator(
                             minHeight: 6,
                             value:
                                 snapshot.status == CourseSyncTaskStatus.failure
@@ -722,48 +950,48 @@ class _AnimatedTabPage extends StatefulWidget {
 }
 
 class _AnimatedTabPageState extends State<_AnimatedTabPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _tabSlideOffset = 0.055;
 
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: _HomeviewPageState._tabAnimationDuration,
-    value: 1,
-  );
-  late final CurvedAnimation _curve = CurvedAnimation(
-    parent: _controller,
-    curve: Curves.easeOutCubic,
-  );
-  late Animation<Offset> _slide;
+  AnimationController? _controller;
+  CurvedAnimation? _curve;
+  Animation<Offset>? _slide;
   // Perf: 只有真正在过渡动画期间才需要 ClipRect+SlideTransition；
-  // 动画完成后退化为直接返回 child，避免常驻 saveLayer。
-  bool _isTransitioning = false;
-  bool _disableAnimations = false;
+  // 动画完成后释放 controller 并退化为直接返回 child，避免常驻 ticker/saveLayer。
+  final ValueNotifier<bool> _isTransitioningNotifier = ValueNotifier<bool>(
+    false,
+  );
+  bool _reduceMotion = false;
+  bool _hasResolvedMotion = false;
 
   @override
   void initState() {
     super.initState();
-    _controller.addStatusListener(_handleAnimationStatusChanged);
-    _configureAnimations();
-    if (widget.isActive && widget.animationSeed > 0) {
-      _startTransition();
-    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final disableAnimations =
-        MediaQuery.maybeOf(context)?.disableAnimations == true;
-    if (_disableAnimations == disableAnimations) {
+    final reduceMotion = AppGlassPerformanceScope.shouldReduceMotionOf(context);
+    final wasResolved = _hasResolvedMotion;
+    final previousReduceMotion = _reduceMotion;
+    if (wasResolved && previousReduceMotion == reduceMotion) {
       return;
     }
 
-    _disableAnimations = disableAnimations;
-    if (disableAnimations) {
+    _hasResolvedMotion = true;
+    _reduceMotion = reduceMotion;
+    if (reduceMotion) {
       _setTransitionLiteMode(false);
-      _isTransitioning = false;
-      _controller.value = 1;
+      _setTransitioning(false);
+      _disposeTransitionController();
+      return;
+    }
+
+    if ((!wasResolved || previousReduceMotion) &&
+        widget.isActive &&
+        widget.animationSeed > 0) {
+      _startTransition();
     }
   }
 
@@ -771,11 +999,8 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
     if (status == AnimationStatus.completed ||
         status == AnimationStatus.dismissed) {
       _setTransitionLiteMode(false);
-      if (_isTransitioning && mounted) {
-        setState(() {
-          _isTransitioning = false;
-        });
-      }
+      _disposeTransitionController();
+      _setTransitioning(false);
     }
   }
 
@@ -787,64 +1012,124 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
     notifier.value = value;
   }
 
-  void _startTransition() {
-    if (_disableAnimations) {
-      _setTransitionLiteMode(false);
-      _isTransitioning = false;
-      _controller.value = 1;
+  void _setTransitioning(bool value) {
+    if (!mounted || _isTransitioningNotifier.value == value) {
       return;
     }
 
-    _setTransitionLiteMode(true);
-    if (!_isTransitioning) {
-      _isTransitioning = true;
+    _isTransitioningNotifier.value = value;
+  }
+
+  void _startTransition() {
+    if (_reduceMotion) {
+      _setTransitionLiteMode(false);
+      _setTransitioning(false);
+      _disposeTransitionController();
+      return;
     }
-    _controller.forward(from: 0);
+
+    _ensureTransitionController();
+    _configureAnimations();
+    _setTransitionLiteMode(true);
+    _setTransitioning(true);
+    _controller!.forward(from: 0);
+  }
+
+  void _ensureTransitionController() {
+    if (_controller != null) {
+      return;
+    }
+
+    final controller = AnimationController(
+      vsync: this,
+      duration: _HomeviewPageState._tabAnimationDuration,
+      value: 1,
+    )..addStatusListener(_handleAnimationStatusChanged);
+    _controller = controller;
+    _curve = CurvedAnimation(parent: controller, curve: Curves.easeOutCubic);
+  }
+
+  void _disposeTransitionController() {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+
+    controller.removeStatusListener(_handleAnimationStatusChanged);
+    _curve?.dispose();
+    _curve = null;
+    _slide = null;
+    _controller = null;
+    controller.dispose();
   }
 
   void _configureAnimations() {
+    final curve = _curve;
+    if (curve == null) {
+      return;
+    }
+
     _slide = Tween<Offset>(
       begin: Offset(widget.slideDirection * _tabSlideOffset, 0),
       end: Offset.zero,
-    ).animate(_curve);
+    ).animate(curve);
   }
 
   @override
   void didUpdateWidget(covariant _AnimatedTabPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!widget.isActive) {
+      _setTransitionLiteMode(false);
+      _disposeTransitionController();
+      _setTransitioning(false);
+      return;
+    }
+
+    if (widget.isActive && widget.animationSeed != oldWidget.animationSeed) {
+      _startTransition();
+      return;
+    }
+
     if (widget.slideDirection != oldWidget.slideDirection ||
         widget.isActive != oldWidget.isActive) {
       _configureAnimations();
-    }
-    if (!widget.isActive) {
-      _setTransitionLiteMode(false);
-    }
-    if (widget.isActive && widget.animationSeed != oldWidget.animationSeed) {
-      _configureAnimations();
-      _startTransition();
     }
   }
 
   @override
   void dispose() {
     _setTransitionLiteMode(false);
-    _controller.removeStatusListener(_handleAnimationStatusChanged);
-    _controller.dispose();
+    _disposeTransitionController();
+    _isTransitioningNotifier.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.isActive || _disableAnimations || !_isTransitioning) {
+    final slide = _slide;
+    if (!widget.isActive ||
+        _reduceMotion ||
+        !_isTransitioningNotifier.value ||
+        slide == null) {
       return widget.child;
     }
 
-    return ClipRect(
-      child: SlideTransition(
-        key: ValueKey<String>('home-tab-slide-${widget.pageIndex}'),
-        position: _slide,
-        child: widget.child,
-      ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: _isTransitioningNotifier,
+      child: widget.child,
+      builder: (context, isTransitioning, child) {
+        if (!isTransitioning) {
+          return child!;
+        }
+
+        return ClipRect(
+          child: SlideTransition(
+            key: ValueKey<String>('home-tab-slide-${widget.pageIndex}'),
+            position: slide,
+            child: child,
+          ),
+        );
+      },
     );
   }
 }
@@ -853,11 +1138,13 @@ class _ClassicTabBar extends StatelessWidget {
   const _ClassicTabBar({
     super.key,
     required this.items,
+    required this.tabs,
     required this.selectedIndex,
     required this.onSelected,
   });
 
   final List<_DockItemData> items;
+  final List<GButton> tabs;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
@@ -976,43 +1263,40 @@ class _ClassicTabBar extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.2,
                     ),
-                    tabs: items
-                        .map(
-                          (item) => GButton(
-                            key: ValueKey<String>('home-tab-${item.label}'),
-                            icon: item.icon,
-                            text: item.label,
-                          ),
-                        )
-                        .toList(growable: false),
+                    tabs: tabs,
                   ),
                 ),
               ),
             ),
             Positioned.fill(
               child: Row(
-                children: List.generate(items.length, (index) {
-                  final item = items[index];
-                  return Expanded(
-                    child: Semantics(
-                      button: true,
-                      selected: index == selectedIndex,
-                      label: item.label,
-                      child: GestureDetector(
-                        key: ValueKey<String>('home-hit-zone-${item.label}'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          onSelected(index);
-                        },
-                        child: const SizedBox.expand(),
-                      ),
-                    ),
-                  );
-                }),
+                children: [
+                  for (var index = 0; index < items.length; index++)
+                    _buildHitZone(index),
+                ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHitZone(int index) {
+    final item = items[index];
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: index == selectedIndex,
+        label: item.label,
+        child: GestureDetector(
+          key: ValueKey<String>('home-hit-zone-${item.label}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onSelected(index);
+          },
+          child: const SizedBox.expand(),
         ),
       ),
     );

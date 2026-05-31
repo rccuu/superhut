@@ -4,7 +4,38 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class DrinkApi {
+abstract class DrinkApiClient {
+  Future<List<Map>> deviceList();
+
+  Future<bool> favoDevice({required String id, required bool isUnFavo});
+
+  Future<bool> startDrink({required String id});
+
+  Future<bool> endDrink({required String id});
+
+  Future<bool> isAvailableDevice({required String id});
+
+  Future<String> getToken();
+
+  Future<void> setToken({required String token});
+}
+
+abstract class DrinkLoginApiClient {
+  Future<Uint8List> userCaptcha({
+    required String doubleRandom,
+    required String timestamp,
+  });
+
+  Future<bool> userMessageCode({
+    required String doubleRandom,
+    required String photoCode,
+    required String phone,
+  });
+
+  Future<bool> userLogin({required String phone, required String messageCode});
+}
+
+class DrinkApi implements DrinkApiClient, DrinkLoginApiClient {
   DrinkApi._privateConstructor() {
     _initToken();
   }
@@ -23,15 +54,16 @@ class DrinkApi {
     String? userInfoDataStr = prefs.getString("drink798UsrApiToken");
     if (userInfoDataStr != null) {
       Map<String, dynamic> map = jsonDecode(userInfoDataStr);
-      map.forEach((key, value) {
-        _token[key] = value;
-      });
+      for (final entry in map.entries) {
+        _token[entry.key] = entry.value;
+      }
     } else {
       prefs.setString("drink798UsrApiToken", jsonEncode(_token));
     }
   }
 
   /// 获取慧生活798登录验证码
+  @override
   Future<Uint8List> userCaptcha({
     required String doubleRandom,
     required String timestamp,
@@ -48,6 +80,7 @@ class DrinkApi {
   }
 
   /// 获取短信验证码
+  @override
   Future<bool> userMessageCode({
     required String doubleRandom,
     required String photoCode,
@@ -64,6 +97,7 @@ class DrinkApi {
   }
 
   /// 开始登录
+  @override
   Future<bool> userLogin({
     required String phone,
     required String messageCode,
@@ -87,6 +121,7 @@ class DrinkApi {
   }
 
   /// 获取设备列表
+  @override
   Future<List<Map>> deviceList() async {
     String url = "https://i.ilife798.com/api/v1/ui/app/master";
     Options options = Options(headers: {"Authorization": _token["token"]});
@@ -104,16 +139,16 @@ class DrinkApi {
     }
 
     final List favos = result["data"]["favos"];
-    return favos
-        .map((e) {
-          return {"id": e["id"], "name": e["name"]};
-        })
-        .toList()
-        .reversed
-        .toList();
+    final devices = <Map>[];
+    for (var index = favos.length - 1; index >= 0; index--) {
+      final device = favos[index];
+      devices.add({"id": device["id"], "name": device["name"]});
+    }
+    return devices;
   }
 
   /// 收藏或取消收藏设备
+  @override
   Future<bool> favoDevice({required String id, required bool isUnFavo}) async {
     String url = "https://i.ilife798.com/api/v1/dev/favo";
     Options options = Options(headers: {"Authorization": _token["token"]});
@@ -129,6 +164,7 @@ class DrinkApi {
   }
 
   /// 开始喝水
+  @override
   Future<bool> startDrink({required String id}) async {
     String url = "https://i.ilife798.com/api/v1/dev/start";
     Options options = Options(headers: {"Authorization": _token["token"]});
@@ -149,6 +185,7 @@ class DrinkApi {
   }
 
   /// 结束喝水
+  @override
   Future<bool> endDrink({required String id}) async {
     String url = "https://i.ilife798.com/api/v1/dev/end";
     Options options = Options(headers: {"Authorization": _token["token"]});
@@ -164,6 +201,7 @@ class DrinkApi {
   }
 
   /// 检测设备状态
+  @override
   Future<bool> isAvailableDevice({required String id}) async {
     String url = "https://i.ilife798.com/api/v1/ui/app/dev/status";
     Options options = Options(headers: {"Authorization": _token["token"]});
@@ -179,11 +217,13 @@ class DrinkApi {
   }
 
   /// 获取Token
+  @override
   Future<String> getToken() async {
     return _token["token"];
   }
 
   /// 设置Token
+  @override
   Future<void> setToken({required String token}) async {
     _token["token"] = token;
     SharedPreferences prefs = await SharedPreferences.getInstance();

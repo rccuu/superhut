@@ -27,28 +27,65 @@ class Room {
   Room({required this.name, required this.seatNumber, required this.free});
 }
 
+class _BuildingListRow {
+  const _BuildingListRow({
+    required this.data,
+    required this.name,
+    required this.priority,
+  });
+
+  final Map<String, dynamic> data;
+  final String name;
+  final int priority;
+}
+
 class FreeBuildingApi {
   List<Building> buildingList = [];
 
   int _buildingPriority(String name) {
-    final normalized = name.replaceAll(' ', '');
     final isHexiPublic =
-        normalized.contains('河西') &&
-        (normalized.contains('公共') || normalized.contains('公教'));
+        _containsBuildingNameToken(name, '河西') &&
+        (_containsBuildingNameToken(name, '公共') ||
+            _containsBuildingNameToken(name, '公教'));
     if (isHexiPublic) {
       return 0;
     }
 
     final isPublicBuilding =
-        normalized.contains('公共教学楼') ||
-        normalized.contains('公共楼') ||
-        normalized.contains('公教') ||
-        normalized.contains('公共');
+        _containsBuildingNameToken(name, '公共') ||
+        _containsBuildingNameToken(name, '公教');
     if (isPublicBuilding) {
       return 1;
     }
 
     return 2;
+  }
+
+  bool _containsBuildingNameToken(String name, String token) {
+    for (var index = 0; index < name.length; index++) {
+      if (_startsWithBuildingNameToken(name, index, token)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _startsWithBuildingNameToken(String name, int start, String token) {
+    var nameIndex = start;
+    var tokenIndex = 0;
+    while (nameIndex < name.length && tokenIndex < token.length) {
+      final nameCodeUnit = name.codeUnitAt(nameIndex);
+      if (nameCodeUnit == 0x20) {
+        nameIndex++;
+        continue;
+      }
+      if (nameCodeUnit != token.codeUnitAt(tokenIndex)) {
+        return false;
+      }
+      nameIndex++;
+      tokenIndex++;
+    }
+    return tokenIndex == token.length;
   }
 
   Map<String, dynamic> _responseMap(
@@ -104,32 +141,41 @@ class FreeBuildingApi {
       throw buildJwxtStateError(response.data, fallbackMessage: '教学楼列表加载失败');
     }
 
-    final List<Map<String, dynamic>> buildingListData =
-        (data['data'] as List? ?? const [])
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
+    final buildingListData = <_BuildingListRow>[];
+    final rawBuildingList = data['data'];
+    if (rawBuildingList is List) {
+      for (final item in rawBuildingList) {
+        if (item is Map) {
+          final row = Map<String, dynamic>.from(item);
+          final name = row['teachingBuildingName']?.toString() ?? '';
+          buildingListData.add(
+            _BuildingListRow(
+              data: row,
+              name: name,
+              priority: _buildingPriority(name),
+            ),
+          );
+        }
+      }
+    }
     buildingListData.sort((left, right) {
-      final leftName = left['teachingBuildingName']?.toString() ?? '';
-      final rightName = right['teachingBuildingName']?.toString() ?? '';
-      final priorityCompare = _buildingPriority(
-        leftName,
-      ).compareTo(_buildingPriority(rightName));
+      final priorityCompare = left.priority.compareTo(right.priority);
       if (priorityCompare != 0) {
         return priorityCompare;
       }
-      return leftName.compareTo(rightName);
+      return left.name.compareTo(right.name);
     });
     buildingList = [];
     for (int i = 0; i < buildingListData.length; i++) {
-      var tbuilding = buildingListData[i];
+      final buildingRow = buildingListData[i];
+      final tbuilding = buildingRow.data;
 
       buildingList.add(
         Building(
-          name: tbuilding['teachingBuildingName'],
-          count: tbuilding['count'],
-          buildingId: tbuilding['buildingId'],
-          free: tbuilding['kxs'],
+          name: buildingRow.name,
+          count: tbuilding['count']?.toString() ?? '',
+          buildingId: tbuilding['buildingId']?.toString() ?? '',
+          free: tbuilding['kxs']?.toString() ?? '',
         ),
       );
     }
@@ -156,18 +202,22 @@ class FreeRoomApi {
 
   String processString(String input) {
     if (input.length <= 2) {
-      // 如果字符串长度小于等于2，直接返回空字符串或其他适当的值
       return '';
     }
-    // 去除第一个字符，并返回最后两个字符
-    return input.substring(1, input.length);
+    return input.substring(1);
   }
 
   List<String> stringToList(String input) {
-    List<String> tempList = input.split(',');
-    List<String> result = [];
-    for (var i = 0; i < tempList.length; i++) {
-      result.add(processString(tempList[i]));
+    final result = <String>[];
+    var tokenStart = 0;
+    for (var index = 0; index <= input.length; index++) {
+      if (index == input.length || input.codeUnitAt(index) == 0x2c) {
+        final tokenLength = index - tokenStart;
+        result.add(
+          tokenLength <= 2 ? '' : input.substring(tokenStart + 1, index),
+        );
+        tokenStart = index + 1;
+      }
     }
     return result;
   }

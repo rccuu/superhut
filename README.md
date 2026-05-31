@@ -16,7 +16,7 @@
 
 ### UI 全面翻新
 
-- **自研 Glass UI 系统**：`lib/core/ui/apple_glass.dart` 提供分层玻璃材质组件（`AppGlassBackground` / `GlassPanel`），支持 rich / soft / flat 三档性能策略，全平台默认轻量模式
+- **自研 Glass UI 系统**：`lib/core/ui/apple_glass.dart` 提供分层玻璃材质组件（`AppGlassBackground` / `GlassPanel`），支持 rich / soft / flat 三档性能策略；视觉效果默认轻量，布局级降级由 Android、系统减少动态或显式性能作用域控制
 - **手写 Material 3 主题**：放弃 FlexColorScheme，自建完整的 light/dark `ColorScheme`，统一品牌蓝 #3B6EEA
 - **课表页重做**：自定义 7 天 × 10 节网格布局、重叠课程布局算法、21 色调色板、课程详情弹层
 - **底栏重做**：悬浮玻璃胶囊 + 外圈阴影绘制器（`_OuterOnlyShadowPainter`），三等分大热区点击
@@ -34,10 +34,12 @@
 
 ### 性能优化
 
-- **GPU 过绘削减**：全局玻璃层 blur sigma 降低 ~40%，模糊核大小呈平方关系，对帧率影响显著
-- **页面转场降级**：Android 上全局使用 `FadeUpwardsPageTransitionsBuilder` 替代滑动转场
-- **轻量玻璃策略**：Android 上自动压低 blur 和阴影，重页面关闭背板模糊
-- **懒加载 + RepaintBoundary**：首页三大 tab 按需构建，功能卡片和重组件包隔离层
+- **GPU 过绘削减**：玻璃背景和重组件统一收敛到轻量策略，降低大面积 blur、阴影和重复 raster 成本
+- **页面转场降级**：Android 使用 `AppLightPageTransitionsBuilder` 和 `buildAppPageRoute` 的轻量 fade + 微位移转场，避免默认重转场叠加
+- **轻量玻璃策略**：视觉效果默认轻量，Android 及系统减少动态场景自动采用更保守的布局与动效
+- **共享动效组件**：`AppAnimatedContainer`、`AppAnimatedSwitcher`、`AppLinearProgressIndicator`、`AppLoadingIndicator` 统一响应轻量/减少动态策略
+- **弹层适配收敛**：页面层通过 `showAppAdaptiveBottomSheet` 打开弹层；Android 使用原生 Material bottom sheet，其他平台保留 Cupertino sheet
+- **懒加载 + RepaintBoundary**：首页三大 tab 按需构建，功能卡片、路线转场和重组件隔离重绘层
 - **弹层先出壳再挂内容**：课表库管理等重弹层先显示骨架，延迟挂载重内容
 - **课表连续分页**：`PageView.builder` 渲染完整周序列，慢拖时相邻周内容持续进入视口
 
@@ -103,7 +105,7 @@ bash scripts/build_ios_quick.sh
 
 ## 版本历史
 
-从上游 v1.2.0 fork 后，已迭代至 v1.5.8。详细变更见 [changelog.md](changelog.md)。
+从上游 v1.2.0 fork 后，已迭代至 v1.6.0。详细变更见 [changelog.md](changelog.md)。
 
 ## 许可证
 

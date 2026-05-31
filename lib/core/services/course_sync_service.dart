@@ -167,6 +167,7 @@ class CourseSyncService {
       progress: progress,
       eventId: ++_eventSeed,
     );
+    _cancelResetTimer();
     _resetTimer = Timer(_terminalStateDuration, reset);
   }
 
