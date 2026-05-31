@@ -28,6 +28,8 @@ const String _courseScheduleFilePayloadType = 'superhut_course_schedule_file';
 const String _courseSilentRefreshAttemptAtKey = 'courseSilentRefreshAttemptAt';
 const String _courseSilentRefreshAttemptAccountKey =
     'courseSilentRefreshAttemptAccount';
+const String courseScheduleShareCodeParseFailureMessage = '分享码解析失败，请检查分享码后重试';
+const String courseScheduleFileParseFailureMessage = '课表文件解析失败，请确认文件内容后重试';
 const Uuid _uuid = Uuid();
 
 const Map<int, String> _courseSectionStartTimes = <int, String>{
@@ -63,6 +65,10 @@ abstract final class CourseScheduleSourceType {
   static const String manual = 'manual';
 }
 
+class CourseScheduleImportException extends FormatException {
+  const CourseScheduleImportException(super.message);
+}
+
 String _stringValue(dynamic value) => value?.toString() ?? '';
 
 int _intValue(dynamic value, {int fallback = 0}) {
@@ -73,6 +79,19 @@ int _intValue(dynamic value, {int fallback = 0}) {
     return int.tryParse(value) ?? fallback;
   }
   return fallback;
+}
+
+bool _isCourseShareCodeWhitespace(int codeUnit) {
+  return codeUnit <= 0x20 ||
+      codeUnit == 0x85 ||
+      codeUnit == 0xA0 ||
+      codeUnit == 0x1680 ||
+      (codeUnit >= 0x2000 && codeUnit <= 0x200A) ||
+      codeUnit == 0x2028 ||
+      codeUnit == 0x2029 ||
+      codeUnit == 0x202F ||
+      codeUnit == 0x205F ||
+      codeUnit == 0x3000;
 }
 
 class Course {
@@ -136,6 +155,97 @@ class Course {
       pcid: '',
     );
   }
+}
+
+List<Course> _parseCourseList(List rawCourses) {
+  final courses = <Course>[];
+  for (final rawCourse in rawCourses) {
+    courses.add(Course.fromJson(Map<String, dynamic>.from(rawCourse as Map)));
+  }
+  return courses;
+}
+
+List<Course> _parseCourseListOrEmpty(dynamic rawCourses) {
+  final courseList = rawCourses is List ? rawCourses : const <dynamic>[];
+  return _parseCourseList(courseList);
+}
+
+Map<String, List<Course>> _parseCourseDataMap(dynamic rawCourseDataValue) {
+  final rawCourseData = Map<String, dynamic>.from(
+    rawCourseDataValue as Map? ?? const <String, dynamic>{},
+  );
+  final courseData = <String, List<Course>>{};
+  for (final entry in rawCourseData.entries) {
+    courseData[entry.key] = _parseCourseListOrEmpty(entry.value);
+  }
+  return courseData;
+}
+
+List<SavedCourseSchedule> _parseSavedCourseSchedules(List rawSchedules) {
+  final schedules = <SavedCourseSchedule>[];
+  for (final rawSchedule in rawSchedules) {
+    schedules.add(
+      SavedCourseSchedule.fromJson(
+        Map<String, dynamic>.from(rawSchedule as Map),
+      ),
+    );
+  }
+  return schedules;
+}
+
+List<CourseWidgetCourseEntry> _parseWidgetCourseEntries(List rawCourses) {
+  final courses = <CourseWidgetCourseEntry>[];
+  for (final rawCourse in rawCourses) {
+    courses.add(
+      CourseWidgetCourseEntry.fromJson(
+        Map<String, dynamic>.from(rawCourse as Map),
+      ),
+    );
+  }
+  return courses;
+}
+
+List<CourseWidgetCourseEntry> _parseWidgetCourseEntriesOrEmpty(
+  dynamic rawCourses,
+) {
+  final courseList = rawCourses is List ? rawCourses : const <dynamic>[];
+  return _parseWidgetCourseEntries(courseList);
+}
+
+List<Course> _sanitizeCoursesForShare(List<Course> courses) {
+  final sanitizedCourses = <Course>[];
+  for (final course in courses) {
+    sanitizedCourses.add(course.sanitizedForShare());
+  }
+  return sanitizedCourses;
+}
+
+List<Map<String, dynamic>> _encodeCourses(List<Course> courses) {
+  final encodedCourses = <Map<String, dynamic>>[];
+  for (final course in courses) {
+    encodedCourses.add(course.toJson());
+  }
+  return encodedCourses;
+}
+
+List<Map<String, dynamic>> _encodeSavedCourseSchedules(
+  List<SavedCourseSchedule> schedules,
+) {
+  final encodedSchedules = <Map<String, dynamic>>[];
+  for (final schedule in schedules) {
+    encodedSchedules.add(schedule.toJson());
+  }
+  return encodedSchedules;
+}
+
+List<Map<String, dynamic>> _encodeWidgetCourseEntries(
+  List<CourseWidgetCourseEntry> courses,
+) {
+  final encodedCourses = <Map<String, dynamic>>[];
+  for (final course in courses) {
+    encodedCourses.add(course.toJson());
+  }
+  return encodedCourses;
 }
 
 bool _isSameCourse(Course left, Course right) {
@@ -203,22 +313,6 @@ class SavedCourseSchedule {
   final Map<String, List<Course>> courseData;
 
   factory SavedCourseSchedule.fromJson(Map<String, dynamic> json) {
-    final rawCourseData = Map<String, dynamic>.from(
-      json['courseData'] as Map? ?? const <String, dynamic>{},
-    );
-    final courseData = <String, List<Course>>{};
-    rawCourseData.forEach((date, rawCourses) {
-      final courseList = rawCourses is List ? rawCourses : const <dynamic>[];
-      courseData[date] =
-          courseList
-              .map(
-                (rawCourse) => Course.fromJson(
-                  Map<String, dynamic>.from(rawCourse as Map),
-                ),
-              )
-              .toList();
-    });
-
     return SavedCourseSchedule(
       id: _stringValue(json['id']),
       name: _stringValue(json['name']),
@@ -232,7 +326,7 @@ class SavedCourseSchedule {
       isReadOnly: json['isReadOnly'] == true,
       createdAt: _stringValue(json['createdAt']),
       updatedAt: _stringValue(json['updatedAt']),
-      courseData: courseData,
+      courseData: _parseCourseDataMap(json['courseData']),
     );
   }
 
@@ -256,10 +350,9 @@ class SavedCourseSchedule {
 
   Map<String, dynamic> toShareJson() {
     final sharedCourseData = <String, List<Course>>{};
-    courseData.forEach((date, courses) {
-      sharedCourseData[date] =
-          courses.map((course) => course.sanitizedForShare()).toList();
-    });
+    for (final entry in courseData.entries) {
+      sharedCourseData[entry.key] = _sanitizeCoursesForShare(entry.value);
+    }
 
     return {
       'name': name,
@@ -331,14 +424,7 @@ class CourseScheduleArchive {
         fallback: _courseScheduleArchiveSchemaVersion,
       ),
       activeScheduleId: _stringValue(json['activeScheduleId']),
-      schedules:
-          rawSchedules
-              .map(
-                (rawSchedule) => SavedCourseSchedule.fromJson(
-                  Map<String, dynamic>.from(rawSchedule as Map),
-                ),
-              )
-              .toList(),
+      schedules: _parseSavedCourseSchedules(rawSchedules),
     );
   }
 
@@ -346,7 +432,7 @@ class CourseScheduleArchive {
     return {
       'schemaVersion': schemaVersion,
       'activeScheduleId': activeScheduleId,
-      'schedules': schedules.map((schedule) => schedule.toJson()).toList(),
+      'schedules': _encodeSavedCourseSchedules(schedules),
     };
   }
 
@@ -501,18 +587,20 @@ class CourseWidgetStore {
   final Map<String, List<CourseWidgetCourseEntry>> dayCourses;
 
   Map<String, dynamic> toJson() {
+    final encodedDays = <String, dynamic>{};
+    for (final entry in days.entries) {
+      encodedDays[entry.key] = entry.value.toJson();
+    }
+    final encodedDayCourses = <String, dynamic>{};
+    for (final entry in dayCourses.entries) {
+      encodedDayCourses[entry.key] = _encodeWidgetCourseEntries(entry.value);
+    }
+
     return {
       'schemaVersion': schemaVersion,
       'updatedAt': updatedAt,
-      'days': days.map(
-        (date, payload) => MapEntry<String, dynamic>(date, payload.toJson()),
-      ),
-      'dayCourses': dayCourses.map(
-        (date, courses) => MapEntry<String, dynamic>(
-          date,
-          courses.map((course) => course.toJson()).toList(),
-        ),
-      ),
+      'days': encodedDays,
+      'dayCourses': encodedDayCourses,
     };
   }
 
@@ -520,27 +608,20 @@ class CourseWidgetStore {
     final rawDays = json['days'] as Map?;
     if (rawDays != null) {
       final days = <String, CourseWidgetPayload>{};
-      rawDays.forEach((date, rawPayload) {
-        days[date.toString()] = CourseWidgetPayload.fromJson(
-          Map<String, dynamic>.from(rawPayload as Map),
+      for (final entry in rawDays.entries) {
+        days[entry.key.toString()] = CourseWidgetPayload.fromJson(
+          Map<String, dynamic>.from(entry.value as Map),
         );
-      });
+      }
 
       final rawDayCourses = json['dayCourses'] as Map?;
       final dayCourses = <String, List<CourseWidgetCourseEntry>>{};
       if (rawDayCourses != null) {
-        rawDayCourses.forEach((date, rawCourses) {
-          final courseList =
-              rawCourses is List ? rawCourses : const <dynamic>[];
-          dayCourses[date.toString()] =
-              courseList
-                  .map(
-                    (rawCourse) => CourseWidgetCourseEntry.fromJson(
-                      Map<String, dynamic>.from(rawCourse as Map),
-                    ),
-                  )
-                  .toList();
-        });
+        for (final entry in rawDayCourses.entries) {
+          dayCourses[entry.key.toString()] = _parseWidgetCourseEntriesOrEmpty(
+            entry.value,
+          );
+        }
       }
 
       return CourseWidgetStore(
@@ -557,24 +638,12 @@ class CourseWidgetStore {
     final legacyCourseData = Map<String, dynamic>.from(
       json['courseData'] as Map? ?? const <String, dynamic>{},
     );
-    final parsedCourseData = <String, List<Course>>{};
-    legacyCourseData.forEach((date, rawCourses) {
-      final courseList = rawCourses is List ? rawCourses : const <dynamic>[];
-      parsedCourseData[date] =
-          courseList
-              .map(
-                (rawCourse) => Course.fromJson(
-                  Map<String, dynamic>.from(rawCourse as Map),
-                ),
-              )
-              .toList();
-    });
 
     return buildCourseWidgetStoreFromRawData(
       firstDay: _stringValue(json['firstDay']),
       maxWeek: _intValue(json['maxWeek'], fallback: 20),
       updatedAt: _stringValue(json['updatedAt']),
-      courseData: parsedCourseData,
+      courseData: _parseCourseDataMap(legacyCourseData),
     );
   }
 }
@@ -615,7 +684,7 @@ class CourseWidgetPayload {
       'emptyText': emptyText,
       'isEmpty': isEmpty,
       'updatedAt': updatedAt,
-      'courses': courses.map((course) => course.toJson()).toList(),
+      'courses': _encodeWidgetCourseEntries(courses),
     };
   }
 
@@ -631,14 +700,7 @@ class CourseWidgetPayload {
       emptyText: _stringValue(json['emptyText']),
       isEmpty: json['isEmpty'] == true,
       updatedAt: _stringValue(json['updatedAt']),
-      courses:
-          rawCourses
-              .map(
-                (rawCourse) => CourseWidgetCourseEntry.fromJson(
-                  Map<String, dynamic>.from(rawCourse as Map),
-                ),
-              )
-              .toList(),
+      courses: _parseWidgetCourseEntries(rawCourses),
     );
   }
 }
@@ -656,9 +718,9 @@ Map<String, List<Map<String, dynamic>>> _encodeCourseDataMap(
   Map<String, List<Course>> courseData,
 ) {
   final courseDataMap = <String, List<Map<String, dynamic>>>{};
-  courseData.forEach((date, courses) {
-    courseDataMap[date] = courses.map((course) => course.toJson()).toList();
-  });
+  for (final entry in courseData.entries) {
+    courseDataMap[entry.key] = _encodeCourses(entry.value);
+  }
   return courseDataMap;
 }
 
@@ -763,16 +825,37 @@ DateTime? _timeOnDate(DateTime date, String timeLabel) {
   if (timeLabel.isEmpty || timeLabel == '--:--') {
     return null;
   }
-  final parts = timeLabel.split(':');
-  if (parts.length != 2) {
+  final separatorIndex = timeLabel.indexOf(':');
+  if (separatorIndex <= 0 ||
+      separatorIndex == timeLabel.length - 1 ||
+      timeLabel.indexOf(':', separatorIndex + 1) != -1) {
     return null;
   }
-  final hour = int.tryParse(parts[0]);
-  final minute = int.tryParse(parts[1]);
+  final hour = _parseTimeLabelPart(timeLabel, 0, separatorIndex);
+  final minute = _parseTimeLabelPart(
+    timeLabel,
+    separatorIndex + 1,
+    timeLabel.length,
+  );
   if (hour == null || minute == null) {
     return null;
   }
   return DateTime(date.year, date.month, date.day, hour, minute);
+}
+
+int? _parseTimeLabelPart(String timeLabel, int start, int end) {
+  if (start >= end) {
+    return null;
+  }
+  var value = 0;
+  for (var index = start; index < end; index++) {
+    final codeUnit = timeLabel.codeUnitAt(index);
+    if (codeUnit < 0x30 || codeUnit > 0x39) {
+      return null;
+    }
+    value = value * 10 + codeUnit - 0x30;
+  }
+  return value;
 }
 
 DateTime? _courseEndsAt(DateTime date, CourseWidgetCourseEntry course) {
@@ -792,13 +875,25 @@ List<CourseWidgetCourseEntry> _remainingCoursesForDate({
     return sorted;
   }
 
-  return sorted.where((course) {
+  final remaining = <CourseWidgetCourseEntry>[];
+  for (final course in sorted) {
     final endAt = _courseEndsAt(date, course);
-    if (endAt == null) {
-      return true;
+    if (endAt == null || endAt.isAfter(now)) {
+      remaining.add(course);
     }
-    return endAt.isAfter(now);
-  }).toList();
+  }
+  return remaining;
+}
+
+List<CourseWidgetCourseEntry> _firstWidgetCourseEntries(
+  List<CourseWidgetCourseEntry> courses,
+) {
+  final limit = courses.length < 2 ? courses.length : 2;
+  final entries = <CourseWidgetCourseEntry>[];
+  for (var index = 0; index < limit; index++) {
+    entries.add(courses[index]);
+  }
+  return entries;
 }
 
 List<CourseWidgetCourseEntry> _resolveStoreDayCourses(
@@ -824,29 +919,36 @@ DateTime? _findNextCourseDateAfterInStore(
   DateTime currentDate,
   CourseWidgetStore store,
 ) {
-  final actualDateKeys = <String>{...store.dayCourses.keys};
-  if (actualDateKeys.isEmpty) {
-    store.days.forEach((dateKey, payload) {
-      if (payload.status == 'today_courses' && payload.courses.isNotEmpty) {
-        actualDateKeys.add(dateKey);
-      }
-    });
-  }
+  DateTime? nextCourseDate;
 
-  final sortedDateKeys = actualDateKeys.toList()..sort();
-  for (final dateKey in sortedDateKeys) {
+  void considerDateKey(String dateKey) {
     final parsedDate = DateTime.tryParse(dateKey);
-    if (parsedDate == null) {
-      continue;
+    if (parsedDate == null || !parsedDate.isAfter(currentDate)) {
+      return;
     }
-    if (!parsedDate.isAfter(currentDate)) {
-      continue;
+    final currentNextCourseDate = nextCourseDate;
+    if (currentNextCourseDate != null &&
+        !parsedDate.isBefore(currentNextCourseDate)) {
+      return;
     }
     if (_resolveStoreDayCourses(store, dateKey).isNotEmpty) {
-      return parsedDate;
+      nextCourseDate = parsedDate;
     }
   }
-  return null;
+
+  if (store.dayCourses.isNotEmpty) {
+    for (final dateKey in store.dayCourses.keys) {
+      considerDateKey(dateKey);
+    }
+  } else {
+    for (final entry in store.days.entries) {
+      final payload = entry.value;
+      if (payload.status == 'today_courses' && payload.courses.isNotEmpty) {
+        considerDateKey(entry.key);
+      }
+    }
+  }
+  return nextCourseDate;
 }
 
 CourseWidgetPayload _buildEmptyCourseWidgetPayload({
@@ -908,7 +1010,7 @@ CourseWidgetPayload _buildRelevantCourseWidgetPayloadFromStore({
       emptyText: '今日暂无课程',
       isEmpty: false,
       updatedAt: updatedAt,
-      courses: todayCourses.take(2).toList(),
+      courses: _firstWidgetCourseEntries(todayCourses),
     );
   }
 
@@ -928,7 +1030,7 @@ CourseWidgetPayload _buildRelevantCourseWidgetPayloadFromStore({
       emptyText: '周一有课',
       isEmpty: false,
       updatedAt: updatedAt,
-      courses: tomorrowCourses.take(2).toList(),
+      courses: _firstWidgetCourseEntries(tomorrowCourses),
     );
   }
 
@@ -947,7 +1049,7 @@ CourseWidgetPayload _buildRelevantCourseWidgetPayloadFromStore({
       emptyText: '明天有课',
       isEmpty: false,
       updatedAt: updatedAt,
-      courses: tomorrowCourses.take(2).toList(),
+      courses: _firstWidgetCourseEntries(tomorrowCourses),
     );
   }
 
@@ -979,7 +1081,7 @@ CourseWidgetPayload _buildRelevantCourseWidgetPayloadFromStore({
       emptyText: '下次课程',
       isEmpty: false,
       updatedAt: updatedAt,
-      courses: nextCourses.take(2).toList(),
+      courses: _firstWidgetCourseEntries(nextCourses),
     );
   }
 
@@ -1038,24 +1140,64 @@ CourseWidgetCourseEntry _buildDisplayEntry(
   );
 }
 
+List<CourseWidgetCourseEntry> _displayEntriesForCourses(
+  List<Course> courses, {
+  required bool includeDatePrefix,
+  DateTime? date,
+}) {
+  final entries = <CourseWidgetCourseEntry>[];
+  for (final course in courses) {
+    entries.add(
+      _buildDisplayEntry(
+        course,
+        includeDatePrefix: includeDatePrefix,
+        date: date,
+      ),
+    );
+  }
+  return entries;
+}
+
+List<CourseWidgetCourseEntry> _firstDisplayEntries(
+  List<Course> courses, {
+  required bool includeDatePrefix,
+  DateTime? date,
+}) {
+  final limit = courses.length < 2 ? courses.length : 2;
+  final entries = <CourseWidgetCourseEntry>[];
+  for (var index = 0; index < limit; index++) {
+    entries.add(
+      _buildDisplayEntry(
+        courses[index],
+        includeDatePrefix: includeDatePrefix,
+        date: date,
+      ),
+    );
+  }
+  return entries;
+}
+
 DateTime? _findNextCourseDateAfter(
   DateTime currentDate,
   Map<String, List<Course>> courseData,
 ) {
-  final sortedDateKeys = courseData.keys.toList()..sort();
-  for (final dateKey in sortedDateKeys) {
+  DateTime? nextCourseDate;
+  for (final entry in courseData.entries) {
+    if (entry.value.isEmpty) {
+      continue;
+    }
+    final dateKey = entry.key;
     final parsedDate = DateTime.tryParse(dateKey);
-    if (parsedDate == null) {
+    if (parsedDate == null || !parsedDate.isAfter(currentDate)) {
       continue;
     }
-    if (!parsedDate.isAfter(currentDate)) {
-      continue;
-    }
-    if ((courseData[dateKey] ?? const <Course>[]).isNotEmpty) {
-      return parsedDate;
+    final currentNextCourseDate = nextCourseDate;
+    if (currentNextCourseDate == null ||
+        parsedDate.isBefore(currentNextCourseDate)) {
+      nextCourseDate = parsedDate;
     }
   }
-  return null;
+  return nextCourseDate;
 }
 
 CourseWidgetPayload _buildCourseWidgetPayloadForDate({
@@ -1086,14 +1228,7 @@ CourseWidgetPayload _buildCourseWidgetPayloadForDate({
       emptyText: '今日暂无课程',
       isEmpty: false,
       updatedAt: updatedAt,
-      courses:
-          todayCourses
-              .take(2)
-              .map(
-                (course) =>
-                    _buildDisplayEntry(course, includeDatePrefix: false),
-              )
-              .toList(),
+      courses: _firstDisplayEntries(todayCourses, includeDatePrefix: false),
     );
   }
 
@@ -1113,14 +1248,7 @@ CourseWidgetPayload _buildCourseWidgetPayloadForDate({
       emptyText: '周一有课',
       isEmpty: false,
       updatedAt: updatedAt,
-      courses:
-          tomorrowCourses
-              .take(2)
-              .map(
-                (course) =>
-                    _buildDisplayEntry(course, includeDatePrefix: false),
-              )
-              .toList(),
+      courses: _firstDisplayEntries(tomorrowCourses, includeDatePrefix: false),
     );
   }
 
@@ -1143,14 +1271,7 @@ CourseWidgetPayload _buildCourseWidgetPayloadForDate({
       emptyText: '明天有课',
       isEmpty: false,
       updatedAt: updatedAt,
-      courses:
-          tomorrowCourses
-              .take(2)
-              .map(
-                (course) =>
-                    _buildDisplayEntry(course, includeDatePrefix: false),
-              )
-              .toList(),
+      courses: _firstDisplayEntries(tomorrowCourses, includeDatePrefix: false),
     );
   }
 
@@ -1186,17 +1307,11 @@ CourseWidgetPayload _buildCourseWidgetPayloadForDate({
       emptyText: '下次课程',
       isEmpty: false,
       updatedAt: updatedAt,
-      courses:
-          nextCourses
-              .take(2)
-              .map(
-                (course) => _buildDisplayEntry(
-                  course,
-                  includeDatePrefix: true,
-                  date: nextCourseDate,
-                ),
-              )
-              .toList(),
+      courses: _firstDisplayEntries(
+        nextCourses,
+        includeDatePrefix: true,
+        date: nextCourseDate,
+      ),
     );
   }
 
@@ -1225,18 +1340,16 @@ CourseWidgetStore buildCourseWidgetStoreFromRawData({
   final days = <String, CourseWidgetPayload>{};
   final dayCourses = <String, List<CourseWidgetCourseEntry>>{};
 
-  final sortedActualDateKeys = courseData.keys.toList()..sort();
-  for (final dateKey in sortedActualDateKeys) {
+  for (final entry in courseData.entries) {
+    final dateKey = entry.key;
     final courses = _sortedCoursesForDate(courseData, dateKey);
     if (courses.isEmpty) {
       continue;
     }
-    dayCourses[dateKey] =
-        courses
-            .map(
-              (course) => _buildDisplayEntry(course, includeDatePrefix: false),
-            )
-            .toList();
+    dayCourses[dateKey] = _displayEntriesForCourses(
+      courses,
+      includeDatePrefix: false,
+    );
   }
 
   final parsedFirstDay = DateTime.tryParse(firstDay);
@@ -1254,8 +1367,8 @@ CourseWidgetStore buildCourseWidgetStoreFromRawData({
       );
     }
   } else {
-    final sortedDateKeys = courseData.keys.toList()..sort();
-    for (final dateKey in sortedDateKeys) {
+    for (final entry in courseData.entries) {
+      final dateKey = entry.key;
       final parsedDate = DateTime.tryParse(dateKey);
       if (parsedDate == null) {
         continue;
@@ -1301,8 +1414,13 @@ String _findFirstCourseDate(Map<String, List<Course>> courseData) {
     return '';
   }
 
-  final dates = courseData.keys.toList()..sort();
-  return dates.first;
+  var firstDate = '';
+  for (final dateKey in courseData.keys) {
+    if (firstDate.isEmpty || dateKey.compareTo(firstDate) < 0) {
+      firstDate = dateKey;
+    }
+  }
+  return firstDate;
 }
 
 Future<Directory> _ensureCourseWidgetDirectory() async {
@@ -1835,16 +1953,25 @@ Future<void> setActiveCourseSchedule(String scheduleId) async {
 
 Future<bool> deleteCourseSchedule(String scheduleId) async {
   final archive = await loadCourseScheduleArchive();
-  final remainingSchedules =
-      archive.schedules.where((schedule) => schedule.id != scheduleId).toList();
-  if (remainingSchedules.length == archive.schedules.length) {
+  final remainingSchedules = <SavedCourseSchedule>[];
+  var removedAny = false;
+  var activeScheduleStillPresent = false;
+  for (final schedule in archive.schedules) {
+    if (schedule.id == scheduleId) {
+      removedAny = true;
+      continue;
+    }
+    if (schedule.id == archive.activeScheduleId) {
+      activeScheduleStillPresent = true;
+    }
+    remainingSchedules.add(schedule);
+  }
+  if (!removedAny) {
     return false;
   }
 
   final nextActiveId =
-      remainingSchedules.any(
-            (schedule) => schedule.id == archive.activeScheduleId,
-          )
+      activeScheduleStillPresent
           ? archive.activeScheduleId
           : remainingSchedules.isEmpty
           ? ''
@@ -1865,17 +1992,22 @@ Future<void> clearCourseSchedules({
   bool refreshWidget = true,
 }) async {
   final archive = await loadCourseScheduleArchive();
-  final retainedSchedules =
-      sourceTypes == null
-          ? <SavedCourseSchedule>[]
-          : archive.schedules
-              .where((schedule) => !sourceTypes.contains(schedule.sourceType))
-              .toList();
+  final retainedSchedules = <SavedCourseSchedule>[];
+  var activeScheduleStillPresent = false;
+  if (sourceTypes != null) {
+    for (final schedule in archive.schedules) {
+      if (sourceTypes.contains(schedule.sourceType)) {
+        continue;
+      }
+      if (schedule.id == archive.activeScheduleId) {
+        activeScheduleStillPresent = true;
+      }
+      retainedSchedules.add(schedule);
+    }
+  }
 
   final nextActiveId =
-      retainedSchedules.any(
-            (schedule) => schedule.id == archive.activeScheduleId,
-          )
+      activeScheduleStillPresent
           ? archive.activeScheduleId
           : retainedSchedules.isEmpty
           ? ''
@@ -1910,7 +2042,7 @@ SavedCourseSchedule _parseImportedSchedulePayload(
 }) {
   final payloadType = _stringValue(payloadJson['type']);
   if (!acceptedTypes.contains(payloadType)) {
-    throw const FormatException('分享内容类型不匹配');
+    throw const CourseScheduleImportException('分享内容类型不匹配');
   }
 
   final rawSchedule = Map<String, dynamic>.from(
@@ -1936,7 +2068,7 @@ SavedCourseSchedule _parseImportedSchedulePayload(
   });
 
   if (imported.courseData.isEmpty) {
-    throw const FormatException('分享内容里没有可导入的课表数据');
+    throw const CourseScheduleImportException('分享内容里没有可导入的课表数据');
   }
   return imported;
 }
@@ -1952,10 +2084,18 @@ String buildCourseScheduleShareCode(SavedCourseSchedule schedule) {
 }
 
 String _normalizeCourseShareCode(String rawCode) {
-  final compact = rawCode.replaceAll(RegExp(r'\s+'), '');
+  final compactBuffer = StringBuffer();
+  for (var index = 0; index < rawCode.length; index++) {
+    final codeUnit = rawCode.codeUnitAt(index);
+    if (!_isCourseShareCodeWhitespace(codeUnit)) {
+      compactBuffer.writeCharCode(codeUnit);
+    }
+  }
+
+  final compact = compactBuffer.toString();
   final prefixIndex = compact.indexOf(_courseSharePrefix);
   if (prefixIndex < 0) {
-    throw const FormatException('未识别到工大盒子课表分享码');
+    throw const CourseScheduleImportException('未识别到工大盒子课表分享码');
   }
   return compact.substring(prefixIndex + _courseSharePrefix.length);
 }
@@ -1978,10 +2118,12 @@ SavedCourseSchedule parseCourseScheduleShareCode(String rawCode) {
       payloadJson,
       acceptedTypes: {_courseScheduleSharePayloadType},
     );
-  } on FormatException {
+  } on CourseScheduleImportException {
     rethrow;
-  } catch (error) {
-    throw FormatException('分享码解析失败：$error');
+  } catch (_) {
+    throw const CourseScheduleImportException(
+      courseScheduleShareCodeParseFailureMessage,
+    );
   }
 }
 
@@ -2005,10 +2147,12 @@ SavedCourseSchedule parseCourseScheduleExportJsonString(String rawJson) {
         _courseScheduleSharePayloadType,
       },
     );
-  } on FormatException {
+  } on CourseScheduleImportException {
     rethrow;
-  } catch (error) {
-    throw FormatException('课表文件解析失败：$error');
+  } catch (_) {
+    throw const CourseScheduleImportException(
+      courseScheduleFileParseFailureMessage,
+    );
   }
 }
 
@@ -2083,9 +2227,9 @@ Future<bool> deleteCourseFromActiveSchedule({
   }
 
   final updatedCourseData = <String, List<Course>>{};
-  activeSchedule.courseData.forEach((key, courses) {
-    updatedCourseData[key] = List<Course>.from(courses);
-  });
+  for (final entry in activeSchedule.courseData.entries) {
+    updatedCourseData[entry.key] = List<Course>.from(entry.value);
+  }
 
   final coursesForDate = updatedCourseData[dateKey];
   if (coursesForDate == null || coursesForDate.isEmpty) {
@@ -2114,19 +2258,21 @@ Future<bool> deleteCourseFromActiveSchedule({
         if (sourceCourses == null || sourceCourses.isEmpty) {
           continue;
         }
-        final filteredCourses =
-            sourceCourses
-                .where(
-                  (course) => !_isSameWholeScheduleCourse(course, targetCourse),
-                )
-                .toList();
-        if (filteredCourses.length != sourceCourses.length) {
-          removedAny = true;
+        var writeIndex = 0;
+        for (final course in sourceCourses) {
+          if (_isSameWholeScheduleCourse(course, targetCourse)) {
+            removedAny = true;
+            continue;
+          }
+          sourceCourses[writeIndex] = course;
+          writeIndex++;
         }
-        if (filteredCourses.isEmpty) {
+        if (writeIndex == 0) {
           updatedCourseData.remove(key);
+        } else if (writeIndex < sourceCourses.length) {
+          sourceCourses.removeRange(writeIndex, sourceCourses.length);
         } else {
-          updatedCourseData[key] = filteredCourses;
+          updatedCourseData[key] = sourceCourses;
         }
       }
       if (!removedAny) {
@@ -2158,13 +2304,9 @@ Future<Map<String, List<Course>>> readCourseDataFromJson(
 
   // 将 Map<String, dynamic> 转换为 Map<String, List<Course>>
   Map<String, List<Course>> courseData = {};
-  jsonData.forEach((key, coursesJson) {
-    List<Course> courses =
-        (coursesJson as List).map((courseJson) {
-          return Course.fromJson(courseJson);
-        }).toList();
-    courseData[key] = courses;
-  });
+  for (final entry in jsonData.entries) {
+    courseData[entry.key] = _parseCourseList(entry.value as List);
+  }
 
   return courseData;
 }
@@ -2485,13 +2627,14 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
       stackTrace: stackTrace,
     );
   }
-  expCourseData.forEach((date, list) {
-    if (courseData.containsKey(date)) {
-      courseData[date]!.addAll(list);
+  for (final entry in expCourseData.entries) {
+    final existingCourses = courseData[entry.key];
+    if (existingCourses != null) {
+      existingCourses.addAll(entry.value);
     } else {
-      courseData[date] = list;
+      courseData[entry.key] = entry.value;
     }
-  });
+  }
   return CourseSyncSnapshot(
     courseData: courseData,
     semesterId: getOrgDataWeb.semesterId ?? '',

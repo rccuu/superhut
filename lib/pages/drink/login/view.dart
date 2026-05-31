@@ -1,5 +1,6 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/ui/app_loading_indicator.dart';
 import '../../../core/ui/app_snack_bar.dart';
@@ -7,7 +8,9 @@ import 'command.dart';
 import 'widgets/login_widgets.dart';
 
 class DrinkLoginPage extends StatefulWidget {
-  const DrinkLoginPage({super.key});
+  const DrinkLoginPage({super.key, this.command});
+
+  final DrinkLoginCommand? command;
 
   @override
   State<DrinkLoginPage> createState() => _DrinkLoginPageState();
@@ -16,22 +19,55 @@ class DrinkLoginPage extends StatefulWidget {
 class _DrinkLoginPageState extends State<DrinkLoginPage> {
   final TextEditingController _userNoController = TextEditingController();
   final TextEditingController _captchaController = TextEditingController();
-  final DrinkLoginCommand _command = DrinkLoginCommand();
-  bool _isSending = false;
+  late final DrinkLoginCommand _command;
+  late final bool _ownsCommand;
+  late final ValueNotifier<Future<Uint8List>> _captchaFutureNotifier;
+  final ValueNotifier<bool> _isSending = ValueNotifier<bool>(false);
+  bool _isCaptchaLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _command = widget.command ?? DrinkLoginCommand();
+    _ownsCommand = widget.command == null;
+    _captchaFutureNotifier = ValueNotifier<Future<Uint8List>>(_loadCaptcha());
+  }
 
   @override
   void dispose() {
     _userNoController.dispose();
     _captchaController.dispose();
-    _command.dispose();
+    _captchaFutureNotifier.dispose();
+    _isSending.dispose();
+    if (_ownsCommand) {
+      _command.dispose();
+    }
     super.dispose();
   }
 
+  Future<Uint8List> _loadCaptcha() async {
+    _isCaptchaLoading = true;
+    try {
+      return await _command.getImageCaptcha();
+    } finally {
+      _isCaptchaLoading = false;
+    }
+  }
+
   void _refreshCaptcha() {
-    setState(_command.dispose);
+    if (_isCaptchaLoading) {
+      return;
+    }
+
+    _command.dispose();
+    _captchaFutureNotifier.value = _loadCaptcha();
   }
 
   Future<void> _sendMessageCode() async {
+    if (_isSending.value) {
+      return;
+    }
+
     if (_userNoController.text.isEmpty || _captchaController.text.isEmpty) {
       showAppSnackBar(
         context,
@@ -41,9 +77,7 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
       return;
     }
 
-    setState(() {
-      _isSending = true;
-    });
+    _setSending(true);
 
     try {
       await _command.sendMessageCode(
@@ -52,12 +86,16 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
         _captchaController.text,
       );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
+      _setSending(false);
     }
+  }
+
+  void _setSending(bool isSending) {
+    if (!mounted || _isSending.value == isSending) {
+      return;
+    }
+
+    _isSending.value = isSending;
   }
 
   @override
@@ -94,20 +132,36 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
                   color: colorScheme.outlineVariant.withValues(alpha: 0.8),
                 ),
               ),
-              child: EnhancedFutureBuilder(
-                future: _command.getImageCaptcha(),
-                rememberFutureResult: true,
-                whenDone: (snapshot) {
-                  if (snapshot.isNotEmpty) {
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: Image.memory(snapshot, fit: BoxFit.contain),
-                    );
-                  }
+              child: ValueListenableBuilder<Future<Uint8List>>(
+                valueListenable: _captchaFutureNotifier,
+                builder: (context, captchaFuture, _) {
+                  return EnhancedFutureBuilder(
+                    future: captchaFuture,
+                    rememberFutureResult: false,
+                    whenDone: (snapshot) {
+                      if (snapshot.isNotEmpty) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: Image.memory(snapshot, fit: BoxFit.contain),
+                        );
+                      }
 
-                  return _CaptchaPlaceholder(onRefresh: _refreshCaptcha);
+                      return _CaptchaPlaceholder(
+                        onRefresh: _refreshCaptcha,
+                        isLoading: false,
+                      );
+                    },
+                    whenError:
+                        (_) => _CaptchaPlaceholder(
+                          onRefresh: _refreshCaptcha,
+                          isLoading: false,
+                        ),
+                    whenNotDone: _CaptchaPlaceholder(
+                      onRefresh: _refreshCaptcha,
+                      isLoading: true,
+                    ),
+                  );
                 },
-                whenNotDone: _CaptchaPlaceholder(onRefresh: _refreshCaptcha),
               ),
             ),
           ),
@@ -140,18 +194,24 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
           SizedBox(
             width: double.infinity,
             height: 52,
-            child: FilledButton(
-              onPressed: _isSending ? null : _sendMessageCode,
-              child:
-                  _isSending
-                      ? const AppLoadingIndicator(size: 22, color: Colors.white)
-                      : const Text(
-                        '发送验证码',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _isSending,
+              child: const Text(
+                '发送验证码',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              builder: (context, isSending, label) {
+                return FilledButton(
+                  onPressed: isSending ? null : _sendMessageCode,
+                  child:
+                      isSending
+                          ? const AppLoadingIndicator(
+                            size: 22,
+                            color: Colors.white,
+                          )
+                          : label,
+                );
+              },
             ),
           ),
           const SizedBox(height: 10),
@@ -166,27 +226,49 @@ class _DrinkLoginPageState extends State<DrinkLoginPage> {
 }
 
 class _CaptchaPlaceholder extends StatelessWidget {
-  const _CaptchaPlaceholder({required this.onRefresh});
+  const _CaptchaPlaceholder({required this.onRefresh, required this.isLoading});
 
   final VoidCallback onRefresh;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AppLoadingIndicator(size: 22, color: colorScheme.primary),
-          const SizedBox(height: 12),
-          Text(
-            '正在加载验证码',
-            style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
-          ),
-          const SizedBox(height: 6),
-          TextButton(onPressed: onRefresh, child: const Text('重新加载')),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isLoading)
+              AppLoadingIndicator(size: 20, color: colorScheme.primary)
+            else
+              Icon(Icons.refresh_rounded, size: 20, color: colorScheme.primary),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                isLoading ? '正在加载验证码' : '验证码加载失败，点击重试',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onRefresh,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('重新加载'),
+            ),
+          ],
+        ),
       ),
     );
   }

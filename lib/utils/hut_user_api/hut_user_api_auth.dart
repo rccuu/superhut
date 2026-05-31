@@ -1,21 +1,28 @@
 part of '../hut_user_api.dart';
 
 mixin _HutAuthMixin on _HutUserApiCore {
+  static const _hexLowerDigits = '0123456789abcdef';
+  static const _hexUpperDigits = '0123456789ABCDEF';
+
   String generateDeviceIdAlphabet() {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
     final random = Random.secure();
-    return List.generate(
-      24,
-      (index) => chars[random.nextInt(chars.length)],
-    ).join();
+    final buffer = StringBuffer();
+    for (var index = 0; index < 24; index++) {
+      buffer.write(chars[random.nextInt(chars.length)]);
+    }
+    return buffer.toString();
   }
 
   String generateUuidV4() {
     final random = Random.secure();
-    final bytes = List<int>.generate(16, (i) => random.nextInt(256));
+    final bytes = Uint8List(16);
+    for (var index = 0; index < bytes.length; index++) {
+      bytes[index] = random.nextInt(256);
+    }
     bytes[6] = (bytes[6] & 0x0F) | 0x40;
     bytes[8] = (bytes[8] & 0x3F) | 0x80;
-    return bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+    return _hexBytes(bytes, _hexLowerDigits);
   }
 
   String generateJSessionId() {
@@ -24,9 +31,18 @@ mixin _HutAuthMixin on _HutUserApiCore {
     for (var i = 0; i < bytes.length; i++) {
       bytes[i] = random.nextInt(256);
     }
-    return bytes
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0').toUpperCase())
-        .join();
+    return _hexBytes(bytes, _hexUpperDigits);
+  }
+
+  String _hexBytes(Uint8List bytes, String digits) {
+    final buffer = StringBuffer();
+    for (var index = 0; index < bytes.length; index++) {
+      final byte = bytes[index];
+      buffer
+        ..write(digits[byte >> 4])
+        ..write(digits[byte & 0x0F]);
+    }
+    return buffer.toString();
   }
 
   Future<String> getFingerprint() async {

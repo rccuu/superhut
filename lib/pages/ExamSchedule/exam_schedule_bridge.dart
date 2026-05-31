@@ -24,11 +24,15 @@ Future<ExamScheduleResult> getSchedule() async {
       );
     }
 
-    final schedules =
-        (data['data'] as List? ?? const <dynamic>[])
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList();
+    final schedules = <Map<String, dynamic>>[];
+    final rawSchedules = data['data'];
+    if (rawSchedules is List) {
+      for (final item in rawSchedules) {
+        if (item is Map) {
+          schedules.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
     return ExamScheduleResult(schedules: schedules);
   } on DioException catch (error, stackTrace) {
     AppLogger.error(

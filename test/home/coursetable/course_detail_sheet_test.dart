@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:superhut/home/coursetable/widgets/course_table_widgets.dart';
@@ -6,6 +8,7 @@ import 'package:superhut/utils/course/coursemain.dart';
 void main() {
   Widget buildSheet(
     Course course, {
+    CourseDetailClipboardWriter? writeClipboard,
     VoidCallback? onViewStudents,
     VoidCallback? onDeleteCurrentCourse,
     VoidCallback? onDeleteWholeScheduleCourse,
@@ -16,6 +19,7 @@ void main() {
           course: course,
           scheduleText: '周一 第1-2节',
           copyText: '测试课程信息',
+          writeClipboard: writeClipboard,
           onViewStudents: onViewStudents,
           onDeleteCurrentCourse: onDeleteCurrentCourse,
           onDeleteWholeScheduleCourse: onDeleteWholeScheduleCourse,
@@ -102,5 +106,83 @@ void main() {
 
     expect(find.text('删除当前课程'), findsNothing);
     expect(find.text('删除整学期该课程'), findsNothing);
+  });
+
+  testWidgets('copy action ignores duplicate taps while clipboard is writing', (
+    tester,
+  ) async {
+    final writeCompleter = Completer<void>();
+    final copiedTexts = <String>[];
+    final course = Course(
+      name: '高等数学',
+      teacherName: '李老师',
+      weekDuration: '1-16',
+      location: '公共101',
+      startSection: 1,
+      duration: 2,
+    );
+
+    await tester.pumpWidget(
+      buildSheet(
+        course,
+        writeClipboard: (text) {
+          copiedTexts.add(text);
+          return writeCompleter.future;
+        },
+      ),
+    );
+
+    final copyName = find.text('复制课程名称');
+    await tester.ensureVisible(copyName);
+    await tester.tap(copyName);
+    await tester.pump();
+    await tester.tap(copyName);
+    await tester.pump();
+
+    expect(copiedTexts, ['高等数学']);
+
+    writeCompleter.complete();
+    await tester.pump();
+  });
+
+  testWidgets('copy action recovers after clipboard write throws', (
+    tester,
+  ) async {
+    var writeCalls = 0;
+    final course = Course(
+      name: '高等数学',
+      teacherName: '李老师',
+      weekDuration: '1-16',
+      location: '公共101',
+      startSection: 1,
+      duration: 2,
+    );
+
+    await tester.pumpWidget(
+      buildSheet(
+        course,
+        writeClipboard: (_) async {
+          writeCalls++;
+          throw Exception('clipboard unavailable');
+        },
+      ),
+    );
+
+    final copyName = find.text('复制课程名称');
+    await tester.ensureVisible(copyName);
+    await tester.tap(copyName);
+    await tester.pump();
+    await tester.pump();
+
+    expect(writeCalls, 1);
+    expect(tester.takeException(), isNull);
+    expect(find.text('复制课程信息失败，请稍后重试'), findsOneWidget);
+
+    await tester.ensureVisible(copyName);
+    await tester.tap(copyName);
+    await tester.pump();
+    await tester.pump();
+
+    expect(writeCalls, 2);
   });
 }

@@ -1,9 +1,10 @@
+import 'dart:async';
+
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:ionicons/ionicons.dart';
-import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 
+import '../../core/ui/app_bottom_sheet.dart';
 import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
@@ -59,15 +60,58 @@ const double _roomGridCompactSpacing = 4;
 // Sliver constraints already exclude outer horizontal padding.
 const double _roomGridThreeColumnMinWidth = 288;
 
+String _formatFreeRoomDateKey(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+String _formatFreeRoomMonthDay(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '$month月$day日';
+}
+
+String _freeRoomWeekdayLabel(DateTime date) {
+  return switch (date.weekday) {
+    DateTime.monday => '周一',
+    DateTime.tuesday => '周二',
+    DateTime.wednesday => '周三',
+    DateTime.thursday => '周四',
+    DateTime.friday => '周五',
+    DateTime.saturday => '周六',
+    DateTime.sunday => '周日',
+    _ => '',
+  };
+}
+
+typedef FreeRoomPageLoader =
+    Future<List<Room>> Function(String date, String nodeId, String buildingId);
+typedef FreeRoomBottomSheetPresenter =
+    Future<T?> Function<T>({
+      required BuildContext context,
+      required WidgetBuilder builder,
+      bool expand,
+      Color? backgroundColor,
+      Color? barrierColor,
+      Color? transitionBackgroundColor,
+      Radius? topRadius,
+      BoxShadow? shadow,
+    });
+
 class FreeRoomPage extends StatefulWidget {
   const FreeRoomPage({
     super.key,
     required this.buildingId,
     required this.buildingName,
+    this.loadRooms,
+    this.showBottomSheet,
   });
 
   final String buildingId;
   final String buildingName;
+  final FreeRoomPageLoader? loadRooms;
+  final FreeRoomBottomSheetPresenter? showBottomSheet;
 
   @override
   State<FreeRoomPage> createState() => _FreeRoomPageState();
@@ -76,48 +120,141 @@ class FreeRoomPage extends StatefulWidget {
 class _FreeRoomPageState extends State<FreeRoomPage> {
   static const Color _emptyRoomAccent = Color(0xFF3768D6);
   static const int _lessonCount = 12;
+  static const List<String> _roomNameCompactTokens = [
+    '（多媒体教室）',
+    '(多媒体教室)',
+    '多媒体教室',
+    '（教室）',
+    '(教室)',
+    '教室',
+    '（）',
+    '()',
+  ];
+  static const List<String> _roomNameFallbackTokens = ['多媒体教室'];
 
   String nodeId = '0102';
-  String date = DateFormat('yyyy-MM-dd').format(DateTime.now());
+  late String date;
   double startLesson = 1;
   double endLesson = 2;
-  late Future<List<Room>> _roomFuture;
+  late final ValueNotifier<Future<List<Room>>> _roomFutureNotifier;
+  bool _isDatePickerOpen = false;
+  bool _isLessonPickerOpen = false;
+  bool _isRoomDetailOpen = false;
+  final Map<Room, _RoomCardInfo> _roomCardInfoCache = <Room, _RoomCardInfo>{};
 
   @override
   void initState() {
     super.initState();
-    final initialQuery = _resolveSuggestedQuery(DateTime.now());
-    date = DateFormat('yyyy-MM-dd').format(initialQuery.date);
+    final now = DateTime.now();
+    final initialQuery = _resolveSuggestedQuery(now);
+    date = _formatFreeRoomDateKey(initialQuery.date);
     startLesson = initialQuery.block.startLesson.toDouble();
     endLesson = initialQuery.block.endLesson.toDouble();
     nodeId = _nodeIdForRange(startLesson, endLesson);
-    _roomFuture = _loadRooms();
+    _roomFutureNotifier = ValueNotifier<Future<List<Room>>>(_reloadRooms());
+  }
+
+  @override
+  void dispose() {
+    _roomFutureNotifier.dispose();
+    super.dispose();
   }
 
   Future<List<Room>> _loadRooms() {
+    final loader = widget.loadRooms;
+    if (loader != null) {
+      return loader(date, nodeId, widget.buildingId);
+    }
     return getRoom(date, nodeId, widget.buildingId, false);
+  }
+
+  Future<List<Room>> _reloadRooms() {
+    _roomCardInfoCache.clear();
+    return _loadRooms();
+  }
+
+  _RoomCardInfo _roomCardInfoFor(Room room) {
+    final cached = _roomCardInfoCache[room];
+    if (cached != null) {
+      return cached;
+    }
+
+    final seatLabel =
+        room.seatNumber.trim().isEmpty ? '座位未知' : '${room.seatNumber} 座';
+    final busyLessons = _busyLessonsForRoom(room);
+    final info = _RoomCardInfo(
+      compactName: _compactRoomName(room.name),
+      seatLabel: seatLabel,
+      busySlotCount: busyLessons.length,
+      busyLessons: busyLessons,
+    );
+    _roomCardInfoCache[room] = info;
+    return info;
   }
 
   String _compactRoomName(String name) {
     final compactName =
-        name
-            .replaceAll(widget.buildingName, '')
-            .replaceAll('（多媒体教室）', '')
-            .replaceAll('(多媒体教室)', '')
-            .replaceAll('多媒体教室', '')
-            .replaceAll('（教室）', '')
-            .replaceAll('(教室)', '')
-            .replaceAll('教室', '')
-            .replaceAll('（）', '')
-            .replaceAll('()', '')
-            .replaceAll(' ', '')
-            .trim();
+        _stripRoomNameSegments(
+          name,
+          removeBuildingName: true,
+          removeAsciiSpaces: true,
+          tokens: _roomNameCompactTokens,
+        ).trim();
     if (compactName.isNotEmpty) {
       return compactName;
     }
 
-    final fallbackName = name.replaceAll('多媒体教室', '').trim();
+    final fallbackName =
+        _stripRoomNameSegments(
+          name,
+          removeBuildingName: false,
+          removeAsciiSpaces: false,
+          tokens: _roomNameFallbackTokens,
+        ).trim();
     return fallbackName.isEmpty ? name : fallbackName;
+  }
+
+  String _stripRoomNameSegments(
+    String name, {
+    required bool removeBuildingName,
+    required bool removeAsciiSpaces,
+    required List<String> tokens,
+  }) {
+    final buffer = StringBuffer();
+    final buildingName = widget.buildingName;
+    for (var index = 0; index < name.length;) {
+      if (removeBuildingName &&
+          buildingName.isNotEmpty &&
+          name.startsWith(buildingName, index)) {
+        index += buildingName.length;
+        continue;
+      }
+
+      final tokenLength = _roomNameTokenLengthAt(name, index, tokens);
+      if (tokenLength > 0) {
+        index += tokenLength;
+        continue;
+      }
+
+      final codeUnit = name.codeUnitAt(index);
+      if (removeAsciiSpaces && codeUnit == 0x20) {
+        index++;
+        continue;
+      }
+
+      buffer.write(name[index]);
+      index++;
+    }
+    return buffer.toString();
+  }
+
+  int _roomNameTokenLengthAt(String name, int start, List<String> tokens) {
+    for (final token in tokens) {
+      if (name.startsWith(token, start)) {
+        return token.length;
+      }
+    }
+    return 0;
   }
 
   String _formatDateLabel(String value) {
@@ -126,17 +263,8 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
       return value;
     }
 
-    final weekday = switch (parsedDate.weekday) {
-      DateTime.monday => '周一',
-      DateTime.tuesday => '周二',
-      DateTime.wednesday => '周三',
-      DateTime.thursday => '周四',
-      DateTime.friday => '周五',
-      DateTime.saturday => '周六',
-      DateTime.sunday => '周日',
-      _ => '',
-    };
-    return '${DateFormat('MM月dd日').format(parsedDate)} · $weekday';
+    return '${_formatFreeRoomMonthDay(parsedDate)} · '
+        '${_freeRoomWeekdayLabel(parsedDate)}';
   }
 
   String _lessonRangeLabel() {
@@ -144,17 +272,7 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
   }
 
   String _formatDateSheetLabel(DateTime value) {
-    final weekday = switch (value.weekday) {
-      DateTime.monday => '周一',
-      DateTime.tuesday => '周二',
-      DateTime.wednesday => '周三',
-      DateTime.thursday => '周四',
-      DateTime.friday => '周五',
-      DateTime.saturday => '周六',
-      DateTime.sunday => '周日',
-      _ => '',
-    };
-    return '${value.month}月${value.day}日$weekday';
+    return '${value.month}月${value.day}日${_freeRoomWeekdayLabel(value)}';
   }
 
   _BigLessonBlock _selectedBigLessonBlock() {
@@ -184,28 +302,23 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
 
   _BigLessonBlock _resolveSuggestedBigLesson(DateTime now) {
     final minutes = now.hour * 60 + now.minute;
-    final timedBlocks =
-        _bigLessonBlocks
-            .where(
-              (block) => block.startMinutes != null && block.endMinutes != null,
-            )
-            .toList();
-
-    for (final block in timedBlocks) {
-      if (minutes <= block.endMinutes!) {
+    _BigLessonBlock? latestTimedBlock;
+    for (final block in _bigLessonBlocks) {
+      final endMinutes = block.endMinutes;
+      if (block.startMinutes == null || endMinutes == null) {
+        continue;
+      }
+      latestTimedBlock = block;
+      if (minutes <= endMinutes) {
         return block;
       }
     }
 
-    return timedBlocks.last;
+    return latestTimedBlock ?? _bigLessonBlocks.last;
   }
 
   String _nodeIdForRange(double start, double end) {
     return '${start.toStringAsFixed(0).padLeft(2, '0')}${end.toStringAsFixed(0).padLeft(2, '0')}';
-  }
-
-  Color _sheetRouteBackground(BuildContext context) {
-    return Colors.transparent;
   }
 
   Color _sheetBarrierColor(BuildContext context) {
@@ -215,99 +328,168 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
     );
   }
 
-  Color _sheetTransitionBackground(BuildContext context) {
-    return Colors.transparent;
+  Set<int> _busyLessonsForRoom(Room room) {
+    final busyLessons = <int>{};
+    for (final rawLesson in room.free) {
+      final lesson = _parseBusyLessonKey(rawLesson);
+      if (lesson > 0 && lesson <= _lessonCount) {
+        busyLessons.add(lesson);
+      }
+    }
+    return busyLessons;
   }
 
-  int _busySlotCount(Room room) {
-    return List<int>.generate(
-      _lessonCount,
-      (index) => index + 1,
-    ).where((lesson) => _isSlotBusy(room, lesson)).length;
+  int _parseBusyLessonKey(String value) {
+    if (value.length != 2) {
+      return 0;
+    }
+
+    final first = value.codeUnitAt(0);
+    final second = value.codeUnitAt(1);
+    if (first < 0x30 || first > 0x39 || second < 0x30 || second > 0x39) {
+      return 0;
+    }
+    return (first - 0x30) * 10 + second - 0x30;
   }
 
-  bool _isSlotBusy(Room room, int lesson) {
-    return room.free.contains(lesson.toString().padLeft(2, '0'));
+  Future<T?> _showFreeRoomSheet<T>({
+    required WidgetBuilder builder,
+    bool expand = false,
+    Color? backgroundColor,
+    Color? barrierColor,
+    Color? transitionBackgroundColor,
+  }) {
+    final presenter = widget.showBottomSheet ?? showAppAdaptiveBottomSheet;
+    return presenter<T>(
+      context: context,
+      expand: expand,
+      backgroundColor: backgroundColor,
+      barrierColor: barrierColor,
+      transitionBackgroundColor: transitionBackgroundColor,
+      builder: builder,
+    );
   }
 
   Future<void> _pickDate() async {
-    final initialDate = DateTime.tryParse(date) ?? DateTime.now();
-    final selectedDate = await showCupertinoModalBottomSheet<DateTime>(
-      context: context,
-      expand: false,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return _DatePickerSheet(
-          accent: _emptyRoomAccent,
-          initialDate: initialDate,
-          firstDate: DateTime(
-            initialDate.year - 2,
-            initialDate.month,
-            initialDate.day,
-          ),
-          lastDate: DateTime(
-            initialDate.year + 2,
-            initialDate.month,
-            initialDate.day,
-          ),
-          formatLabel: _formatDateSheetLabel,
-        );
-      },
-    );
+    if (_isDatePickerOpen) {
+      return;
+    }
+
+    _isDatePickerOpen = true;
+    final today = DateUtils.dateOnly(DateTime.now());
+    final initialDate = DateTime.tryParse(date) ?? today;
+    final DateTime? selectedDate;
+    try {
+      selectedDate = await _showFreeRoomSheet<DateTime>(
+        backgroundColor: Colors.transparent,
+        builder: (context) {
+          return _DatePickerSheet(
+            accent: _emptyRoomAccent,
+            initialDate: initialDate,
+            firstDate: DateTime(
+              initialDate.year - 2,
+              initialDate.month,
+              initialDate.day,
+            ),
+            lastDate: DateTime(
+              initialDate.year + 2,
+              initialDate.month,
+              initialDate.day,
+            ),
+            today: today,
+            formatLabel: _formatDateSheetLabel,
+          );
+        },
+      );
+    } finally {
+      _isDatePickerOpen = false;
+    }
 
     if (selectedDate == null || !mounted) {
       return;
     }
 
-    setState(() {
-      date = DateFormat('yyyy-MM-dd').format(selectedDate);
-      _roomFuture = _loadRooms();
-    });
+    final selectedDateText = _formatFreeRoomDateKey(selectedDate);
+    if (selectedDateText == date) {
+      return;
+    }
+
+    date = selectedDateText;
+    _roomFutureNotifier.value = _reloadRooms();
   }
 
   Future<void> _showLessonPicker() async {
-    final result = await showCupertinoModalBottomSheet<_BigLessonBlock>(
-      context: context,
-      expand: false,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return _BigLessonSheet(
-          accent: _emptyRoomAccent,
-          initialBlock: _selectedBigLessonBlock(),
-          suggestedBlock: _resolveSuggestedBigLesson(DateTime.now()),
-        );
-      },
-    );
+    if (_isLessonPickerOpen) {
+      return;
+    }
+
+    _isLessonPickerOpen = true;
+    final initialBlock = _selectedBigLessonBlock();
+    final suggestedBlock = _resolveSuggestedBigLesson(DateTime.now());
+    final _BigLessonBlock? result;
+    try {
+      result = await _showFreeRoomSheet<_BigLessonBlock>(
+        backgroundColor: Colors.transparent,
+        builder: (context) {
+          return _BigLessonSheet(
+            accent: _emptyRoomAccent,
+            initialBlock: initialBlock,
+            suggestedBlock: suggestedBlock,
+          );
+        },
+      );
+    } finally {
+      _isLessonPickerOpen = false;
+    }
 
     if (result == null || !mounted) {
       return;
     }
 
-    setState(() {
-      startLesson = result.startLesson.toDouble();
-      endLesson = result.endLesson.toDouble();
-      nodeId = _nodeIdForRange(startLesson, endLesson);
-      _roomFuture = _loadRooms();
-    });
+    final nextStartLesson = result.startLesson.toDouble();
+    final nextEndLesson = result.endLesson.toDouble();
+    final nextNodeId = _nodeIdForRange(nextStartLesson, nextEndLesson);
+    if (nextNodeId == nodeId) {
+      return;
+    }
+
+    startLesson = nextStartLesson;
+    endLesson = nextEndLesson;
+    nodeId = nextNodeId;
+    _roomFutureNotifier.value = _reloadRooms();
   }
 
   void _showRoomDetail(Room room) {
-    showCupertinoModalBottomSheet<void>(
-      context: context,
-      expand: false,
-      backgroundColor: _sheetRouteBackground(context),
+    if (_isRoomDetailOpen) {
+      return;
+    }
+
+    _isRoomDetailOpen = true;
+    final cardInfo = _roomCardInfoFor(room);
+    final sheet = _showFreeRoomSheet<void>(
+      backgroundColor: Colors.transparent,
       barrierColor: _sheetBarrierColor(context),
-      transitionBackgroundColor: _sheetTransitionBackground(context),
+      transitionBackgroundColor: Colors.transparent,
       builder: (context) {
         return _RoomDetailSheet(
           room: room,
-          compactRoomName: _compactRoomName(room.name),
+          compactRoomName: cardInfo.compactName,
           accent: _emptyRoomAccent,
           slotCount: _lessonCount,
-          isSlotBusy: (lesson) => _isSlotBusy(room, lesson),
+          busySlotCount: cardInfo.busySlotCount,
+          busyLessons: cardInfo.busyLessons,
         );
       },
     );
+    unawaited(_trackRoomDetailSheet(sheet));
+  }
+
+  Future<void> _trackRoomDetailSheet(Future<void> sheet) async {
+    try {
+      await sheet;
+    } finally {
+      _isRoomDetailOpen = false;
+    }
   }
 
   SliverAppBar _buildTopBar(BuildContext context, {int? roomCount}) {
@@ -388,11 +570,16 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
         style: AppGlassBackgroundStyle.soft,
         lightBottomColor: const Color(0xFFF0F5FF),
         darkBottomColor: const Color(0xFF0F1826),
-        child: EnhancedFutureBuilder(
-          future: _roomFuture,
-          rememberFutureResult: false,
-          whenDone: (List<Room> data) => _buildContent(context, data),
-          whenNotDone: _buildLoadingView(context),
+        child: ValueListenableBuilder<Future<List<Room>>>(
+          valueListenable: _roomFutureNotifier,
+          builder: (context, roomFuture, _) {
+            return EnhancedFutureBuilder(
+              future: roomFuture,
+              rememberFutureResult: false,
+              whenDone: (List<Room> data) => _buildContent(context, data),
+              whenNotDone: _buildLoadingView(context),
+            );
+          },
         ),
       ),
     );
@@ -437,20 +624,6 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
   }
 
   Widget _buildContent(BuildContext context, List<Room> data) {
-    final roomItems = data
-        .map(
-          (room) => _RoomGridItem(
-            room: room,
-            compactRoomName: _compactRoomName(room.name),
-            seatLabel:
-                room.seatNumber.trim().isEmpty
-                    ? '座位未知'
-                    : '${room.seatNumber} 座',
-            busySlotCount: _busySlotCount(room),
-          ),
-        )
-        .toList(growable: false);
-
     return CustomScrollView(
       physics: const BouncingScrollPhysics(
         parent: AlwaysScrollableScrollPhysics(),
@@ -525,16 +698,17 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final item = roomItems[index];
+                      final room = data[index];
+                      final cardInfo = _roomCardInfoFor(room);
                       return _RoomCard(
-                        roomName: item.compactRoomName,
-                        seatLabel: item.seatLabel,
-                        busySlotCount: item.busySlotCount,
+                        roomName: cardInfo.compactName,
+                        seatLabel: cardInfo.seatLabel,
+                        busySlotCount: cardInfo.busySlotCount,
                         accent: _emptyRoomAccent,
-                        onTap: () => _showRoomDetail(item.room),
+                        onTap: () => _showRoomDetail(room),
                       );
                     },
-                    childCount: roomItems.length,
+                    childCount: data.length,
                     addAutomaticKeepAlives: false,
                     addRepaintBoundaries: true,
                     addSemanticIndexes: false,
@@ -546,6 +720,20 @@ class _FreeRoomPageState extends State<FreeRoomPage> {
       ],
     );
   }
+}
+
+class _RoomCardInfo {
+  const _RoomCardInfo({
+    required this.compactName,
+    required this.seatLabel,
+    required this.busySlotCount,
+    required this.busyLessons,
+  });
+
+  final String compactName;
+  final String seatLabel;
+  final int busySlotCount;
+  final Set<int> busyLessons;
 }
 
 class _FilterPanel extends StatelessWidget {
@@ -801,24 +989,21 @@ class _RoomDetailSheet extends StatelessWidget {
     required this.compactRoomName,
     required this.accent,
     required this.slotCount,
-    required this.isSlotBusy,
+    required this.busySlotCount,
+    required this.busyLessons,
   });
 
   final Room room;
   final String compactRoomName;
   final Color accent;
   final int slotCount;
-  final bool Function(int lesson) isSlotBusy;
+  final int busySlotCount;
+  final Set<int> busyLessons;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final busyCount =
-        List<int>.generate(
-          slotCount,
-          (index) => index + 1,
-        ).where(isSlotBusy).length;
-    final freeCount = slotCount - busyCount;
+    final freeCount = slotCount - busySlotCount;
 
     return Material(
       color: Colors.transparent,
@@ -896,7 +1081,7 @@ class _RoomDetailSheet extends StatelessWidget {
                           accent: accent,
                         ),
                         _MiniPill(label: '空闲 $freeCount 节', accent: accent),
-                        _MiniPill(label: '占用 $busyCount 节', accent: accent),
+                        _MiniPill(label: '占用 $busySlotCount 节', accent: accent),
                       ],
                     ),
                   ],
@@ -932,7 +1117,7 @@ class _RoomDetailSheet extends StatelessWidget {
                           childAspectRatio: 1.55,
                           itemBuilder: (context, index) {
                             final lesson = index + 1;
-                            final busy = isSlotBusy(lesson);
+                            final busy = busyLessons.contains(lesson);
                             return _LessonSlotCard(
                               lesson: lesson,
                               busy: busy,
@@ -977,6 +1162,7 @@ class _DatePickerSheet extends StatefulWidget {
     required this.initialDate,
     required this.firstDate,
     required this.lastDate,
+    required this.today,
     required this.formatLabel,
   });
 
@@ -984,6 +1170,7 @@ class _DatePickerSheet extends StatefulWidget {
   final DateTime initialDate;
   final DateTime firstDate;
   final DateTime lastDate;
+  final DateTime today;
   final String Function(DateTime value) formatLabel;
 
   @override
@@ -991,19 +1178,35 @@ class _DatePickerSheet extends StatefulWidget {
 }
 
 class _DatePickerSheetState extends State<_DatePickerSheet> {
-  late DateTime _selectedDate;
+  late final ValueNotifier<DateTime> _selectedDateNotifier;
 
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateUtils.dateOnly(widget.initialDate);
+    _selectedDateNotifier = ValueNotifier<DateTime>(
+      DateUtils.dateOnly(widget.initialDate),
+    );
+  }
+
+  @override
+  void dispose() {
+    _selectedDateNotifier.dispose();
+    super.dispose();
+  }
+
+  void _selectDate(DateTime value) {
+    final nextDate = DateUtils.dateOnly(value);
+    if (DateUtils.isSameDay(_selectedDateNotifier.value, nextDate)) {
+      return;
+    }
+
+    _selectedDateNotifier.value = nextDate;
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final today = DateUtils.dateOnly(DateTime.now());
-    final isToday = DateUtils.isSameDay(_selectedDate, today);
+    final today = widget.today;
 
     return Material(
       color: Colors.transparent,
@@ -1066,25 +1269,37 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                         ],
                       ),
                     ),
-                    _RangePresetChip(
-                      label: isToday ? '今天' : '回到今天',
-                      accent: widget.accent,
-                      selected: isToday,
-                      onTap: () {
-                        setState(() {
-                          _selectedDate = today;
-                        });
+                    ValueListenableBuilder<DateTime>(
+                      valueListenable: _selectedDateNotifier,
+                      builder: (context, selectedDate, child) {
+                        final isToday = DateUtils.isSameDay(
+                          selectedDate,
+                          today,
+                        );
+                        return _RangePresetChip(
+                          label: isToday ? '今天' : '回到今天',
+                          accent: widget.accent,
+                          selected: isToday,
+                          onTap: () => _selectDate(today),
+                        );
                       },
                     ),
                   ],
                 ),
                 const SizedBox(height: 18),
-                Text(
-                  widget.formatLabel(_selectedDate),
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.8,
-                  ),
+                ValueListenableBuilder<DateTime>(
+                  valueListenable: _selectedDateNotifier,
+                  builder: (context, selectedDate, child) {
+                    return Text(
+                      widget.formatLabel(selectedDate),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.8,
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 14),
                 ClipRRect(
@@ -1123,15 +1338,16 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                           ),
                         ),
                       ),
-                      child: CalendarDatePicker(
-                        initialDate: _selectedDate,
-                        firstDate: widget.firstDate,
-                        lastDate: widget.lastDate,
-                        currentDate: today,
-                        onDateChanged: (value) {
-                          setState(() {
-                            _selectedDate = DateUtils.dateOnly(value);
-                          });
+                      child: ValueListenableBuilder<DateTime>(
+                        valueListenable: _selectedDateNotifier,
+                        builder: (context, selectedDate, child) {
+                          return CalendarDatePicker(
+                            initialDate: selectedDate,
+                            firstDate: widget.firstDate,
+                            lastDate: widget.lastDate,
+                            currentDate: today,
+                            onDateChanged: _selectDate,
+                          );
                         },
                       ),
                     ),
@@ -1159,7 +1375,9 @@ class _DatePickerSheetState extends State<_DatePickerSheet> {
                     Expanded(
                       child: FilledButton(
                         onPressed:
-                            () => Navigator.of(context).pop(_selectedDate),
+                            () => Navigator.of(
+                              context,
+                            ).pop(_selectedDateNotifier.value),
                         style: FilledButton.styleFrom(
                           backgroundColor: widget.accent,
                           foregroundColor: Colors.white,
@@ -1195,12 +1413,28 @@ class _BigLessonSheet extends StatefulWidget {
 }
 
 class _BigLessonSheetState extends State<_BigLessonSheet> {
-  late _BigLessonBlock _selectedBlock;
+  late final ValueNotifier<_BigLessonBlock> _selectedBlockNotifier;
 
   @override
   void initState() {
     super.initState();
-    _selectedBlock = widget.initialBlock;
+    _selectedBlockNotifier = ValueNotifier<_BigLessonBlock>(
+      widget.initialBlock,
+    );
+  }
+
+  @override
+  void dispose() {
+    _selectedBlockNotifier.dispose();
+    super.dispose();
+  }
+
+  void _selectBlock(_BigLessonBlock block) {
+    if (_selectedBlockNotifier.value.index == block.index) {
+      return;
+    }
+
+    _selectedBlockNotifier.value = block;
   }
 
   @override
@@ -1260,10 +1494,18 @@ class _BigLessonSheetState extends State<_BigLessonSheet> {
                                 ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            '当前选择：${_selectedBlock.displayLabel}',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ValueListenableBuilder<_BigLessonBlock>(
+                            valueListenable: _selectedBlockNotifier,
+                            builder: (context, selectedBlock, child) {
+                              return Text(
+                                '当前选择：${selectedBlock.displayLabel}',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -1271,38 +1513,42 @@ class _BigLessonSheetState extends State<_BigLessonSheet> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                _RangePresetChip(
-                  label: '按当前时间',
-                  accent: widget.accent,
-                  selected: _selectedBlock.index == widget.suggestedBlock.index,
-                  onTap: () {
-                    setState(() {
-                      _selectedBlock = widget.suggestedBlock;
-                    });
-                  },
-                ),
-                const SizedBox(height: 14),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    return _FixedCrossAxisGrid(
-                      width: constraints.maxWidth,
-                      itemCount: _bigLessonBlocks.length,
-                      crossAxisCount: 2,
-                      spacing: 8,
-                      childAspectRatio: 2.42,
-                      itemBuilder: (context, index) {
-                        final block = _bigLessonBlocks[index];
-                        return _BigLessonOptionCard(
-                          block: block,
+                ValueListenableBuilder<_BigLessonBlock>(
+                  valueListenable: _selectedBlockNotifier,
+                  builder: (context, selectedBlock, child) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _RangePresetChip(
+                          label: '按当前时间',
                           accent: widget.accent,
-                          selected: _selectedBlock.index == block.index,
-                          onTap: () {
-                            setState(() {
-                              _selectedBlock = block;
-                            });
+                          selected:
+                              selectedBlock.index ==
+                              widget.suggestedBlock.index,
+                          onTap: () => _selectBlock(widget.suggestedBlock),
+                        ),
+                        const SizedBox(height: 14),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            return _FixedCrossAxisGrid(
+                              width: constraints.maxWidth,
+                              itemCount: _bigLessonBlocks.length,
+                              crossAxisCount: 2,
+                              spacing: 8,
+                              childAspectRatio: 2.42,
+                              itemBuilder: (context, index) {
+                                final block = _bigLessonBlocks[index];
+                                return _BigLessonOptionCard(
+                                  block: block,
+                                  accent: widget.accent,
+                                  selected: selectedBlock.index == block.index,
+                                  onTap: () => _selectBlock(block),
+                                );
+                              },
+                            );
                           },
-                        );
-                      },
+                        ),
+                      ],
                     );
                   },
                 ),
@@ -1328,7 +1574,9 @@ class _BigLessonSheetState extends State<_BigLessonSheet> {
                     Expanded(
                       child: FilledButton(
                         onPressed:
-                            () => Navigator.of(context).pop(_selectedBlock),
+                            () => Navigator.of(
+                              context,
+                            ).pop(_selectedBlockNotifier.value),
                         style: FilledButton.styleFrom(
                           backgroundColor: widget.accent,
                           foregroundColor: Colors.white,
@@ -1440,7 +1688,7 @@ class _FixedCrossAxisGrid extends StatelessWidget {
           SizedBox(
             width: itemWidth,
             height: itemHeight,
-            child: RepaintBoundary(child: itemBuilder(context, index)),
+            child: itemBuilder(context, index),
           ),
       ],
     );
@@ -1662,20 +1910,6 @@ class _BigLessonBlock {
     const labels = ['一', '二', '三', '四', '五', '六'];
     return labels[index - 1];
   }
-}
-
-class _RoomGridItem {
-  const _RoomGridItem({
-    required this.room,
-    required this.compactRoomName,
-    required this.seatLabel,
-    required this.busySlotCount,
-  });
-
-  final Room room;
-  final String compactRoomName;
-  final String seatLabel;
-  final int busySlotCount;
 }
 
 class _LegendDot extends StatelessWidget {

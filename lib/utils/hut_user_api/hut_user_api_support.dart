@@ -55,13 +55,26 @@ String _readJsonString(
 }
 
 Map<String, dynamic>? decodeHutJwtPayload(String token) {
-  final parts = token.trim().split('.');
-  if (parts.length < 2 || parts[1].isEmpty) {
+  final trimmedToken = token.trim();
+  final headerEnd = trimmedToken.indexOf('.');
+  if (headerEnd == -1) {
+    return null;
+  }
+
+  final payloadStart = headerEnd + 1;
+  final payloadEnd = trimmedToken.indexOf('.', payloadStart);
+  final effectivePayloadEnd =
+      payloadEnd == -1 ? trimmedToken.length : payloadEnd;
+  if (payloadStart == effectivePayloadEnd) {
     return null;
   }
 
   try {
-    final normalized = base64Url.normalize(Uri.decodeComponent(parts[1]));
+    final payloadSegment = trimmedToken.substring(
+      payloadStart,
+      effectivePayloadEnd,
+    );
+    final normalized = base64Url.normalize(Uri.decodeComponent(payloadSegment));
     final payload = utf8.decode(base64Url.decode(normalized));
     final decoded = jsonDecode(payload);
     if (decoded is Map) {
@@ -228,11 +241,12 @@ String normalizeHutPortalUrl(String url) {
 
   var changed = false;
   final normalizedQueryParameters = <String, String>{};
-  uri.queryParameters.forEach((key, value) {
+  for (final entry in uri.queryParameters.entries) {
+    final value = entry.value;
     final normalizedValue = _replaceLegacyPortalIndexPath(value);
-    normalizedQueryParameters[key] = normalizedValue;
+    normalizedQueryParameters[entry.key] = normalizedValue;
     changed = changed || normalizedValue != value;
-  });
+  }
 
   if (!changed) {
     return directUrl;
@@ -244,14 +258,50 @@ String _replaceLegacyPortalIndexPath(String value) {
   return value.replaceAll(_kLegacyPortalIndexPath, _kPortalMainPath);
 }
 
+List<String> _sortedHutUrlQueryKeys(String query) {
+  if (query.isEmpty) {
+    return const <String>[];
+  }
+
+  final keys = <String>[];
+  final seenKeys = <String>{};
+  var keyStart = 0;
+  for (var index = 0; index <= query.length; index++) {
+    final isSegmentEnd =
+        index == query.length || query.codeUnitAt(index) == 0x26;
+    if (!isSegmentEnd) {
+      continue;
+    }
+
+    if (keyStart < index) {
+      var keyEnd = keyStart;
+      while (keyEnd < index && query.codeUnitAt(keyEnd) != 0x3D) {
+        keyEnd++;
+      }
+      final key = Uri.decodeQueryComponent(query.substring(keyStart, keyEnd));
+      if (seenKeys.add(key)) {
+        keys.add(key);
+      }
+    }
+    keyStart = index + 1;
+  }
+  keys.sort();
+  return keys;
+}
+
 String describeHutUrlForLog(String url) {
   final uri = Uri.tryParse(url);
   if (uri == null) {
     return 'invalid-url';
   }
-  final keys = uri.queryParameters.keys.toList()..sort();
-  final fragmentPath =
-      uri.fragment.isEmpty ? '' : ' fragment=${uri.fragment.split('?').first}';
+  final keys = _sortedHutUrlQueryKeys(uri.query);
+  var fragmentPath = '';
+  if (uri.fragment.isNotEmpty) {
+    final queryStart = uri.fragment.indexOf('?');
+    final fragmentRoute =
+        queryStart == -1 ? uri.fragment : uri.fragment.substring(0, queryStart);
+    fragmentPath = ' fragment=$fragmentRoute';
+  }
   return '${uri.host}${uri.path} queryKeys=$keys$fragmentPath';
 }
 

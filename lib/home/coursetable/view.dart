@@ -11,8 +11,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:intl/intl.dart';
-import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
@@ -21,8 +19,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/services/app_auth_storage.dart';
+import '../../core/services/app_logger.dart';
 import '../../core/services/course_sync_service.dart';
+import '../../core/ui/app_bottom_sheet.dart';
 import '../../core/ui/app_loading_indicator.dart';
+import '../../core/ui/app_page_route.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
@@ -33,15 +34,91 @@ import '../../utils/token.dart';
 import '../../widget_refresh_service.dart';
 import 'widgets/course_table_widgets.dart';
 
+typedef CourseTableBottomSheetPresenter =
+    Future<T?> Function<T>({
+      required BuildContext context,
+      required WidgetBuilder builder,
+      bool expand,
+      Color? backgroundColor,
+      Color? barrierColor,
+      Color? transitionBackgroundColor,
+    });
+typedef CourseTableClipboardReader = Future<String?> Function();
+typedef CourseTableClipboardWriter = Future<void> Function(String text);
+typedef CourseTableArchiveLoader = Future<CourseScheduleArchive> Function();
+typedef CourseTableShareCodeImporter =
+    Future<SavedCourseSchedule> Function(String rawCode);
+typedef CourseTableFileContentPicker = Future<String?> Function();
+typedef CourseTableFileContentImporter =
+    Future<SavedCourseSchedule> Function(String rawContent);
+typedef CourseTableQrCodeScanner =
+    Future<String?> Function(BuildContext context);
+typedef CourseTableCampusLoginOpener =
+    Future<void> Function(BuildContext context);
+typedef CourseTableExperimentStudentsLoader =
+    Future<Map<String, dynamic>> Function(String pcid);
+typedef CourseTableCourseDeleter =
+    Future<bool> Function({
+      required String dateKey,
+      required Course targetCourse,
+      required CourseDeleteScope scope,
+    });
+typedef CourseTableScheduleDeleter = Future<bool> Function(String scheduleId);
+typedef CourseTableScheduleSwitcher = Future<void> Function(String scheduleId);
+typedef CourseTableScheduleRenamer =
+    Future<void> Function(String scheduleId, String newName);
+typedef CourseTableScheduleFileSaver =
+    Future<String?> Function({
+      required String fileName,
+      required Uint8List bytes,
+    });
+typedef CourseTableScheduleFileSharer =
+    Future<void> Function({
+      required SavedCourseSchedule schedule,
+      required Rect sharePositionOrigin,
+    });
+
 class CourseTableView extends StatefulWidget {
   const CourseTableView({
     super.key,
     this.transitionLiteModeListenable,
     this.debugScheduleOverride,
     this.debugForceTransitionLiteMode,
+    this.showBottomSheet,
+    this.readClipboardText,
+    this.writeClipboardText,
+    this.loadScheduleArchive,
+    this.importShareCode,
+    this.pickImportFileContent,
+    this.importFileContent,
+    this.scanQrCode,
+    this.openCampusLogin,
+    this.loadExperimentStudents,
+    this.deleteCourse,
+    this.deleteSchedule,
+    this.switchSchedule,
+    this.renameSchedule,
+    this.saveScheduleFile,
+    this.shareScheduleFile,
   });
 
   final ValueListenable<bool>? transitionLiteModeListenable;
+  final CourseTableBottomSheetPresenter? showBottomSheet;
+  final CourseTableClipboardReader? readClipboardText;
+  final CourseTableClipboardWriter? writeClipboardText;
+  final CourseTableArchiveLoader? loadScheduleArchive;
+  final CourseTableShareCodeImporter? importShareCode;
+  final CourseTableFileContentPicker? pickImportFileContent;
+  final CourseTableFileContentImporter? importFileContent;
+  final CourseTableQrCodeScanner? scanQrCode;
+  final CourseTableCampusLoginOpener? openCampusLogin;
+  final CourseTableExperimentStudentsLoader? loadExperimentStudents;
+  final CourseTableCourseDeleter? deleteCourse;
+  final CourseTableScheduleDeleter? deleteSchedule;
+  final CourseTableScheduleSwitcher? switchSchedule;
+  final CourseTableScheduleRenamer? renameSchedule;
+  final CourseTableScheduleFileSaver? saveScheduleFile;
+  final CourseTableScheduleFileSharer? shareScheduleFile;
 
   @visibleForTesting
   final SavedCourseSchedule? debugScheduleOverride;
@@ -75,6 +152,68 @@ DateTime getMondayOfCurrentWeek({bool refreshWidget = true}) {
   return now.subtract(Duration(days: daysToSubtract));
 }
 
+String _formatCourseDateKey(DateTime date) {
+  final month = date.month.toString().padLeft(2, '0');
+  final day = date.day.toString().padLeft(2, '0');
+  return '${date.year}-$month-$day';
+}
+
+String _formatCourseMonthDay(DateTime date) => '${date.month}/${date.day}';
+
+bool _isCourseDateKey(String value) {
+  return value.length == 10 &&
+      _isCourseAsciiDigitAt(value, 0) &&
+      _isCourseAsciiDigitAt(value, 1) &&
+      _isCourseAsciiDigitAt(value, 2) &&
+      _isCourseAsciiDigitAt(value, 3) &&
+      value.codeUnitAt(4) == 0x2D &&
+      _isCourseAsciiDigitAt(value, 5) &&
+      _isCourseAsciiDigitAt(value, 6) &&
+      value.codeUnitAt(7) == 0x2D &&
+      _isCourseAsciiDigitAt(value, 8) &&
+      _isCourseAsciiDigitAt(value, 9);
+}
+
+bool _isCourseAsciiDigitAt(String value, int index) {
+  final codeUnit = value.codeUnitAt(index);
+  return codeUnit >= 0x30 && codeUnit <= 0x39;
+}
+
+bool _isCourseFileNameWhitespace(int codeUnit) {
+  return codeUnit <= 0x20 ||
+      codeUnit == 0x85 ||
+      codeUnit == 0xA0 ||
+      codeUnit == 0x1680 ||
+      (codeUnit >= 0x2000 && codeUnit <= 0x200A) ||
+      codeUnit == 0x2028 ||
+      codeUnit == 0x2029 ||
+      codeUnit == 0x202F ||
+      codeUnit == 0x205F ||
+      codeUnit == 0x3000;
+}
+
+bool _isUnsafeCourseFileNameCodeUnit(int codeUnit) {
+  return codeUnit == 0x22 ||
+      codeUnit == 0x2A ||
+      codeUnit == 0x2F ||
+      codeUnit == 0x3A ||
+      codeUnit == 0x3C ||
+      codeUnit == 0x3E ||
+      codeUnit == 0x3F ||
+      codeUnit == 0x5C ||
+      codeUnit == 0x7C;
+}
+
+class _PendingWeekPageMove {
+  const _PendingWeekPageMove({
+    required this.targetPage,
+    required this.animated,
+  });
+
+  final int targetPage;
+  final bool animated;
+}
+
 class _CourseTableViewState extends State<CourseTableView> {
   static const int _defaultMaxWeek = 20;
   static const int _sectionCount = 10;
@@ -89,20 +228,34 @@ class _CourseTableViewState extends State<CourseTableView> {
   late final PageController _weekPageController;
   late final ValueNotifier<int> _displayedWeekNotifier;
   late final ValueNotifier<bool> _transitionLiteModeNotifier;
+  late final ValueNotifier<bool> _isPrimaryActionLoadingNotifier;
+  late final ValueNotifier<bool> _showExperimentCoursesNotifier;
+  late final ValueNotifier<DateTime> _todayDateNotifier;
   bool _hasLinkedCampusAccount = false;
-  bool _isPrimaryActionLoading = false;
+  bool _isCourseDetailSheetOpen = false;
+  bool _isScheduleManagerSheetOpen = false;
+  bool _isImportingScheduleFromClipboard = false;
+  bool _isImportingScheduleFromFile = false;
+  bool _isScanningScheduleQrCode = false;
+  bool _isCopyingScheduleShareCode = false;
   bool _isCurrentTermSchedule = true;
   bool _isInitialLoadComplete = false;
   bool _weekPlacementWarmupPending = false;
+  bool _weekPageMovePending = false;
+  _PendingWeekPageMove? _pendingWeekPageMove;
   int _transitionLiteModeRequestId = 0;
   int _handledCourseSyncSuccessEventId = 0;
+  int _scheduleReloadGeneration = 0;
+  int _weekPlacementWarmupGeneration = 0;
   final Map<String, List<_PlacedCourse>> _weekPlacementsCache =
       <String, List<_PlacedCourse>>{};
   final Map<String, List<_CourseCardPaintData>> _weekCourseCardPaintCache =
       <String, List<_CourseCardPaintData>>{};
+  final Map<int, List<DateTime>> _weekDaysCache = <int, List<DateTime>>{};
 
   // DateTime _currentDate = DateTime.now();
   DateTime _currentDate = getMondayOfCurrentWeek(refreshWidget: false);
+  DateTime _todayDate = DateUtils.dateOnly(DateTime.now());
 
   //设置周数
   //当前显示周数
@@ -141,6 +294,11 @@ class _CourseTableViewState extends State<CourseTableView> {
     _transitionLiteModeNotifier = ValueNotifier<bool>(
       _resolveTransitionLiteModeValue(),
     );
+    _isPrimaryActionLoadingNotifier = ValueNotifier<bool>(false);
+    _showExperimentCoursesNotifier = ValueNotifier<bool>(
+      _showExperimentCourses,
+    );
+    _todayDateNotifier = ValueNotifier<DateTime>(_todayDate);
     CourseSyncService.instance.stateListenable.addListener(
       _handleCourseSyncStateChanged,
     );
@@ -179,6 +337,9 @@ class _CourseTableViewState extends State<CourseTableView> {
     CourseSyncService.instance.stateListenable.removeListener(
       _handleCourseSyncStateChanged,
     );
+    _showExperimentCoursesNotifier.dispose();
+    _todayDateNotifier.dispose();
+    _isPrimaryActionLoadingNotifier.dispose();
     _transitionLiteModeNotifier.dispose();
     _displayedWeekNotifier.dispose();
     _weekPageController.dispose();
@@ -257,10 +418,10 @@ class _CourseTableViewState extends State<CourseTableView> {
   }
 
   // 综合计算周数的完整函数
-  int calculateSchoolWeek(String? firstDayString) {
+  int calculateSchoolWeek(String? firstDayString, {DateTime? now}) {
     // 异常情况处理
     if (firstDayString == null) throw ArgumentError('firstDay 不能为空');
-    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(firstDayString)) {
+    if (!_isCourseDateKey(firstDayString)) {
       throw FormatException('日期格式应为 yyyy-MM-dd');
     }
 
@@ -271,8 +432,8 @@ class _CourseTableViewState extends State<CourseTableView> {
     final firstMonday = firstDay.subtract(Duration(days: firstDay.weekday - 1));
 
     // 3. 计算当前周数
-    final now = DateTime.now();
-    final difference = now.difference(firstMonday).inDays + 1;
+    final currentDate = now ?? DateTime.now();
+    final difference = currentDate.difference(firstMonday).inDays + 1;
 
     // 处理早于开学日的情况
     if (difference < 0) return 0;
@@ -280,13 +441,13 @@ class _CourseTableViewState extends State<CourseTableView> {
     return (difference / 7).ceil();
   }
 
-  int _resolveCurrentWeek(String? firstDay) {
+  int _resolveCurrentWeek(String? firstDay, {required DateTime now}) {
     if (firstDay == null || firstDay.isEmpty) {
       return 1;
     }
 
     try {
-      return calculateSchoolWeek(firstDay);
+      return calculateSchoolWeek(firstDay, now: now);
     } on ArgumentError catch (_) {
       return 1;
     } on FormatException catch (_) {
@@ -305,7 +466,10 @@ class _CourseTableViewState extends State<CourseTableView> {
     return date.subtract(Duration(days: date.weekday - 1));
   }
 
-  bool _isScheduleCurrentTerm(SavedCourseSchedule? schedule) {
+  bool _isScheduleCurrentTerm(
+    SavedCourseSchedule? schedule, {
+    required DateTime now,
+  }) {
     if (schedule == null ||
         schedule.firstDay.isEmpty ||
         schedule.maxWeek <= 0) {
@@ -318,36 +482,40 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
 
     final firstMonday = _startOfMonday(firstDay);
-    final now = DateTime.now();
     final termEnd = firstMonday.add(Duration(days: schedule.maxWeek * 7 - 1));
     return !now.isBefore(firstMonday) && !now.isAfter(termEnd);
   }
 
-  int _resolveCurrentWeekForSchedule(SavedCourseSchedule? schedule) {
+  int _resolveCurrentWeekForSchedule(
+    SavedCourseSchedule? schedule, {
+    required DateTime now,
+    required bool isCurrentTermSchedule,
+  }) {
     if (schedule == null) {
       return 1;
     }
 
-    if (!_isScheduleCurrentTerm(schedule)) {
+    if (!isCurrentTermSchedule) {
       return 1;
     }
 
     final maxWeek = schedule.maxWeek > 0 ? schedule.maxWeek : _defaultMaxWeek;
-    final computed = _resolveCurrentWeek(schedule.firstDay);
+    final computed = _resolveCurrentWeek(schedule.firstDay, now: now);
     return computed.clamp(1, maxWeek).toInt();
   }
 
   DateTime _buildInitialDateForSchedule(
     SavedCourseSchedule? schedule,
     int currentWeek,
+    DateTime now,
   ) {
     if (schedule == null) {
-      return getMondayOfCurrentWeek(refreshWidget: false);
+      return _startOfMonday(now);
     }
 
     final firstDay = _tryParseDate(schedule.firstDay);
     if (firstDay == null) {
-      return getMondayOfCurrentWeek(refreshWidget: false);
+      return _startOfMonday(now);
     }
 
     final firstMonday = _startOfMonday(firstDay);
@@ -417,13 +585,24 @@ class _CourseTableViewState extends State<CourseTableView> {
     return archive.schedules.first;
   }
 
-  Future<void> _reloadScheduleState() async {
+  int _nextScheduleReloadGeneration() {
+    return ++_scheduleReloadGeneration;
+  }
+
+  bool _isLatestScheduleReloadGeneration(int generation) {
+    return mounted && generation == _scheduleReloadGeneration;
+  }
+
+  Future<bool> _reloadScheduleState() async {
+    final generation = _nextScheduleReloadGeneration();
     final overrideSchedule = widget.debugScheduleOverride;
     final prefsFuture = SharedPreferences.getInstance();
     final hasLinkedCampusAccountFuture =
         AppAuthStorage.instance.hasLinkedCampusAccount();
     final archiveFuture =
-        overrideSchedule == null ? loadCourseScheduleArchive() : null;
+        overrideSchedule == null
+            ? (widget.loadScheduleArchive ?? loadCourseScheduleArchive)()
+            : null;
 
     final prefs = await prefsFuture;
     final showExperimentCourses =
@@ -438,25 +617,49 @@ class _CourseTableViewState extends State<CourseTableView> {
         overrideSchedule ?? _resolveActiveScheduleFromArchive(archive!);
     final courseData =
         activeSchedule?.courseData ?? const <String, List<Course>>{};
-    final isCurrentTermSchedule = _isScheduleCurrentTerm(activeSchedule);
+    final reloadNow = DateTime.now();
+    final isCurrentTermSchedule = _isScheduleCurrentTerm(
+      activeSchedule,
+      now: reloadNow,
+    );
     final allWeek =
         activeSchedule == null
             ? _defaultMaxWeek
             : (activeSchedule.maxWeek <= 0
                 ? _defaultMaxWeek
                 : activeSchedule.maxWeek);
-    final currentWeek = _resolveCurrentWeekForSchedule(activeSchedule);
+    final currentWeek = _resolveCurrentWeekForSchedule(
+      activeSchedule,
+      now: reloadNow,
+      isCurrentTermSchedule: isCurrentTermSchedule,
+    );
     final currentDate = _buildInitialDateForSchedule(
       activeSchedule,
       currentWeek,
+      reloadNow,
     );
+    final todayDate = DateUtils.dateOnly(reloadNow);
 
-    if (!mounted) {
-      return;
+    if (!_isLatestScheduleReloadGeneration(generation)) {
+      return false;
+    }
+
+    if (_hasSameScheduleReloadState(
+      savedSchedules: savedSchedules,
+      activeSchedule: activeSchedule,
+      allWeek: allWeek,
+      currentRealWeek: currentWeek,
+      showExperimentCourses: showExperimentCourses,
+      hasLinkedCampusAccount: hasLinkedCampusAccount,
+      isCurrentTermSchedule: isCurrentTermSchedule,
+    )) {
+      _applyTodayDateIfChanged(todayDate);
+      return false;
     }
 
     _clearWeekPlacementCache();
     setState(() {
+      _isInitialLoadComplete = true;
       _savedSchedules = savedSchedules;
       _activeSchedule = activeSchedule;
       _courseData = courseData;
@@ -464,34 +667,163 @@ class _CourseTableViewState extends State<CourseTableView> {
       _currentWeek = currentWeek;
       _currentRealWeek = currentWeek;
       _currentDate = currentDate;
+      _todayDate = todayDate;
       _showExperimentCourses = showExperimentCourses;
       _hasLinkedCampusAccount = hasLinkedCampusAccount;
       _isCurrentTermSchedule = isCurrentTermSchedule;
     });
+    _showExperimentCoursesNotifier.value = showExperimentCourses;
+    _todayDateNotifier.value = todayDate;
     _displayedWeekNotifier.value = currentWeek;
     _syncWeekPageToCurrentWeek();
+    return true;
+  }
+
+  bool _hasSameScheduleReloadState({
+    required List<SavedCourseSchedule> savedSchedules,
+    required SavedCourseSchedule? activeSchedule,
+    required int allWeek,
+    required int currentRealWeek,
+    required bool showExperimentCourses,
+    required bool hasLinkedCampusAccount,
+    required bool isCurrentTermSchedule,
+  }) {
+    return _isInitialLoadComplete &&
+        _hasSameScheduleList(_savedSchedules, savedSchedules) &&
+        _activeSchedule?.id == activeSchedule?.id &&
+        _allWeek == allWeek &&
+        _currentRealWeek == currentRealWeek &&
+        _showExperimentCourses == showExperimentCourses &&
+        _hasLinkedCampusAccount == hasLinkedCampusAccount &&
+        _isCurrentTermSchedule == isCurrentTermSchedule;
+  }
+
+  void _applyTodayDateIfChanged(DateTime todayDate) {
+    if (!mounted || _isSameDay(_todayDate, todayDate)) {
+      return;
+    }
+
+    _todayDate = todayDate;
+    _todayDateNotifier.value = todayDate;
+  }
+
+  bool _hasSameScheduleList(
+    List<SavedCourseSchedule> left,
+    List<SavedCourseSchedule> right,
+  ) {
+    if (identical(left, right)) {
+      return true;
+    }
+    if (left.length != right.length) {
+      return false;
+    }
+
+    for (var index = 0; index < left.length; index++) {
+      if (!_hasSameSavedSchedule(left[index], right[index])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _hasSameSavedSchedule(
+    SavedCourseSchedule left,
+    SavedCourseSchedule right,
+  ) {
+    return identical(left, right) ||
+        (left.id == right.id &&
+            left.name == right.name &&
+            left.ownerName == right.ownerName &&
+            left.ownerAccount == right.ownerAccount &&
+            left.termLabel == right.termLabel &&
+            left.semesterId == right.semesterId &&
+            left.firstDay == right.firstDay &&
+            left.maxWeek == right.maxWeek &&
+            left.sourceType == right.sourceType &&
+            left.isReadOnly == right.isReadOnly &&
+            left.createdAt == right.createdAt &&
+            left.updatedAt == right.updatedAt &&
+            _hasSameCourseData(left.courseData, right.courseData));
+  }
+
+  bool _hasSameCourseData(
+    Map<String, List<Course>> left,
+    Map<String, List<Course>> right,
+  ) {
+    if (identical(left, right)) {
+      return true;
+    }
+    if (left.length != right.length) {
+      return false;
+    }
+
+    for (final entry in left.entries) {
+      final rightCourses = right[entry.key];
+      if (rightCourses == null ||
+          !_hasSameCourseList(entry.value, rightCourses)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _hasSameCourseList(List<Course> left, List<Course> right) {
+    if (identical(left, right)) {
+      return true;
+    }
+    if (left.length != right.length) {
+      return false;
+    }
+
+    for (var index = 0; index < left.length; index++) {
+      if (!_hasSameCourse(left[index], right[index])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  bool _hasSameCourse(Course left, Course right) {
+    return identical(left, right) ||
+        (left.name == right.name &&
+            left.teacherName == right.teacherName &&
+            left.weekDuration == right.weekDuration &&
+            left.location == right.location &&
+            left.startSection == right.startSection &&
+            left.duration == right.duration &&
+            left.isExp == right.isExp &&
+            left.pcid == right.pcid);
   }
 
   Future<void> _loadInitialData() async {
     await _reloadScheduleState();
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _isInitialLoadComplete = true;
-    });
+  }
+
+  @visibleForTesting
+  Future<bool> debugReloadScheduleState() {
+    return _reloadScheduleState();
   }
 
   Future<void> _setShowExperimentCourses(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_showExperimentCoursesKey, value);
-    if (!mounted) {
+    if (_showExperimentCourses == value) {
       return;
     }
-    setState(() {
-      _clearWeekPlacementCache();
-      _showExperimentCourses = value;
-    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_showExperimentCoursesKey, value);
+    _applyShowExperimentCoursesIfChanged(value);
+  }
+
+  void _applyShowExperimentCoursesIfChanged(bool value) {
+    if (!mounted ||
+        (_showExperimentCourses == value &&
+            _showExperimentCoursesNotifier.value == value)) {
+      return;
+    }
+
+    _clearWeekPlacementCache();
+    _showExperimentCourses = value;
+    _showExperimentCoursesNotifier.value = value;
   }
 
   /*
@@ -505,7 +837,13 @@ class _CourseTableViewState extends State<CourseTableView> {
 
   List<DateTime> _buildWeekDays(DateTime anchorDate) {
     final weekStart = _getStartOfWeek(anchorDate);
-    return List.generate(7, (i) => weekStart.add(Duration(days: i)));
+    final weekDays = List<DateTime>.filled(7, weekStart, growable: false);
+    var day = weekStart;
+    for (var index = 0; index < weekDays.length; index++) {
+      weekDays[index] = day;
+      day = day.add(const Duration(days: 1));
+    }
+    return weekDays;
   }
 
   int _normalizeWeek(int weekNumber) {
@@ -527,7 +865,14 @@ class _CourseTableViewState extends State<CourseTableView> {
   }
 
   List<DateTime> _buildWeekDaysForWeek(int weekNumber) {
-    return _buildWeekDays(_dateForWeek(weekNumber));
+    final normalizedWeek = _normalizeWeek(weekNumber);
+    final cachedWeekDays = _weekDaysCache[normalizedWeek];
+    if (cachedWeekDays != null) {
+      return cachedWeekDays;
+    }
+    final weekDays = _buildWeekDays(_dateForWeek(normalizedWeek));
+    _weekDaysCache[normalizedWeek] = weekDays;
+    return weekDays;
   }
 
   void _applyDisplayedWeek(int targetWeek) {
@@ -540,41 +885,57 @@ class _CourseTableViewState extends State<CourseTableView> {
     _currentWeek = normalizedWeek;
     _currentDate = targetDate;
     _displayedWeekNotifier.value = normalizedWeek;
+    _invalidateWeekPlacementWarmup();
   }
 
   void _moveWeekPagerTo(int targetWeek, {bool animated = false}) {
     final targetPage = _normalizeWeek(targetWeek) - 1;
 
-    void move() {
+    void move(int page, {required bool withAnimation}) {
       if (!mounted || !_weekPageController.hasClients) {
         return;
       }
       final currentPage =
           _weekPageController.page ??
           _weekPageController.initialPage.toDouble();
-      if ((currentPage - targetPage).abs() < 0.01) {
+      if ((currentPage - page).abs() < 0.01) {
         return;
       }
-      if (animated) {
+      if (withAnimation) {
         unawaited(
           _weekPageController.animateToPage(
-            targetPage,
+            page,
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
           ),
         );
         return;
       }
-      _weekPageController.jumpToPage(targetPage);
+      _weekPageController.jumpToPage(page);
     }
 
     if (_weekPageController.hasClients) {
-      move();
+      move(targetPage, withAnimation: animated);
       return;
     }
 
+    _pendingWeekPageMove = _PendingWeekPageMove(
+      targetPage: targetPage,
+      animated: animated,
+    );
+    if (_weekPageMovePending) {
+      return;
+    }
+
+    _weekPageMovePending = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      move();
+      _weekPageMovePending = false;
+      final pendingMove = _pendingWeekPageMove;
+      _pendingWeekPageMove = null;
+      if (pendingMove == null) {
+        return;
+      }
+      move(pendingMove.targetPage, withAnimation: pendingMove.animated);
     });
   }
 
@@ -606,7 +967,7 @@ class _CourseTableViewState extends State<CourseTableView> {
    * @param date 要格式化的日期对象
    * @return yyyy-MM-dd格式的日期字符串
    */
-  String _dateKey(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
+  String _dateKey(DateTime date) => _formatCourseDateKey(date);
 
   bool _isSameDay(DateTime left, DateTime right) {
     return left.year == right.year &&
@@ -614,44 +975,46 @@ class _CourseTableViewState extends State<CourseTableView> {
         left.day == right.day;
   }
 
-  bool _isToday(DateTime date) => _isSameDay(date, DateTime.now());
-
-  List<Course> _visibleCoursesForDay(DateTime date) {
-    final courses = _courseData[_dateKey(date)] ?? const <Course>[];
-    if (_showExperimentCourses) {
-      return List<Course>.from(courses);
-    }
-    return courses.where((course) => !course.isExp).toList();
+  List<Course> _coursesForDay(DateTime date) {
+    return _courseData[_dateKey(date)] ?? const <Course>[];
   }
 
   void _clearWeekPlacementCache() {
+    _weekDaysCache.clear();
     _weekPlacementsCache.clear();
     _weekCourseCardPaintCache.clear();
+    _invalidateWeekPlacementWarmup();
+  }
+
+  void _invalidateWeekPlacementWarmup() {
+    _weekPlacementWarmupGeneration++;
     _weekPlacementWarmupPending = false;
   }
 
   String _buildWeekPlacementCacheKey(
     List<DateTime> weekDays,
     _WeekGridMetrics metrics,
+    bool showExperimentCourses,
   ) {
     final scheduleId = _activeSchedule?.id ?? 'no-schedule';
-    return [
-      scheduleId,
-      _showExperimentCourses ? 'exp-on' : 'exp-off',
-      _dateKey(weekDays.first),
-      metrics.timeColumnWidth.toStringAsFixed(2),
-      metrics.dayWidth.toStringAsFixed(2),
-      metrics.columnGap.toStringAsFixed(2),
-      metrics.rowGap.toStringAsFixed(2),
-      metrics.slotHeight.toStringAsFixed(2),
-      metrics.gridHeight.toStringAsFixed(2),
-    ].join('|');
+    final experimentMode = showExperimentCourses ? 'exp-on' : 'exp-off';
+    return '$scheduleId|$experimentMode|${_dateKey(weekDays.first)}|'
+        '${metrics.timeColumnWidth.toStringAsFixed(2)}|'
+        '${metrics.dayWidth.toStringAsFixed(2)}|'
+        '${metrics.columnGap.toStringAsFixed(2)}|'
+        '${metrics.rowGap.toStringAsFixed(2)}|'
+        '${metrics.slotHeight.toStringAsFixed(2)}|'
+        '${metrics.gridHeight.toStringAsFixed(2)}';
   }
 
-  bool _hasWeekPlacementCache(int weekNumber, _WeekGridMetrics metrics) {
+  bool _hasWeekPlacementCache(
+    int weekNumber,
+    _WeekGridMetrics metrics,
+    bool showExperimentCourses,
+  ) {
     final weekDays = _buildWeekDaysForWeek(weekNumber);
     return _weekPlacementsCache.containsKey(
-      _buildWeekPlacementCacheKey(weekDays, metrics),
+      _buildWeekPlacementCacheKey(weekDays, metrics, showExperimentCourses),
     );
   }
 
@@ -661,10 +1024,15 @@ class _CourseTableViewState extends State<CourseTableView> {
     required ThemeData theme,
     required ui.TextDirection textDirection,
     required TextScaler textScaler,
+    required bool showExperimentCourses,
   }) {
     final weekDays = _buildWeekDaysForWeek(weekNumber);
     final placements =
-        _weekPlacementsCache[_buildWeekPlacementCacheKey(weekDays, metrics)];
+        _weekPlacementsCache[_buildWeekPlacementCacheKey(
+          weekDays,
+          metrics,
+          showExperimentCourses,
+        )];
     if (placements == null || placements.isEmpty) {
       return placements != null;
     }
@@ -673,6 +1041,7 @@ class _CourseTableViewState extends State<CourseTableView> {
       _buildWeekCourseCardPaintCacheKey(
         weekDays,
         metrics,
+        showExperimentCourses,
         theme,
         textDirection,
         textScaler,
@@ -682,6 +1051,7 @@ class _CourseTableViewState extends State<CourseTableView> {
 
   void _scheduleWeekPlacementWarmup(
     _WeekGridMetrics metrics, {
+    required bool showExperimentCourses,
     required ThemeData theme,
     required ui.TextDirection textDirection,
     required TextScaler textScaler,
@@ -693,40 +1063,52 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
 
     final centerWeek = _normalizeWeek(_displayedWeekNotifier.value);
-    final targetWeeks =
-        <int>{
-            centerWeek,
-            if (centerWeek > 1) centerWeek - 1,
-            if (centerWeek < _allWeek) centerWeek + 1,
-          }.toList()
-          ..sort();
-    final needsWarmup = targetWeeks.any((weekNumber) {
-      return !_hasWeekPlacementCache(weekNumber, metrics) ||
+    final targetWeeks = <int>[
+      if (centerWeek > 1) centerWeek - 1,
+      centerWeek,
+      if (centerWeek < _allWeek) centerWeek + 1,
+    ];
+    var needsWarmup = false;
+    for (final weekNumber in targetWeeks) {
+      if (!_hasWeekPlacementCache(weekNumber, metrics, showExperimentCourses) ||
           !_hasWeekPaintCache(
             weekNumber: weekNumber,
             metrics: metrics,
             theme: theme,
             textDirection: textDirection,
             textScaler: textScaler,
-          );
-    });
+            showExperimentCourses: showExperimentCourses,
+          )) {
+        needsWarmup = true;
+        break;
+      }
+    }
     if (!needsWarmup) {
       return;
     }
 
+    final warmupGeneration = _weekPlacementWarmupGeneration;
     _weekPlacementWarmupPending = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (warmupGeneration != _weekPlacementWarmupGeneration) {
+        return;
+      }
       _weekPlacementWarmupPending = false;
       if (!mounted || _courseData.isEmpty) {
         return;
       }
       for (final weekNumber in targetWeeks) {
         final weekDays = _buildWeekDaysForWeek(weekNumber);
-        final placedCourses = _buildPlacedCourses(weekDays, metrics);
+        final placedCourses = _buildPlacedCourses(
+          weekDays,
+          metrics,
+          showExperimentCourses,
+        );
         _buildWeekCourseCardPaintDataForEnvironment(
           weekDays: weekDays,
           metrics: metrics,
           placedCourses: placedCourses,
+          showExperimentCourses: showExperimentCourses,
           theme: theme,
           textDirection: textDirection,
           textScaler: textScaler,
@@ -785,10 +1167,6 @@ class _CourseTableViewState extends State<CourseTableView> {
   bool get _useLiteAndroidEffects =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  Color _sheetRouteBackground(BuildContext context) {
-    return Colors.transparent;
-  }
-
   Color _sheetBarrierColor(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return colorScheme.overlayScrim.withValues(
@@ -796,30 +1174,17 @@ class _CourseTableViewState extends State<CourseTableView> {
     );
   }
 
-  Color _sheetTransitionBackground(BuildContext context) {
-    return Colors.transparent;
-  }
-
   Future<T?> _showAdaptiveBottomSheet<T>({
     required WidgetBuilder builder,
     bool expand = false,
   }) {
-    if (_useLiteAndroidEffects) {
-      return showModalBottomSheet<T>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        barrierColor: _sheetBarrierColor(context),
-        builder: builder,
-      );
-    }
-
-    return showCupertinoModalBottomSheet<T>(
+    final presenter = widget.showBottomSheet ?? showAppAdaptiveBottomSheet;
+    return presenter<T>(
       context: context,
       expand: expand,
-      backgroundColor: _sheetRouteBackground(context),
+      backgroundColor: Colors.transparent,
       barrierColor: _sheetBarrierColor(context),
-      transitionBackgroundColor: _sheetTransitionBackground(context),
+      transitionBackgroundColor: Colors.transparent,
       builder: builder,
     );
   }
@@ -905,29 +1270,47 @@ class _CourseTableViewState extends State<CourseTableView> {
       return;
     }
 
-    final deleted = await deleteCourseFromActiveSchedule(
-      dateKey: _dateKey(placement.day),
-      targetCourse: placement.course,
-      scope: scope,
-    );
-    if (!mounted) {
-      return;
-    }
-    if (!deleted) {
-      _showSnackBar('删除失败，请稍后重试');
-      return;
-    }
+    try {
+      final deleteCourse =
+          widget.deleteCourse ?? deleteCourseFromActiveSchedule;
+      final deleted = await deleteCourse(
+        dateKey: _dateKey(placement.day),
+        targetCourse: placement.course,
+        scope: scope,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (!deleted) {
+        _showSnackBar('删除失败，请稍后重试');
+        return;
+      }
 
-    await _reloadScheduleState();
-    if (!mounted) {
-      return;
+      await _reloadScheduleState();
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar('$successMessage：${placement.course.name}');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to delete course from active schedule',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('删除课程失败，请稍后重试');
+      }
     }
-    _showSnackBar('$successMessage：${placement.course.name}');
   }
 
   void _showCourseDetails(_PlacedCourse placement) {
+    if (_isCourseDetailSheetOpen) {
+      return;
+    }
+
+    _isCourseDetailSheetOpen = true;
     final course = placement.course;
-    _showAdaptiveBottomSheet<void>(
+    final sheet = _showAdaptiveBottomSheet<void>(
       expand: false,
       builder:
           (sheetContext) => CourseDetailSheet(
@@ -963,15 +1346,29 @@ class _CourseTableViewState extends State<CourseTableView> {
                     : null,
           ),
     );
+    unawaited(_trackCourseDetailSheet(sheet));
+  }
+
+  Future<void> _trackCourseDetailSheet(Future<void> sheet) async {
+    try {
+      await sheet;
+    } finally {
+      _isCourseDetailSheetOpen = false;
+    }
   }
 
   Future<void> _openCampusLogin() async {
-    await Navigator.of(context).push(UnifiedLoginPage.route());
+    final openLogin =
+        widget.openCampusLogin ??
+        (BuildContext context) async {
+          await Navigator.of(context).push(UnifiedLoginPage.route());
+        };
+    await openLogin(context);
     await _reloadScheduleState();
   }
 
   Future<void> _handlePrimaryAction() async {
-    if (_isPrimaryActionLoading) {
+    if (_isPrimaryActionLoadingNotifier.value) {
       return;
     }
     if (CourseSyncService.instance.state.isRunning) {
@@ -979,16 +1376,16 @@ class _CourseTableViewState extends State<CourseTableView> {
       return;
     }
 
-    if (!_hasLinkedCampusAccount) {
-      await _openCampusLogin();
-      return;
-    }
+    _isPrimaryActionLoadingNotifier.value = true;
 
-    setState(() {
-      _isPrimaryActionLoading = true;
-    });
-
+    var failureMessage = '课表同步失败，请稍后重试';
     try {
+      if (!_hasLinkedCampusAccount) {
+        failureMessage = '无法打开登录页面，请稍后重试';
+        await _openCampusLogin();
+        return;
+      }
+
       final renewed = await renewToken(context);
       if (!mounted) {
         return;
@@ -1004,11 +1401,18 @@ class _CourseTableViewState extends State<CourseTableView> {
       if (!started && mounted && CourseSyncService.instance.state.isRunning) {
         _showSnackBar('课表正在同步，请稍候');
       }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to run course table primary action',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar(failureMessage);
+      }
     } finally {
       if (mounted) {
-        setState(() {
-          _isPrimaryActionLoading = false;
-        });
+        _isPrimaryActionLoadingNotifier.value = false;
       }
     }
   }
@@ -1019,11 +1423,19 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
 
     try {
-      await setActiveCourseSchedule(schedule.id);
+      final switchSchedule = widget.switchSchedule ?? setActiveCourseSchedule;
+      await switchSchedule(schedule.id);
       await _reloadScheduleState();
       _showSnackBar('已切换到 ${schedule.name}');
-    } catch (error) {
-      _showSnackBar('切换课表失败：$error');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to switch course schedule',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('切换课表失败，请稍后重试');
+      }
     }
   }
 
@@ -1052,14 +1464,32 @@ class _CourseTableViewState extends State<CourseTableView> {
       return;
     }
 
-    final deleted = await deleteCourseSchedule(schedule.id);
-    if (!deleted) {
-      _showSnackBar('删除失败，请稍后重试');
-      return;
-    }
+    try {
+      final deleteSchedule = widget.deleteSchedule ?? deleteCourseSchedule;
+      final deleted = await deleteSchedule(schedule.id);
+      if (!mounted) {
+        return;
+      }
+      if (!deleted) {
+        _showSnackBar('删除失败，请稍后重试');
+        return;
+      }
 
-    await _reloadScheduleState();
-    _showSnackBar('已删除 ${schedule.name}');
+      await _reloadScheduleState();
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar('已删除 ${schedule.name}');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to delete course schedule',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('删除课表失败，请稍后重试');
+      }
+    }
   }
 
   Future<void> _renameSchedule(SavedCourseSchedule schedule) async {
@@ -1111,11 +1541,19 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
 
     try {
-      await renameCourseSchedule(schedule.id, normalizedName);
+      final renameSchedule = widget.renameSchedule ?? renameCourseSchedule;
+      await renameSchedule(schedule.id, normalizedName);
       await _reloadScheduleState();
       _showSnackBar('已重命名为 $normalizedName');
-    } catch (error) {
-      _showSnackBar('重命名失败：$error');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to rename course schedule',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('重命名课表失败，请稍后重试');
+      }
     }
   }
 
@@ -1130,23 +1568,34 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
 
     try {
-      final importedSchedule = await saveImportedCourseScheduleFromShareCode(
-        code,
-      );
+      final importShareCode =
+          widget.importShareCode ?? saveImportedCourseScheduleFromShareCode;
+      final importedSchedule = await importShareCode(code);
       await _reloadScheduleState();
       _showSnackBar('已导入 ${importedSchedule.name}');
-    } on FormatException catch (error) {
-      final message = error.message.toString();
+    } on FormatException catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to parse course schedule share code',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (reopenEditorOnFailure) {
         await _showManualImportDialog(
           initialText: rawCode,
-          errorMessage: message,
+          errorMessage: courseScheduleShareCodeParseFailureMessage,
         );
         return;
       }
-      _showSnackBar(message);
-    } catch (error) {
-      _showSnackBar('导入失败：$error');
+      _showSnackBar(courseScheduleShareCodeParseFailureMessage);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to import course schedule from share code',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('导入课表失败，请稍后重试');
+      }
     }
   }
 
@@ -1216,56 +1665,140 @@ class _CourseTableViewState extends State<CourseTableView> {
   }
 
   Future<void> _importScheduleFromClipboard() async {
-    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-    final rawCode = clipboardData?.text?.trim() ?? '';
-    if (rawCode.isEmpty) {
-      await _showManualImportDialog(errorMessage: '剪贴板里没有可导入的分享码');
+    if (_isImportingScheduleFromClipboard) {
       return;
     }
-    await _importScheduleFromShareCode(rawCode, reopenEditorOnFailure: true);
+
+    _isImportingScheduleFromClipboard = true;
+    try {
+      final rawCode =
+          (await (widget.readClipboardText ?? _readClipboardText)())?.trim() ??
+          '';
+      if (rawCode.isEmpty) {
+        await _showManualImportDialog(errorMessage: '剪贴板里没有可导入的分享码');
+        return;
+      }
+      await _importScheduleFromShareCode(rawCode, reopenEditorOnFailure: true);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to import course schedule from clipboard',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('读取剪贴板失败，请稍后重试');
+      }
+    } finally {
+      _isImportingScheduleFromClipboard = false;
+    }
+  }
+
+  Future<String?> _readClipboardText() async {
+    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    return clipboardData?.text;
+  }
+
+  Future<void> _writeClipboardText(String text) {
+    final writeClipboardText = widget.writeClipboardText ?? _setClipboardText;
+    return writeClipboardText(text);
+  }
+
+  Future<void> _setClipboardText(String text) {
+    return Clipboard.setData(ClipboardData(text: text));
   }
 
   Future<void> _importScheduleFromFile() async {
+    if (_isImportingScheduleFromFile) {
+      return;
+    }
+
+    _isImportingScheduleFromFile = true;
     try {
-      final result = await FilePicker.platform.pickFiles(
-        dialogTitle: '选择工大盒子课表文件',
-        type: FileType.custom,
-        allowedExtensions: const ['json'],
-        allowMultiple: false,
-        withData: true,
-      );
-      if (result == null || result.files.isEmpty) {
+      final rawContent =
+          await (widget.pickImportFileContent ?? _pickImportFileContent)();
+      if (rawContent == null) {
         return;
       }
-
-      final file = result.files.single;
-      String rawContent = '';
-      if (file.bytes != null) {
-        rawContent = utf8.decode(file.bytes!);
-      } else if (file.path != null && file.path!.isNotEmpty) {
-        rawContent = await File(file.path!).readAsString();
-      }
-
       if (rawContent.trim().isEmpty) {
         _showSnackBar('选中的文件没有可导入内容');
         return;
       }
 
-      final importedSchedule = await saveImportedCourseScheduleFromFileContent(
-        rawContent,
-      );
+      final importFileContent =
+          widget.importFileContent ?? saveImportedCourseScheduleFromFileContent;
+      final importedSchedule = await importFileContent(rawContent);
       await _reloadScheduleState();
       _showSnackBar('已从文件导入 ${importedSchedule.name}');
-    } on FormatException catch (error) {
-      _showSnackBar(error.message.toString());
-    } catch (error) {
-      _showSnackBar('导入文件失败：$error');
+    } on FormatException catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to parse course schedule import file',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _showSnackBar(courseScheduleFileParseFailureMessage);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to import course schedule from file',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('导入文件失败，请稍后重试');
+      }
+    } finally {
+      _isImportingScheduleFromFile = false;
     }
   }
 
+  Future<String?> _pickImportFileContent() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: '选择工大盒子课表文件',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+      allowMultiple: false,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return null;
+    }
+
+    final file = result.files.single;
+    if (file.bytes != null) {
+      return utf8.decode(file.bytes!);
+    }
+    if (file.path != null && file.path!.isNotEmpty) {
+      return File(file.path!).readAsString();
+    }
+    return '';
+  }
+
   String _sanitizeFileNameSegment(String value) {
-    final normalized = value.trim().replaceAll(RegExp(r'\s+'), '_');
-    final safe = normalized.replaceAll(RegExp(r'[\\/:*?"<>|]'), '-');
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return 'schedule';
+    }
+
+    final buffer = StringBuffer();
+    var previousWasWhitespace = false;
+    for (var index = 0; index < trimmed.length; index++) {
+      final codeUnit = trimmed.codeUnitAt(index);
+      if (_isCourseFileNameWhitespace(codeUnit)) {
+        if (!previousWasWhitespace) {
+          buffer.writeCharCode(0x5F);
+          previousWasWhitespace = true;
+        }
+        continue;
+      }
+
+      previousWasWhitespace = false;
+      if (_isUnsafeCourseFileNameCodeUnit(codeUnit)) {
+        buffer.writeCharCode(0x2D);
+      } else {
+        buffer.writeCharCode(codeUnit);
+      }
+    }
+
+    final safe = buffer.toString();
     return safe.isEmpty ? 'schedule' : safe;
   }
 
@@ -1287,6 +1820,32 @@ class _CourseTableViewState extends State<CourseTableView> {
     return file;
   }
 
+  Future<String?> _saveScheduleExportFile({
+    required String fileName,
+    required Uint8List bytes,
+  }) {
+    return FilePicker.platform.saveFile(
+      dialogTitle: '导出课表文件',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+      bytes: bytes,
+    );
+  }
+
+  Future<void> _shareScheduleExportFile({
+    required SavedCourseSchedule schedule,
+    required Rect sharePositionOrigin,
+  }) async {
+    final file = await _writeScheduleExportTempFile(schedule);
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      subject: '${schedule.name} 课表文件',
+      text: '这是 ${schedule.name} 的工大盒子课表文件，导入后即可使用。',
+      sharePositionOrigin: sharePositionOrigin,
+    );
+  }
+
   Rect _sharePositionOrigin() {
     final box = context.findRenderObject();
     if (box is RenderBox) {
@@ -1306,19 +1865,25 @@ class _CourseTableViewState extends State<CourseTableView> {
       final bytes = Uint8List.fromList(
         utf8.encode(buildCourseScheduleExportJsonString(activeSchedule)),
       );
-      final savedPath = await FilePicker.platform.saveFile(
-        dialogTitle: '导出课表文件',
+      final saveScheduleFile =
+          widget.saveScheduleFile ?? _saveScheduleExportFile;
+      final savedPath = await saveScheduleFile(
         fileName: _buildExportFileName(activeSchedule),
-        type: FileType.custom,
-        allowedExtensions: const ['json'],
         bytes: bytes,
       );
       if (savedPath == null || savedPath.isEmpty) {
         return;
       }
       _showSnackBar('课表文件已导出');
-    } catch (error) {
-      _showSnackBar('导出文件失败：$error');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to export course schedule file',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('导出文件失败，请稍后重试');
+      }
     }
   }
 
@@ -1330,15 +1895,21 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
 
     try {
-      final file = await _writeScheduleExportTempFile(activeSchedule);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        subject: '${activeSchedule.name} 课表文件',
-        text: '这是 ${activeSchedule.name} 的工大盒子课表文件，导入后即可使用。',
+      final shareScheduleFile =
+          widget.shareScheduleFile ?? _shareScheduleExportFile;
+      await shareScheduleFile(
+        schedule: activeSchedule,
         sharePositionOrigin: _sharePositionOrigin(),
       );
-    } catch (error) {
-      _showSnackBar('分享文件失败：$error');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to share course schedule file',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('分享文件失败，请稍后重试');
+      }
     }
   }
 
@@ -1583,13 +2154,22 @@ class _CourseTableViewState extends State<CourseTableView> {
                             Expanded(
                               child: FilledButton(
                                 onPressed: () async {
-                                  await Clipboard.setData(
-                                    ClipboardData(text: shareCode),
-                                  );
-                                  if (!dialogContext.mounted) {
-                                    return;
+                                  try {
+                                    await _writeClipboardText(shareCode);
+                                    if (!dialogContext.mounted) {
+                                      return;
+                                    }
+                                    Navigator.of(dialogContext).pop();
+                                  } catch (error, stackTrace) {
+                                    AppLogger.error(
+                                      'Failed to copy course schedule share code from QR dialog',
+                                      error: error,
+                                      stackTrace: stackTrace,
+                                    );
+                                    if (mounted) {
+                                      _showSnackBar('复制分享码失败，请稍后重试');
+                                    }
                                   }
-                                  Navigator.of(dialogContext).pop();
                                 },
                                 style: FilledButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
@@ -1617,207 +2197,273 @@ class _CourseTableViewState extends State<CourseTableView> {
   }
 
   Future<void> _scanScheduleQrCode() async {
+    if (_isScanningScheduleQrCode) {
+      return;
+    }
+
+    _isScanningScheduleQrCode = true;
     try {
-      final cameraPermission = await Permission.camera.request();
-      if (!cameraPermission.isGranted) {
-        if (!mounted) {
-          return;
-        }
-
-        final needsSettings =
-            cameraPermission.isPermanentlyDenied ||
-            cameraPermission.isRestricted;
-        showAppSnackBar(
-          context,
-          message:
-              needsSettings
-                  ? '相机权限已关闭，请在系统设置中允许工大盒子访问相机后再扫码导入。'
-                  : '未授予相机权限，无法扫码导入课表。',
-          type: AppSnackBarType.warning,
-          icon: CupertinoIcons.camera_fill,
-          actionLabel: needsSettings ? '去设置' : null,
-          onAction: needsSettings ? openAppSettings : null,
-        );
-        return;
-      }
-
-      if (!mounted) {
-        return;
-      }
-      final navigator = Navigator.of(context);
-      final scannedCode = await navigator.push<String>(
-        MaterialPageRoute(builder: (_) => const _CourseShareQrScannerPage()),
-      );
+      final scanner = widget.scanQrCode ?? _scanQrCode;
+      final scannedCode = await scanner(context);
       if (scannedCode == null || scannedCode.trim().isEmpty) {
         return;
       }
       await _importScheduleFromShareCode(scannedCode);
-    } catch (error) {
-      _showSnackBar('扫码导入失败：$error');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to scan course schedule QR code',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('扫码导入失败，请稍后重试');
+      }
+    } finally {
+      _isScanningScheduleQrCode = false;
     }
   }
 
+  Future<String?> _scanQrCode(BuildContext context) async {
+    final cameraPermission = await Permission.camera.request();
+    if (!cameraPermission.isGranted) {
+      if (!context.mounted) {
+        return null;
+      }
+
+      final needsSettings =
+          cameraPermission.isPermanentlyDenied || cameraPermission.isRestricted;
+      showAppSnackBar(
+        context,
+        message:
+            needsSettings
+                ? '相机权限已关闭，请在系统设置中允许工大盒子访问相机后再扫码导入。'
+                : '未授予相机权限，无法扫码导入课表。',
+        type: AppSnackBarType.warning,
+        icon: CupertinoIcons.camera_fill,
+        actionLabel: needsSettings ? '去设置' : null,
+        onAction: needsSettings ? openAppSettings : null,
+      );
+      return null;
+    }
+
+    if (!context.mounted) {
+      return null;
+    }
+    return Navigator.of(context).push<String>(
+      buildAppPageRoute(builder: (_) => const _CourseShareQrScannerPage()),
+    );
+  }
+
   Future<void> _exportActiveScheduleShareCode() async {
+    if (_isCopyingScheduleShareCode) {
+      return;
+    }
+
     final activeSchedule = _activeSchedule;
     if (activeSchedule == null) {
       _showSnackBar('当前没有可分享的课表');
       return;
     }
 
-    final shareCode = buildCourseScheduleShareCode(activeSchedule);
-    await Clipboard.setData(ClipboardData(text: shareCode));
-    if (!mounted) {
-      return;
-    }
+    _isCopyingScheduleShareCode = true;
+    try {
+      final shareCode = buildCourseScheduleShareCode(activeSchedule);
+      await _writeClipboardText(shareCode);
+      if (!mounted) {
+        return;
+      }
 
-    await showDialog<void>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text('分享码已复制'),
-            content: SizedBox(
-              width: 520,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '已经复制 ${activeSchedule.name} 的分享码。对方打开工大盒子后，从剪贴板导入即可使用。',
-                    style: Theme.of(dialogContext).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color:
-                          Theme.of(
-                            dialogContext,
-                          ).colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(16),
+      await showDialog<void>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('分享码已复制'),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '已经复制 ${activeSchedule.name} 的分享码。对方打开工大盒子后，从剪贴板导入即可使用。',
+                      style: Theme.of(dialogContext).textTheme.bodyMedium,
                     ),
-                    child: SelectableText(
-                      shareCode,
-                      maxLines: 6,
-                      style: Theme.of(dialogContext).textTheme.bodySmall,
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color:
+                            Theme.of(
+                              dialogContext,
+                            ).colorScheme.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: SelectableText(
+                        shareCode,
+                        maxLines: 6,
+                        style: Theme.of(dialogContext).textTheme.bodySmall,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('关闭'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final navigator = Navigator.of(dialogContext);
+                    try {
+                      await _writeClipboardText(shareCode);
+                      navigator.pop();
+                    } catch (error, stackTrace) {
+                      AppLogger.error(
+                        'Failed to copy course schedule share code again',
+                        error: error,
+                        stackTrace: stackTrace,
+                      );
+                      if (mounted) {
+                        _showSnackBar('复制分享码失败，请稍后重试');
+                      }
+                    }
+                  },
+                  child: const Text('再次复制'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('关闭'),
-              ),
-              FilledButton(
-                onPressed: () async {
-                  final navigator = Navigator.of(dialogContext);
-                  await Clipboard.setData(ClipboardData(text: shareCode));
-                  navigator.pop();
-                },
-                child: const Text('再次复制'),
-              ),
-            ],
-          ),
-    );
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to copy course schedule share code',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('复制分享码失败，请稍后重试');
+      }
+    } finally {
+      _isCopyingScheduleShareCode = false;
+    }
   }
 
   Future<void> _showScheduleManager() async {
-    final contentReadyFuture =
-        _useLiteAndroidEffects
-            ? Future<bool>.delayed(
-              const Duration(milliseconds: 120),
-              () => true,
-            )
-            : SynchronousFuture<bool>(true);
+    if (_isScheduleManagerSheetOpen) {
+      return;
+    }
 
-    final action = await _showAdaptiveBottomSheet<_ScheduleManagerAction>(
-      expand: false,
-      builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        final colorScheme = theme.colorScheme;
-        final sheetHeight = math.min(
-          MediaQuery.sizeOf(sheetContext).height * 0.82,
-          620.0,
-        );
+    _isScheduleManagerSheetOpen = true;
+    Future<bool>? contentReadyFuture;
+    Future<bool> scheduleManagerContentReadyFuture() {
+      return contentReadyFuture ??=
+          _useLiteAndroidEffects
+              ? Future<bool>.delayed(
+                const Duration(milliseconds: 120),
+                () => true,
+              )
+              : SynchronousFuture<bool>(true);
+    }
 
-        return Material(
-          color: Colors.transparent,
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(34)),
-            child: _buildScheduleManagerBackground(
-              sheetContext,
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                  child: SizedBox(
-                    height: sheetHeight,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 42,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: colorScheme.outlineVariant,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            GlassIconBadge(
-                              icon: Icons.layers_rounded,
-                              tint: colorScheme.primary,
-                              size: 46,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '课表库',
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.4,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '把自己的历史课表和朋友分享的课表都收进这里，切换、备份、分享都会更清楚。',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
+    final _ScheduleManagerAction? action;
+    try {
+      action = await _showAdaptiveBottomSheet<_ScheduleManagerAction>(
+        expand: false,
+        builder: (sheetContext) {
+          final theme = Theme.of(sheetContext);
+          final colorScheme = theme.colorScheme;
+          final sheetHeight = math.min(
+            MediaQuery.sizeOf(sheetContext).height * 0.82,
+            620.0,
+          );
+
+          return Material(
+            color: Colors.transparent,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(34),
+              ),
+              child: _buildScheduleManagerBackground(
+                sheetContext,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    child: SizedBox(
+                      height: sheetHeight,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 42,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: colorScheme.outlineVariant,
+                                borderRadius: BorderRadius.circular(999),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 18),
-                        _buildScheduleManagerPrimaryActionButton(sheetContext),
-                        const SizedBox(height: 14),
-                        Expanded(
-                          child: _buildScheduleManagerBody(
-                            sheetContext,
-                            contentReadyFuture: contentReadyFuture,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              GlassIconBadge(
+                                icon: Icons.layers_rounded,
+                                tint: colorScheme.primary,
+                                size: 46,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '课表库',
+                                      style: theme.textTheme.titleLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.4,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '把自己的历史课表和朋友分享的课表都收进这里，切换、备份、分享都会更清楚。',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          _buildScheduleManagerPrimaryActionButton(
+                            sheetContext,
+                          ),
+                          const SizedBox(height: 14),
+                          Expanded(
+                            child: _buildScheduleManagerBody(
+                              sheetContext,
+                              contentReadyFuture:
+                                  scheduleManagerContentReadyFuture(),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
+    } finally {
+      _isScheduleManagerSheetOpen = false;
+    }
 
     if (action == null) {
       return;
@@ -1946,24 +2592,15 @@ class _CourseTableViewState extends State<CourseTableView> {
       future: contentReadyFuture,
       builder: (context, snapshot) {
         final isReady = snapshot.data ?? false;
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 90),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          transitionBuilder:
-              (child, animation) =>
-                  FadeTransition(opacity: animation, child: child),
-          child:
-              isReady
-                  ? KeyedSubtree(
-                    key: const ValueKey('schedule-manager-content'),
-                    child: _buildScheduleManagerSections(context),
-                  )
-                  : KeyedSubtree(
-                    key: const ValueKey('schedule-manager-placeholder'),
-                    child: _buildScheduleManagerPlaceholder(context),
-                  ),
-        );
+        return isReady
+            ? KeyedSubtree(
+              key: const ValueKey('schedule-manager-content'),
+              child: _buildScheduleManagerSections(context),
+            )
+            : KeyedSubtree(
+              key: const ValueKey('schedule-manager-placeholder'),
+              child: _buildScheduleManagerPlaceholder(context),
+            );
       },
     );
   }
@@ -2154,136 +2791,121 @@ class _CourseTableViewState extends State<CourseTableView> {
           _savedSchedules.isEmpty
               ? null
               : Column(
-                children:
-                    _savedSchedules.asMap().entries.map((entry) {
-                      final schedule = entry.value;
-                      final isActive = schedule.id == _activeSchedule?.id;
-                      final badges = _scheduleBadges(
-                        schedule,
-                        isActive: isActive,
-                      );
-                      final tileAccent =
-                          isActive ? colorScheme.primary : colorScheme.tertiary;
-                      return Padding(
-                        padding: EdgeInsets.only(
-                          bottom:
-                              entry.key == _savedSchedules.length - 1 ? 0 : 8,
-                        ),
-                        child: GlassPanel(
-                          style: GlassPanelStyle.list,
-                          blur: useLitePanels ? 0 : 18,
-                          useBackdropFilter: !useLitePanels,
-                          borderRadius: BorderRadius.circular(18),
-                          padding: EdgeInsets.zero,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.white.withValues(
-                                alpha:
-                                    theme.brightness == Brightness.dark
-                                        ? 0.08
-                                        : 0.64,
-                              ),
-                              tileAccent.withValues(
-                                alpha:
-                                    theme.brightness == Brightness.dark
-                                        ? 0.18
-                                        : 0.12,
-                              ),
-                              colorScheme.surface.withValues(
-                                alpha:
-                                    theme.brightness == Brightness.dark
-                                        ? 0.12
-                                        : 0.28,
-                              ),
-                            ],
-                          ),
-                          borderColor: tileAccent.withValues(
-                            alpha:
-                                theme.brightness == Brightness.dark
-                                    ? 0.22
-                                    : 0.20,
-                          ),
-                          child: ListTile(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            title: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    schedule.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (badges.isNotEmpty) ...[
-                                  const SizedBox(width: 8),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
-                                    children:
-                                        badges
-                                            .map(
-                                              (badge) =>
-                                                  _ScheduleBadge(label: badge),
-                                            )
-                                            .toList(),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            subtitle: Text(
-                              _buildScheduleListSubtitle(schedule),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            leading: Icon(
-                              isActive
-                                  ? Icons.check_circle_rounded
-                                  : Icons.calendar_month_rounded,
-                              color: tileAccent,
-                            ),
-                            trailing: PopupMenuButton<String>(
-                              tooltip: '课表操作',
-                              onSelected: (value) {
-                                switch (value) {
-                                  case 'rename':
-                                    Navigator.of(sheetContext).pop(
-                                      _ScheduleManagerAction.rename(schedule),
-                                    );
-                                    break;
-                                  case 'delete':
-                                    Navigator.of(sheetContext).pop(
-                                      _ScheduleManagerAction.delete(schedule),
-                                    );
-                                    break;
-                                }
-                              },
-                              itemBuilder:
-                                  (context) => const [
-                                    PopupMenuItem(
-                                      value: 'rename',
-                                      child: Text('重命名'),
-                                    ),
-                                    PopupMenuItem(
-                                      value: 'delete',
-                                      child: Text('删除'),
-                                    ),
-                                  ],
-                            ),
-                            onTap:
-                                () => Navigator.of(sheetContext).pop(
-                                  _ScheduleManagerAction.switchSchedule(
-                                    schedule,
-                                  ),
-                                ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                children: [
+                  for (var index = 0; index < _savedSchedules.length; index++)
+                    _buildSavedScheduleTile(
+                      sheetContext,
+                      schedule: _savedSchedules[index],
+                      isLast: index == _savedSchedules.length - 1,
+                      useLitePanels: useLitePanels,
+                    ),
+                ],
               ),
+    );
+  }
+
+  Widget _buildSavedScheduleTile(
+    BuildContext sheetContext, {
+    required SavedCourseSchedule schedule,
+    required bool isLast,
+    required bool useLitePanels,
+  }) {
+    final theme = Theme.of(sheetContext);
+    final colorScheme = theme.colorScheme;
+    final isActive = schedule.id == _activeSchedule?.id;
+    final badges = _scheduleBadges(schedule, isActive: isActive);
+    final tileAccent = isActive ? colorScheme.primary : colorScheme.tertiary;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+      child: GlassPanel(
+        style: GlassPanelStyle.list,
+        blur: useLitePanels ? 0 : 18,
+        useBackdropFilter: !useLitePanels,
+        borderRadius: BorderRadius.circular(18),
+        padding: EdgeInsets.zero,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.08 : 0.64,
+            ),
+            tileAccent.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.18 : 0.12,
+            ),
+            colorScheme.surface.withValues(
+              alpha: theme.brightness == Brightness.dark ? 0.12 : 0.28,
+            ),
+          ],
+        ),
+        borderColor: tileAccent.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.22 : 0.20,
+        ),
+        child: ListTile(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  schedule.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (badges.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    for (final badge in badges) _ScheduleBadge(label: badge),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          subtitle: Text(
+            _buildScheduleListSubtitle(schedule),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          leading: Icon(
+            isActive
+                ? Icons.check_circle_rounded
+                : Icons.calendar_month_rounded,
+            color: tileAccent,
+          ),
+          trailing: PopupMenuButton<String>(
+            tooltip: '课表操作',
+            onSelected: (value) {
+              switch (value) {
+                case 'rename':
+                  Navigator.of(
+                    sheetContext,
+                  ).pop(_ScheduleManagerAction.rename(schedule));
+                  break;
+                case 'delete':
+                  Navigator.of(
+                    sheetContext,
+                  ).pop(_ScheduleManagerAction.delete(schedule));
+                  break;
+              }
+            },
+            itemBuilder:
+                (context) => const [
+                  PopupMenuItem(value: 'rename', child: Text('重命名')),
+                  PopupMenuItem(value: 'delete', child: Text('删除')),
+                ],
+          ),
+          onTap:
+              () => Navigator.of(
+                sheetContext,
+              ).pop(_ScheduleManagerAction.switchSchedule(schedule)),
+        ),
+      ),
     );
   }
 
@@ -2390,18 +3012,15 @@ class _CourseTableViewState extends State<CourseTableView> {
                 ],
               ),
               const SizedBox(height: 18),
-              ...lineWidths
-                  .skip(2)
-                  .map(
-                    (widthFactor) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: placeholderLine(widthFactor),
-                    ),
-                  ),
+              for (var index = 2; index < lineWidths.length; index++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: placeholderLine(lineWidths[index]),
+                ),
               if (trailingTiles > 0) ...[
                 const Spacer(),
-                ...List.generate(trailingTiles, (index) {
-                  return Padding(
+                for (var index = 0; index < trailingTiles; index++)
+                  Padding(
                     padding: EdgeInsets.only(
                       bottom: index == trailingTiles - 1 ? 0 : 8,
                     ),
@@ -2414,8 +3033,7 @@ class _CourseTableViewState extends State<CourseTableView> {
                         borderRadius: BorderRadius.circular(18),
                       ),
                     ),
-                  );
-                }),
+                  ),
               ],
             ],
           ),
@@ -2575,24 +3193,31 @@ class _CourseTableViewState extends State<CourseTableView> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed:
-                        _isPrimaryActionLoading ? null : _handlePrimaryAction,
-                    icon:
-                        _isPrimaryActionLoading
-                            ? const AppLoadingIndicator(
-                              size: 18,
-                              color: Colors.white,
-                            )
-                            : Icon(
-                              _hasLinkedCampusAccount
-                                  ? Icons.cloud_download_rounded
-                                  : Icons.login_rounded,
-                            ),
-                    label: Text(primaryLabel),
-                  ),
+                ValueListenableBuilder<bool>(
+                  valueListenable: _isPrimaryActionLoadingNotifier,
+                  builder: (context, isPrimaryActionLoading, _) {
+                    return SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed:
+                            isPrimaryActionLoading
+                                ? null
+                                : _handlePrimaryAction,
+                        icon:
+                            isPrimaryActionLoading
+                                ? const AppLoadingIndicator(
+                                  size: 18,
+                                  color: Colors.white,
+                                )
+                                : Icon(
+                                  _hasLinkedCampusAccount
+                                      ? Icons.cloud_download_rounded
+                                      : Icons.login_rounded,
+                                ),
+                        label: Text(primaryLabel),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
@@ -2666,82 +3291,97 @@ class _CourseTableViewState extends State<CourseTableView> {
     }
 
     return RepaintBoundary(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 10, 8, 88),
-        child: Column(
-          children: [
-            RepaintBoundary(
-              child: ValueListenableBuilder<int>(
-                valueListenable: _displayedWeekNotifier,
-                builder: (context, displayedWeek, child) {
-                  final weekDays = _buildWeekDaysForWeek(displayedWeek);
-                  return ValueListenableBuilder<bool>(
-                    valueListenable: _transitionLiteModeNotifier,
-                    builder: (context, useLiteStyle, child) {
-                      return CourseTableToolbar(
-                        weekTitle: '第$displayedWeek周',
-                        weekDateRange: _buildWeekDateRange(weekDays),
-                        currentWeekLabel: _buildCurrentWeekLabel(),
-                        isShowingCurrentWeek: displayedWeek == _currentRealWeek,
-                        onBackToCurrentWeek: _backToRealWeek,
-                        onManageSchedules: _showScheduleManager,
-                        showExperimentCourses: _showExperimentCourses,
-                        onShowExperimentCoursesChanged:
-                            _setShowExperimentCourses,
-                        useLiteStyle: useLiteStyle,
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final metrics = _buildGridMetrics(constraints);
-                  _scheduleWeekPlacementWarmup(
-                    metrics,
-                    theme: Theme.of(context),
-                    textDirection: Directionality.of(context),
-                    textScaler: MediaQuery.textScalerOf(context),
-                  );
-                  final basePagingPhysics =
-                      _allWeek <= 1
-                          ? const NeverScrollableScrollPhysics()
-                          : const _CourseTablePagingPhysics().applyTo(
-                            ScrollConfiguration.of(
-                              context,
-                            ).getScrollPhysics(context),
-                          );
-                  return Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(
-                      width: metrics.totalWidth,
-                      child: PageView.builder(
-                        key: const ValueKey('course-table-week-pager'),
-                        controller: _weekPageController,
-                        itemCount: _allWeek,
-                        dragStartBehavior: DragStartBehavior.down,
-                        allowImplicitScrolling: false,
-                        physics: basePagingPhysics,
-                        onPageChanged: _handleWeekPageChanged,
-                        itemBuilder: (context, index) {
-                          final weekNumber = index + 1;
-                          return _buildWeekPage(
-                            context: context,
-                            weekDays: _buildWeekDaysForWeek(weekNumber),
-                            metrics: metrics,
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _showExperimentCoursesNotifier,
+        builder: (context, showExperimentCourses, child) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 88),
+            child: Column(
+              children: [
+                RepaintBoundary(
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: _displayedWeekNotifier,
+                    builder: (context, displayedWeek, child) {
+                      final weekDays = _buildWeekDaysForWeek(displayedWeek);
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: _transitionLiteModeNotifier,
+                        builder: (context, useLiteStyle, child) {
+                          return CourseTableToolbar(
+                            weekTitle: '第$displayedWeek周',
+                            weekDateRange: _buildWeekDateRange(weekDays),
+                            currentWeekLabel: _buildCurrentWeekLabel(),
+                            isShowingCurrentWeek:
+                                displayedWeek == _currentRealWeek,
+                            onBackToCurrentWeek: _backToRealWeek,
+                            onManageSchedules: _showScheduleManager,
+                            showExperimentCourses: showExperimentCourses,
+                            onShowExperimentCoursesChanged:
+                                _setShowExperimentCourses,
+                            useLiteStyle: useLiteStyle,
                           );
                         },
-                      ),
-                    ),
-                  );
-                },
-              ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ValueListenableBuilder<DateTime>(
+                    valueListenable: _todayDateNotifier,
+                    builder: (context, today, child) {
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          final metrics = _buildGridMetrics(constraints);
+                          _scheduleWeekPlacementWarmup(
+                            metrics,
+                            showExperimentCourses: showExperimentCourses,
+                            theme: Theme.of(context),
+                            textDirection: Directionality.of(context),
+                            textScaler: MediaQuery.textScalerOf(context),
+                          );
+                          final basePagingPhysics =
+                              _allWeek <= 1
+                                  ? const NeverScrollableScrollPhysics()
+                                  : const _CourseTablePagingPhysics().applyTo(
+                                    ScrollConfiguration.of(
+                                      context,
+                                    ).getScrollPhysics(context),
+                                  );
+                          return Align(
+                            alignment: Alignment.topCenter,
+                            child: SizedBox(
+                              width: metrics.totalWidth,
+                              child: PageView.builder(
+                                key: const ValueKey('course-table-week-pager'),
+                                controller: _weekPageController,
+                                itemCount: _allWeek,
+                                dragStartBehavior: DragStartBehavior.down,
+                                allowImplicitScrolling: false,
+                                physics: basePagingPhysics,
+                                onPageChanged: _handleWeekPageChanged,
+                                itemBuilder: (context, index) {
+                                  final weekNumber = index + 1;
+                                  return _buildWeekPage(
+                                    context: context,
+                                    weekDays: _buildWeekDaysForWeek(weekNumber),
+                                    metrics: metrics,
+                                    today: today,
+                                    showExperimentCourses:
+                                        showExperimentCourses,
+                                  );
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -2760,8 +3400,8 @@ class _CourseTableViewState extends State<CourseTableView> {
   ];
 
   String _buildWeekDateRange(List<DateTime> weekDays) {
-    final start = DateFormat('M/d').format(weekDays.first);
-    final end = DateFormat('M/d').format(weekDays.last);
+    final start = _formatCourseMonthDay(weekDays.first);
+    final end = _formatCourseMonthDay(weekDays.last);
     return '$start - $end';
   }
 
@@ -2829,8 +3469,13 @@ class _CourseTableViewState extends State<CourseTableView> {
   List<_PlacedCourse> _buildPlacedCourses(
     List<DateTime> weekDays,
     _WeekGridMetrics metrics,
+    bool showExperimentCourses,
   ) {
-    final cacheKey = _buildWeekPlacementCacheKey(weekDays, metrics);
+    final cacheKey = _buildWeekPlacementCacheKey(
+      weekDays,
+      metrics,
+      showExperimentCourses,
+    );
     final cachedPlacements = _weekPlacementsCache[cacheKey];
     if (cachedPlacements != null) {
       return cachedPlacements;
@@ -2838,14 +3483,14 @@ class _CourseTableViewState extends State<CourseTableView> {
 
     final placements = <_PlacedCourse>[];
     for (var dayIndex = 0; dayIndex < weekDays.length; dayIndex++) {
-      final dayCourses = _visibleCoursesForDay(weekDays[dayIndex]);
-      placements.addAll(
-        _layoutDayCourses(
-          dayCourses: dayCourses,
-          dayDate: weekDays[dayIndex],
-          dayIndex: dayIndex,
-          metrics: metrics,
-        ),
+      final dayCourses = _coursesForDay(weekDays[dayIndex]);
+      _appendDayCoursePlacements(
+        targetPlacements: placements,
+        dayCourses: dayCourses,
+        dayDate: weekDays[dayIndex],
+        dayIndex: dayIndex,
+        metrics: metrics,
+        showExperimentCourses: showExperimentCourses,
       );
     }
     final cachedResult = List<_PlacedCourse>.unmodifiable(placements);
@@ -2856,22 +3501,25 @@ class _CourseTableViewState extends State<CourseTableView> {
   String _buildWeekCourseCardPaintCacheKey(
     List<DateTime> weekDays,
     _WeekGridMetrics metrics,
+    bool showExperimentCourses,
     ThemeData theme,
     ui.TextDirection textDirection,
     TextScaler textScaler,
   ) {
     final bodySmall = theme.textTheme.bodySmall;
     final labelSmall = theme.textTheme.labelSmall;
-    return [
-      _buildWeekPlacementCacheKey(weekDays, metrics),
-      theme.brightness.name,
-      bodySmall?.fontFamily ?? 'default',
-      (bodySmall?.fontSize ?? 0).toStringAsFixed(2),
-      labelSmall?.fontFamily ?? 'default',
-      (labelSmall?.fontSize ?? 0).toStringAsFixed(2),
-      textDirection.name,
-      textScaler.scale(1).toStringAsFixed(2),
-    ].join('|');
+    final placementKey = _buildWeekPlacementCacheKey(
+      weekDays,
+      metrics,
+      showExperimentCourses,
+    );
+    final bodyFontFamily = bodySmall?.fontFamily ?? 'default';
+    final labelFontFamily = labelSmall?.fontFamily ?? 'default';
+    return '$placementKey|${theme.brightness.name}|$bodyFontFamily|'
+        '${(bodySmall?.fontSize ?? 0).toStringAsFixed(2)}|'
+        '$labelFontFamily|'
+        '${(labelSmall?.fontSize ?? 0).toStringAsFixed(2)}|'
+        '${textDirection.name}|${textScaler.scale(1).toStringAsFixed(2)}';
   }
 
   List<_CourseCardPaintData> _buildWeekCourseCardPaintData({
@@ -2879,11 +3527,13 @@ class _CourseTableViewState extends State<CourseTableView> {
     required List<DateTime> weekDays,
     required _WeekGridMetrics metrics,
     required List<_PlacedCourse> placedCourses,
+    required bool showExperimentCourses,
   }) {
     return _buildWeekCourseCardPaintDataForEnvironment(
       weekDays: weekDays,
       metrics: metrics,
       placedCourses: placedCourses,
+      showExperimentCourses: showExperimentCourses,
       theme: Theme.of(context),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.textScalerOf(context),
@@ -2894,6 +3544,7 @@ class _CourseTableViewState extends State<CourseTableView> {
     required List<DateTime> weekDays,
     required _WeekGridMetrics metrics,
     required List<_PlacedCourse> placedCourses,
+    required bool showExperimentCourses,
     required ThemeData theme,
     required ui.TextDirection textDirection,
     required TextScaler textScaler,
@@ -2905,6 +3556,7 @@ class _CourseTableViewState extends State<CourseTableView> {
     final cacheKey = _buildWeekCourseCardPaintCacheKey(
       weekDays,
       metrics,
+      showExperimentCourses,
       theme,
       textDirection,
       textScaler,
@@ -2914,18 +3566,29 @@ class _CourseTableViewState extends State<CourseTableView> {
       return cachedCards;
     }
 
-    final cards = placedCourses
-        .map(
-          (placement) => _buildCourseCardPaintData(
-            placement: placement,
-            palette: _getCoursePalette(placement.course.name, theme),
-            theme: theme,
-            textDirection: textDirection,
-            textScaler: textScaler,
-          ),
-        )
-        .toList(growable: false);
-    final cachedResult = List<_CourseCardPaintData>.unmodifiable(cards);
+    final firstPlacement = placedCourses.first;
+    final paintData = List<_CourseCardPaintData>.filled(
+      placedCourses.length,
+      _buildCourseCardPaintData(
+        placement: firstPlacement,
+        palette: _getCoursePalette(firstPlacement.course.name, theme),
+        theme: theme,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      ),
+      growable: false,
+    );
+    for (var index = 1; index < placedCourses.length; index++) {
+      final placement = placedCourses[index];
+      paintData[index] = _buildCourseCardPaintData(
+        placement: placement,
+        palette: _getCoursePalette(placement.course.name, theme),
+        theme: theme,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      );
+    }
+    final cachedResult = List<_CourseCardPaintData>.unmodifiable(paintData);
     _weekCourseCardPaintCache[cacheKey] = cachedResult;
     return cachedResult;
   }
@@ -3250,25 +3913,28 @@ class _CourseTableViewState extends State<CourseTableView> {
   }
 
   String _buildCourseCardHitKey(_PlacedCourse placement) {
-    return [
-      _dateKey(placement.day),
-      placement.startSection,
-      placement.endSection,
-      placement.course.name,
-    ].join('-');
+    return '${_dateKey(placement.day)}-${placement.startSection}-'
+        '${placement.endSection}-${placement.course.name}';
   }
 
   Widget _buildWeekPage({
     required BuildContext context,
     required List<DateTime> weekDays,
     required _WeekGridMetrics metrics,
+    required DateTime today,
+    required bool showExperimentCourses,
   }) {
-    final placedCourses = _buildPlacedCourses(weekDays, metrics);
+    final placedCourses = _buildPlacedCourses(
+      weekDays,
+      metrics,
+      showExperimentCourses,
+    );
     final paintedCards = _buildWeekCourseCardPaintData(
       context: context,
       weekDays: weekDays,
       metrics: metrics,
       placedCourses: placedCourses,
+      showExperimentCourses: showExperimentCourses,
     );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -3289,6 +3955,7 @@ class _CourseTableViewState extends State<CourseTableView> {
                   weekDays: weekDays,
                   weekdayMap: _weekdayMap,
                   metrics: metrics,
+                  today: today,
                 ),
               ),
               const SizedBox(height: _headerGap),
@@ -3328,7 +3995,9 @@ class _CourseTableViewState extends State<CourseTableView> {
                               painter: _WeekGridStaticPainter(
                                 metrics: metrics,
                                 sectionCount: _sectionCount,
-                                todayColumnIndex: weekDays.indexWhere(_isToday),
+                                todayColumnIndex: weekDays.indexWhere(
+                                  (day) => _isSameDay(day, today),
+                                ),
                                 todayHighlightColor: colorScheme.primary
                                     .withValues(alpha: isDark ? 0.08 : 0.06),
                                 horizontalLineColor: colorScheme.outlineVariant
@@ -3336,19 +4005,19 @@ class _CourseTableViewState extends State<CourseTableView> {
                                 verticalLineColor: colorScheme.outlineVariant
                                     .withValues(alpha: isDark ? 0.18 : 0.22),
                               ),
+                              isComplex: true,
+                              willChange: false,
                             ),
                           ),
                         ),
-                        ..._sectionTimes.map((section) {
-                          final top = metrics.topForSection(section.index);
-                          return Positioned(
+                        for (final section in _sectionTimes)
+                          Positioned(
                             left: 0,
-                            top: top,
+                            top: metrics.topForSection(section.index),
                             width: metrics.timeColumnWidth,
                             height: metrics.slotHeight,
                             child: _TimeAxisLabel(section: section),
-                          );
-                        }),
+                          ),
                         if (paintedCards.isNotEmpty)
                           Positioned.fill(
                             child: RepaintBoundary(
@@ -3379,8 +4048,8 @@ class _CourseTableViewState extends State<CourseTableView> {
                               ),
                             ),
                           ),
-                        ...placedCourses.map((placement) {
-                          return Positioned(
+                        for (final placement in placedCourses)
+                          Positioned(
                             left: placement.left,
                             top: placement.top,
                             width: placement.width,
@@ -3392,8 +4061,7 @@ class _CourseTableViewState extends State<CourseTableView> {
                               semanticLabel: placement.course.name,
                               onTap: () => _showCourseDetails(placement),
                             ),
-                          );
-                        }),
+                          ),
                       ],
                     ),
                   ),
@@ -3406,54 +4074,78 @@ class _CourseTableViewState extends State<CourseTableView> {
     );
   }
 
-  List<_PlacedCourse> _layoutDayCourses({
+  void _appendDayCoursePlacements({
+    required List<_PlacedCourse> targetPlacements,
     required List<Course> dayCourses,
     required DateTime dayDate,
     required int dayIndex,
     required _WeekGridMetrics metrics,
+    required bool showExperimentCourses,
   }) {
-    final sortedCourses =
-        dayCourses.map(_normalizeCourse).whereType<_CourseSpan>().toList()
-          ..sort((a, b) {
-            final startCompare = a.startSection.compareTo(b.startSection);
-            if (startCompare != 0) {
-              return startCompare;
-            }
-            return b.endSection.compareTo(a.endSection);
-          });
-    final clusters = <List<_CourseSpan>>[];
-    var currentCluster = <_CourseSpan>[];
-    var currentEnd = 0;
-
-    for (final courseSpan in sortedCourses) {
-      if (currentCluster.isEmpty || courseSpan.startSection <= currentEnd) {
-        currentCluster.add(courseSpan);
-        if (courseSpan.endSection > currentEnd) {
-          currentEnd = courseSpan.endSection;
-        }
-      } else {
-        clusters.add(currentCluster);
-        currentCluster = [courseSpan];
-        currentEnd = courseSpan.endSection;
+    final sortedCourses = <_CourseSpan>[];
+    for (final course in dayCourses) {
+      if (!showExperimentCourses && course.isExp) {
+        continue;
+      }
+      final courseSpan = _normalizeCourse(course);
+      if (courseSpan != null) {
+        sortedCourses.add(courseSpan);
       }
     }
-    if (currentCluster.isNotEmpty) {
-      clusters.add(currentCluster);
-    }
-
-    final placements = <_PlacedCourse>[];
+    sortedCourses.sort((a, b) {
+      final startCompare = a.startSection.compareTo(b.startSection);
+      if (startCompare != 0) {
+        return startCompare;
+      }
+      return b.endSection.compareTo(a.endSection);
+    });
     final dayLeft = metrics.leftForDay(dayIndex);
+    var clusterStartIndex = 0;
 
-    for (final cluster in clusters) {
+    while (clusterStartIndex < sortedCourses.length) {
+      var clusterEndIndex = clusterStartIndex + 1;
+      var clusterEndSection = sortedCourses[clusterStartIndex].endSection;
+      while (clusterEndIndex < sortedCourses.length) {
+        final courseSpan = sortedCourses[clusterEndIndex];
+        if (courseSpan.startSection > clusterEndSection) {
+          break;
+        }
+        if (courseSpan.endSection > clusterEndSection) {
+          clusterEndSection = courseSpan.endSection;
+        }
+        clusterEndIndex++;
+      }
+
       final active = <_ActiveCourseSlot>[];
       final assignments = <_CourseAssignment>[];
       var columnCount = 0;
 
-      for (final courseSpan in cluster) {
-        active.removeWhere((slot) => slot.endSection < courseSpan.startSection);
+      for (var index = clusterStartIndex; index < clusterEndIndex; index++) {
+        final courseSpan = sortedCourses[index];
+        var activeWriteIndex = 0;
+        for (var slotIndex = 0; slotIndex < active.length; slotIndex++) {
+          final slot = active[slotIndex];
+          if (slot.endSection >= courseSpan.startSection) {
+            active[activeWriteIndex] = slot;
+            activeWriteIndex++;
+          }
+        }
+        if (activeWriteIndex < active.length) {
+          active.removeRange(activeWriteIndex, active.length);
+        }
 
         var column = 0;
-        while (active.any((slot) => slot.column == column)) {
+        while (true) {
+          var columnInUse = false;
+          for (final slot in active) {
+            if (slot.column == column) {
+              columnInUse = true;
+              break;
+            }
+          }
+          if (!columnInUse) {
+            break;
+          }
           column++;
         }
         active.add(
@@ -3476,7 +4168,7 @@ class _CourseTableViewState extends State<CourseTableView> {
         final top = metrics.topForSection(courseSpan.startSection);
         final height = metrics.heightForDuration(courseSpan.duration);
         final left = dayLeft + assignment.column * (cardWidth + _cardInnerGap);
-        placements.add(
+        targetPlacements.add(
           _PlacedCourse(
             course: courseSpan.course,
             day: dayDate,
@@ -3489,9 +4181,9 @@ class _CourseTableViewState extends State<CourseTableView> {
           ),
         );
       }
-    }
 
-    return placements;
+      clusterStartIndex = clusterEndIndex;
+    }
   }
 
   @override
@@ -3528,13 +4220,28 @@ class _CourseTableViewState extends State<CourseTableView> {
       _showSnackBar('无法获取人员名单：缺少pcid，请在设置页刷新课表');
       return;
     }
-    final Map<String, dynamic> re = await getExpStudentList(pcid);
+    final Map<String, dynamic> re;
+    try {
+      final loadExperimentStudents =
+          widget.loadExperimentStudents ?? getExpStudentList;
+      re = await loadExperimentStudents(pcid);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to load experiment students',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showSnackBar('获取人员名单失败，请稍后重试');
+      }
+      return;
+    }
     if (!mounted) {
       return;
     }
 
     if (re['code']?.toString() != '1') {
-      _showSnackBar('获取人员名单失败');
+      _showSnackBar('获取人员名单失败，请稍后重试');
       return;
     }
     final Map<String, dynamic> data = Map<String, dynamic>.from(
@@ -3543,10 +4250,15 @@ class _CourseTableViewState extends State<CourseTableView> {
     final Map<String, dynamic> baseData = Map<String, dynamic>.from(
       data['baseData'] as Map? ?? <String, dynamic>{},
     );
-    final List<Map<String, dynamic>> students =
-        (data['studentList'] as List? ?? <dynamic>[])
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList();
+    final students = <Map<String, dynamic>>[];
+    final rawStudents = data['studentList'];
+    if (rawStudents is List) {
+      for (final item in rawStudents) {
+        if (item is Map) {
+          students.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
 
     _showAdaptiveBottomSheet<void>(
       expand: false,
@@ -3762,11 +4474,13 @@ class _WeekHeaderStrip extends StatelessWidget {
     required this.weekDays,
     required this.weekdayMap,
     required this.metrics,
+    required this.today,
   });
 
   final List<DateTime> weekDays;
   final Map<int, String> weekdayMap;
   final _WeekGridMetrics metrics;
+  final DateTime today;
 
   bool _isSameDay(DateTime left, DateTime right) {
     return left.year == right.year &&
@@ -3779,84 +4493,91 @@ class _WeekHeaderStrip extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final now = DateTime.now();
 
     return Row(
       children: [
         SizedBox(width: metrics.timeColumnWidth),
-        ...weekDays.asMap().entries.map((entry) {
-          final index = entry.key;
-          final day = entry.value;
-          final isToday = _isSameDay(day, now);
+        for (var index = 0; index < weekDays.length; index++)
+          _buildDayHeader(
+            index: index,
+            theme: theme,
+            colorScheme: colorScheme,
+            isDark: isDark,
+          ),
+      ],
+    );
+  }
 
-          return Padding(
-            padding: EdgeInsets.only(left: index == 0 ? 0 : metrics.columnGap),
-            child: SizedBox(
-              width: metrics.dayWidth,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                decoration: BoxDecoration(
-                  color:
-                      isToday
-                          ? colorScheme.primary.withValues(
-                            alpha: isDark ? 0.18 : 0.12,
-                          )
-                          : Colors.white.withValues(
-                            alpha: isDark ? 0.04 : 0.28,
-                          ),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
+  Widget _buildDayHeader({
+    required int index,
+    required ThemeData theme,
+    required ColorScheme colorScheme,
+    required bool isDark,
+  }) {
+    final day = weekDays[index];
+    final isToday = _isSameDay(day, today);
+
+    return Padding(
+      padding: EdgeInsets.only(left: index == 0 ? 0 : metrics.columnGap),
+      child: SizedBox(
+        width: metrics.dayWidth,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color:
+                isToday
+                    ? colorScheme.primary.withValues(
+                      alpha: isDark ? 0.18 : 0.12,
+                    )
+                    : Colors.white.withValues(alpha: isDark ? 0.04 : 0.28),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color:
+                  isToday
+                      ? colorScheme.primary.withValues(
+                        alpha: isDark ? 0.34 : 0.22,
+                      )
+                      : Colors.white.withValues(alpha: isDark ? 0.08 : 0.60),
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  weekdayMap[day.weekday] ?? '',
+                  maxLines: 1,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
                     color:
                         isToday
-                            ? colorScheme.primary.withValues(
-                              alpha: isDark ? 0.34 : 0.22,
-                            )
-                            : Colors.white.withValues(
-                              alpha: isDark ? 0.08 : 0.60,
-                            ),
+                            ? colorScheme.primary
+                            : colorScheme.onSurfaceVariant,
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        weekdayMap[day.weekday] ?? '',
-                        maxLines: 1,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color:
-                              isToday
-                                  ? colorScheme.primary
-                                  : colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 1),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        DateFormat('M/d').format(day),
-                        maxLines: 1,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color:
-                              isToday
-                                  ? colorScheme.primary.withValues(alpha: 0.88)
-                                  : colorScheme.onSurfaceVariant.withValues(
-                                    alpha: 0.82,
-                                  ),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(height: 1),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  _formatCourseMonthDay(day),
+                  maxLines: 1,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color:
+                        isToday
+                            ? colorScheme.primary.withValues(alpha: 0.88)
+                            : colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.82,
+                            ),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-          );
-        }),
-      ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -4208,13 +4929,15 @@ class _CourseShareQrScannerPageState extends State<_CourseShareQrScannerPage> {
   final GlobalKey _qrKey = GlobalKey(debugLabel: 'course-share-qr');
   QRViewController? _controller;
   StreamSubscription<Barcode>? _scanSubscription;
-  bool _isFlashOn = false;
+  final ValueNotifier<bool> _isFlashOnNotifier = ValueNotifier<bool>(false);
+  bool _isTogglingFlash = false;
   bool _isScanning = true;
 
   @override
   void dispose() {
     _scanSubscription?.cancel();
     _controller?.dispose();
+    _isFlashOnNotifier.dispose();
     super.dispose();
   }
 
@@ -4226,9 +4949,7 @@ class _CourseShareQrScannerPageState extends State<_CourseShareQrScannerPage> {
         return;
       }
 
-      setState(() {
-        _isScanning = false;
-      });
+      _isScanning = false;
       _scanSubscription?.cancel();
       controller.pauseCamera();
       Navigator.of(context).pop(code);
@@ -4236,18 +4957,27 @@ class _CourseShareQrScannerPageState extends State<_CourseShareQrScannerPage> {
   }
 
   Future<void> _toggleFlash() async {
+    if (_isTogglingFlash) {
+      return;
+    }
+
     final controller = _controller;
     if (controller == null) {
       return;
     }
-    await controller.toggleFlash();
-    final current = await controller.getFlashStatus() ?? false;
-    if (!mounted) {
-      return;
+
+    _isTogglingFlash = true;
+    try {
+      await controller.toggleFlash();
+      final current = await controller.getFlashStatus() ?? false;
+      if (!mounted || _isFlashOnNotifier.value == current) {
+        return;
+      }
+
+      _isFlashOnNotifier.value = current;
+    } finally {
+      _isTogglingFlash = false;
     }
-    setState(() {
-      _isFlashOn = current;
-    });
   }
 
   @override
@@ -4339,14 +5069,19 @@ class _CourseShareQrScannerPageState extends State<_CourseShareQrScannerPage> {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    FilledButton.icon(
-                      onPressed: _toggleFlash,
-                      icon: Icon(
-                        _isFlashOn
-                            ? Icons.flash_on_rounded
-                            : Icons.flash_off_rounded,
-                      ),
-                      label: Text(_isFlashOn ? '关闭闪光灯' : '打开闪光灯'),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _isFlashOnNotifier,
+                      builder: (context, isFlashOn, _) {
+                        return FilledButton.icon(
+                          onPressed: _toggleFlash,
+                          icon: Icon(
+                            isFlashOn
+                                ? Icons.flash_on_rounded
+                                : Icons.flash_off_rounded,
+                          ),
+                          label: Text(isFlashOn ? '关闭闪光灯' : '打开闪光灯'),
+                        );
+                      },
                     ),
                   ],
                 ),

@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 enum AppGlassBackgroundStyle { rich, soft, flat }
@@ -33,6 +34,24 @@ class AppGlassPerformanceScope extends InheritedWidget {
 
     // 默认全平台走轻量效果。需要完整玻璃效果的局部页面可显式传入 isLite: false。
     return true;
+  }
+
+  static bool shouldReduceMotionOf(BuildContext context) {
+    if (!TickerMode.valuesOf(context).enabled) {
+      return true;
+    }
+    return isLiteOf(context);
+  }
+
+  static bool shouldUseLiteLayoutOf(BuildContext context) {
+    if (MediaQuery.maybeOf(context)?.disableAnimations == true) {
+      return true;
+    }
+    final scope = maybeOf(context);
+    if (scope?.isLite != null) {
+      return scope!.isLite!;
+    }
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   }
 
   @override
@@ -376,7 +395,10 @@ class GlassPanel extends StatelessWidget {
             )
             : panelBody;
 
-    return Container(margin: margin, child: decoratedBody);
+    if (margin == null) {
+      return decoratedBody;
+    }
+    return Padding(padding: margin!, child: decoratedBody);
   }
 }
 
@@ -388,17 +410,22 @@ List<BoxShadow> _resolveGlassBoxShadow(
     return shadows;
   }
 
-  return shadows
-      .map(
-        (shadow) => BoxShadow(
-          color: shadow.color.withValues(alpha: shadow.color.a * 0.62),
-          offset: Offset(shadow.offset.dx * 0.72, shadow.offset.dy * 0.62),
-          blurRadius: shadow.blurRadius.clamp(0.0, 10.0).toDouble(),
-          spreadRadius: shadow.spreadRadius.clamp(-6.0, 1.0).toDouble(),
-          blurStyle: shadow.blurStyle,
-        ),
-      )
-      .toList(growable: false);
+  final resolvedShadows = List<BoxShadow>.filled(
+    shadows.length,
+    const BoxShadow(),
+    growable: false,
+  );
+  for (var index = 0; index < shadows.length; index++) {
+    final shadow = shadows[index];
+    resolvedShadows[index] = BoxShadow(
+      color: shadow.color.withValues(alpha: shadow.color.a * 0.62),
+      offset: Offset(shadow.offset.dx * 0.72, shadow.offset.dy * 0.62),
+      blurRadius: shadow.blurRadius.clamp(0.0, 10.0).toDouble(),
+      spreadRadius: shadow.spreadRadius.clamp(-6.0, 1.0).toDouble(),
+      blurStyle: shadow.blurStyle,
+    );
+  }
+  return resolvedShadows;
 }
 
 class GlassIconBadge extends StatelessWidget {

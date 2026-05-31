@@ -11,6 +11,8 @@ import 'course_sync_progress.dart';
 import '../withhttp.dart';
 import 'coursemain.dart';
 
+const String courseExperimentWeekFetchFailureMessage = '实验课表抓取失败，请稍后重试';
+
 int _readInt(dynamic value, {int fallback = 0}) {
   if (value is int) {
     return value;
@@ -52,12 +54,18 @@ dynamic _jsonSafeValue(dynamic value) {
     return value;
   }
   if (value is Map) {
-    return value.map(
-      (key, item) => MapEntry(key.toString(), _jsonSafeValue(item)),
-    );
+    final safeMap = <String, dynamic>{};
+    for (final entry in value.entries) {
+      safeMap[entry.key.toString()] = _jsonSafeValue(entry.value);
+    }
+    return safeMap;
   }
   if (value is List) {
-    return value.map(_jsonSafeValue).toList();
+    final safeList = <dynamic>[];
+    for (final item in value) {
+      safeList.add(_jsonSafeValue(item));
+    }
+    return safeList;
   }
   return value.toString();
 }
@@ -135,10 +143,14 @@ void _mergeCourseData({
   required Map<String, List<Course>> target,
   required Map<String, List<Course>> source,
 }) {
-  source.forEach((date, courses) {
-    target.putIfAbsent(date, () => []);
-    target[date]!.addAll(courses);
-  });
+  for (final entry in source.entries) {
+    final existingCourses = target[entry.key];
+    if (existingCourses == null) {
+      target[entry.key] = List<Course>.from(entry.value);
+    } else {
+      existingCourses.addAll(entry.value);
+    }
+  }
 }
 
 class _WeekFetchResult {
@@ -271,18 +283,15 @@ class GetSingleWeekExpClass {
     sectionDefinitionList = List<Map<String, dynamic>>.from(
       orgdata['jcdatalist'] as List? ?? [],
     );
-    _sectionDefinitionIndexByLabel
-      ..clear()
-      ..addEntries(
-        sectionDefinitionList
-            .asMap()
-            .entries
-            .map((entry) {
-              final label = entry.value['DJMC']?.toString().trim() ?? '';
-              return MapEntry(label, entry.key);
-            })
-            .where((entry) => entry.key.isNotEmpty),
-      );
+    _sectionDefinitionIndexByLabel.clear();
+    for (var index = 0; index < sectionDefinitionList.length; index++) {
+      final label =
+          sectionDefinitionList[index]['DJMC']?.toString().trim() ?? '';
+      if (label.isEmpty) {
+        continue;
+      }
+      _sectionDefinitionIndexByLabel[label] = index;
+    }
   }
 
   void getWeekDate() {
@@ -297,43 +306,98 @@ class GetSingleWeekExpClass {
     }
   }
 
+  bool _isSectionTokenDelimiter(int codeUnit) {
+    return codeUnit == 0x2C ||
+        codeUnit == 0xFF0C ||
+        codeUnit <= 0x20 ||
+        codeUnit == 0x85 ||
+        codeUnit == 0xA0 ||
+        codeUnit == 0x1680 ||
+        (codeUnit >= 0x2000 && codeUnit <= 0x200A) ||
+        codeUnit == 0x2028 ||
+        codeUnit == 0x2029 ||
+        codeUnit == 0x202F ||
+        codeUnit == 0x205F ||
+        codeUnit == 0x3000;
+  }
+
+  void _addWeekNoteSectionToken(
+    String rawValue,
+    int start,
+    int end,
+    List<int> sections,
+  ) {
+    if (start >= end) {
+      return;
+    }
+
+    final numberStart = end - start >= 2 ? end - 2 : start;
+    final section = int.tryParse(rawValue.substring(numberStart, end)) ?? 0;
+    if (section > 0) {
+      sections.add(section);
+    }
+  }
+
+  void _addExplicitSectionToken(
+    String rawValue,
+    int start,
+    int end,
+    List<int> sections,
+  ) {
+    if (start >= end) {
+      return;
+    }
+
+    final section = int.tryParse(rawValue.substring(start, end)) ?? 0;
+    if (section > 0) {
+      sections.add(section);
+    }
+  }
+
   List<int> _parseWeekNoteSections(String rawValue) {
-    final trimmed = rawValue.trim();
-    if (trimmed.isEmpty) {
+    if (rawValue.isEmpty) {
       return const <int>[];
     }
 
-    final sections =
-        trimmed
-            .split(RegExp(r'[,，\s]+'))
-            .where((value) => value.trim().isNotEmpty)
-            .map((value) {
-              final normalized = value.trim();
-              final lastTwo =
-                  normalized.length >= 2
-                      ? normalized.substring(normalized.length - 2)
-                      : normalized;
-              return int.tryParse(lastTwo) ?? 0;
-            })
-            .where((section) => section > 0)
-            .toList();
+    final sections = <int>[];
+    var tokenStart = -1;
+    for (var index = 0; index <= rawValue.length; index++) {
+      final isDelimiter =
+          index == rawValue.length ||
+          _isSectionTokenDelimiter(rawValue.codeUnitAt(index));
+      if (isDelimiter) {
+        if (tokenStart >= 0) {
+          _addWeekNoteSectionToken(rawValue, tokenStart, index, sections);
+          tokenStart = -1;
+        }
+      } else if (tokenStart < 0) {
+        tokenStart = index;
+      }
+    }
     sections.sort();
     return sections;
   }
 
   List<int> _parseExplicitSections(String rawValue) {
-    final trimmed = rawValue.trim();
-    if (trimmed.isEmpty) {
+    if (rawValue.isEmpty) {
       return const <int>[];
     }
 
-    final sections =
-        trimmed
-            .split(RegExp(r'[,，\s]+'))
-            .where((value) => value.trim().isNotEmpty)
-            .map((value) => int.tryParse(value.trim()) ?? 0)
-            .where((section) => section > 0)
-            .toList();
+    final sections = <int>[];
+    var tokenStart = -1;
+    for (var index = 0; index <= rawValue.length; index++) {
+      final isDelimiter =
+          index == rawValue.length ||
+          _isSectionTokenDelimiter(rawValue.codeUnitAt(index));
+      if (isDelimiter) {
+        if (tokenStart >= 0) {
+          _addExplicitSectionToken(rawValue, tokenStart, index, sections);
+          tokenStart = -1;
+        }
+      } else if (tokenStart < 0) {
+        tokenStart = index;
+      }
+    }
     sections.sort();
     return sections;
   }
@@ -374,12 +438,11 @@ class GetSingleWeekExpClass {
       return const <int>[];
     }
 
-    final limited =
-        collected.length > expectedSectionCount
-            ? collected.take(expectedSectionCount).toList()
-            : collected;
-    limited.sort();
-    return limited;
+    if (collected.length > expectedSectionCount) {
+      collected.removeRange(expectedSectionCount, collected.length);
+    }
+    collected.sort();
+    return collected;
   }
 
   List<int> _resolveSectionsFromTimeRange(Map<String, dynamic> tempClass) {
@@ -620,6 +683,15 @@ class GetOrgDataWeb {
       return weekResults;
     }
 
+    Future<_WeekFetchResult> fetchWeekResult(int week) async {
+      try {
+        final parsedCourseData = await fetchWeekData(week);
+        return _WeekFetchResult.success(week, parsedCourseData);
+      } catch (error, stackTrace) {
+        return _WeekFetchResult.failure(week, error, stackTrace);
+      }
+    }
+
     for (
       int startIndex = 0;
       startIndex < weeks.length;
@@ -633,17 +705,11 @@ class GetOrgDataWeb {
         startIndex + _weekFetchConcurrency,
         weeks.length,
       );
-      final batchWeeks = weeks.sublist(startIndex, endIndex);
-      final batchResults = await Future.wait(
-        batchWeeks.map((week) async {
-          try {
-            final parsedCourseData = await fetchWeekData(week);
-            return _WeekFetchResult.success(week, parsedCourseData);
-          } catch (error, stackTrace) {
-            return _WeekFetchResult.failure(week, error, stackTrace);
-          }
-        }),
-      );
+      final batchFutures = <Future<_WeekFetchResult>>[];
+      for (var index = startIndex; index < endIndex; index++) {
+        batchFutures.add(fetchWeekResult(weeks[index]));
+      }
+      final batchResults = await Future.wait(batchFutures);
 
       for (final result in batchResults) {
         completedWeeks += 1;
@@ -695,10 +761,9 @@ class GetOrgDataWeb {
 
   void _applyWeekResults(Map<int, Map<String, List<Course>>> weekResults) {
     courseData.clear();
-    final sortedWeeks = weekResults.keys.toList()..sort();
-    for (final week in sortedWeeks) {
-      final tempData = weekResults[week];
-      if (tempData == null || tempData.isEmpty) {
+    for (final entry in weekResults.entries) {
+      final tempData = entry.value;
+      if (tempData.isEmpty) {
         continue;
       }
       _mergeCourseData(target: courseData, source: tempData);
@@ -857,7 +922,7 @@ class GetOrgDataWeb {
               '/njwhd/teacher/courseScheduleExp?xnxq01id=$sid&week=$week';
           weeks['$week'] = {
             'requestPath': requestPath,
-            'error': error.toString(),
+            'error': courseExperimentWeekFetchFailureMessage,
             if (error is DioException && error.response != null)
               'statusCode': error.response?.statusCode,
             if (error is DioException && error.response != null)
@@ -866,10 +931,9 @@ class GetOrgDataWeb {
         },
       );
 
-      final sortedWeeks = weekResults.keys.toList()..sort();
-      for (final week in sortedWeeks) {
-        final tempData = weekResults[week];
-        if (tempData == null || tempData.isEmpty) {
+      for (final entry in weekResults.entries) {
+        final tempData = entry.value;
+        if (tempData.isEmpty) {
           continue;
         }
         _mergeCourseData(target: expCourseData, source: tempData);

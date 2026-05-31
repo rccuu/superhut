@@ -10,10 +10,151 @@ import '../../core/services/app_logger.dart';
 import '../../core/ui/app_snack_bar.dart';
 import 'state.dart';
 
+const String hotWaterStartFailureMessage = '设备开启失败，请稍后重试';
+const String hotWaterAddDeviceFailureMessage = '添加设备失败，请稍后重试';
+const String hotWaterDeleteDeviceFailureMessage = '删除设备失败，请稍后重试';
+
+abstract class HotWaterApiClient {
+  Future<Map<String, dynamic>> getHotWaterDevice();
+
+  Future<bool> userLogin({required String username, required String password});
+
+  Future<String> getCardBalance();
+
+  Future<List> checkHotWaterDevice();
+
+  Future<Map> startHotWater({required String device});
+
+  Future<bool> stopHotWater({required String device});
+
+  Future<Map> addWaterDevice(String bindCode);
+
+  Future<Map<String, dynamic>> delWaterDevice(String bindCode);
+}
+
+class HutHotWaterApiClient implements HotWaterApiClient {
+  HutHotWaterApiClient([HutUserApi? api]) : _api = api ?? HutUserApi();
+
+  final HutUserApi _api;
+
+  @override
+  Future<Map<String, dynamic>> getHotWaterDevice() {
+    return _api.getHotWaterDevice();
+  }
+
+  @override
+  Future<bool> userLogin({required String username, required String password}) {
+    return _api.userLogin(username: username, password: password);
+  }
+
+  @override
+  Future<String> getCardBalance() {
+    return _api.getCardBalance();
+  }
+
+  @override
+  Future<List> checkHotWaterDevice() {
+    return _api.checkHotWaterDevice();
+  }
+
+  @override
+  Future<Map> startHotWater({required String device}) {
+    return _api.startHotWater(device: device);
+  }
+
+  @override
+  Future<bool> stopHotWater({required String device}) {
+    return _api.stopHotWater(device: device);
+  }
+
+  @override
+  Future<Map> addWaterDevice(String bindCode) {
+    return _api.addWaterDevice(bindCode);
+  }
+
+  @override
+  Future<Map<String, dynamic>> delWaterDevice(String bindCode) {
+    return _api.delWaterDevice(bindCode);
+  }
+}
+
+abstract class HotWaterAuthStorage {
+  Future<String> readHutToken();
+
+  Future<String> readHutDeviceId();
+
+  Future<String> readHutUsername();
+
+  Future<String> readHutPassword();
+
+  Future<bool> isHutLoggedIn();
+
+  Future<void> setHutLoginStatus(bool value);
+}
+
+typedef HotWaterLoginRedirect = void Function();
+
+class AppHotWaterAuthStorage implements HotWaterAuthStorage {
+  AppHotWaterAuthStorage([AppAuthStorage? storage])
+    : _storage = storage ?? AppAuthStorage.instance;
+
+  final AppAuthStorage _storage;
+
+  @override
+  Future<String> readHutToken() {
+    return _storage.readHutToken();
+  }
+
+  @override
+  Future<String> readHutDeviceId() {
+    return _storage.readHutDeviceId();
+  }
+
+  @override
+  Future<String> readHutUsername() {
+    return _storage.readHutUsername();
+  }
+
+  @override
+  Future<String> readHutPassword() {
+    return _storage.readHutPassword();
+  }
+
+  @override
+  Future<bool> isHutLoggedIn() {
+    return _storage.isHutLoggedIn();
+  }
+
+  @override
+  Future<void> setHutLoginStatus(bool value) {
+    return _storage.setHutLoginStatus(value);
+  }
+}
+
 class FunctionHotWaterLogic extends GetxController {
+  FunctionHotWaterLogic({
+    HotWaterApiClient? hotWaterApi,
+    HotWaterAuthStorage? authStorage,
+    HotWaterLoginRedirect? redirectToLogin,
+    this.loginRedirectDelay = const Duration(milliseconds: 100),
+  }) : hutUserApi = hotWaterApi ?? HutHotWaterApiClient(),
+       _storage = authStorage ?? AppHotWaterAuthStorage(),
+       _redirectToLogin =
+           redirectToLogin ?? (() => Get.off(() => HutLoginPage()));
+
   final FunctionHotWaterState state = FunctionHotWaterState();
-  final hutUserApi = HutUserApi();
-  final AppAuthStorage _storage = AppAuthStorage.instance;
+  final HotWaterApiClient hutUserApi;
+  final HotWaterAuthStorage _storage;
+  final HotWaterLoginRedirect _redirectToLogin;
+  final Duration loginRedirectDelay;
+  Future<void>? _deviceListLoad;
+  final Map<String, Future<bool>> _deviceMutationLoads =
+      <String, Future<bool>>{};
+  Timer? _loginRedirectTimer;
+  bool _loginRedirectQueued = false;
+  bool _waterOperationInFlight = false;
+  bool _isDisposed = false;
+  int _balanceRefreshGeneration = 0;
 
   // Local storage for user information
   final Map<String, dynamic> _hutUserInfo = {
@@ -32,7 +173,6 @@ class FunctionHotWaterLogic extends GetxController {
     _hutUserInfo[key] = value;
     // Persist to storage if needed
     saveUserInfo();
-    update();
   }
 
   // Method to save user info to storage
@@ -44,11 +184,22 @@ class FunctionHotWaterLogic extends GetxController {
   }
 
   Future<void> _populateUserInfoFromStorage() async {
-    _hutUserInfo["token"] = await _storage.readHutToken();
-    _hutUserInfo["deviceId"] = await _storage.readHutDeviceId();
-    _hutUserInfo["username"] = await _storage.readHutUsername();
-    _hutUserInfo["password"] = await _storage.readHutPassword();
-    _hutUserInfo["hutIsLogin"] = await _storage.isHutLoggedIn();
+    final results = await Future.wait<Object>([
+      _storage.readHutToken(),
+      _storage.readHutDeviceId(),
+      _storage.readHutUsername(),
+      _storage.readHutPassword(),
+      _storage.isHutLoggedIn(),
+    ]);
+    if (_isDisposed) {
+      return;
+    }
+
+    _hutUserInfo["token"] = results[0] as String;
+    _hutUserInfo["deviceId"] = results[1] as String;
+    _hutUserInfo["username"] = results[2] as String;
+    _hutUserInfo["password"] = results[3] as String;
+    _hutUserInfo["hutIsLogin"] = results[4] as bool;
   }
 
   Future<void> loadUserInfo() async {
@@ -84,23 +235,80 @@ class FunctionHotWaterLogic extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    loadUserInfo();
-    checkLogin();
     // 初始化时设置设备检查状态为未完成
     state.deviceCheckComplete.value = false;
+    unawaited(checkLogin());
   }
 
   /// 判断是否需要跳转登录
   Future<void> checkLogin() async {
-    await _populateUserInfoFromStorage();
+    await loadUserInfo();
+    if (_isDisposed) {
+      return;
+    }
 
     if (_hutUserInfo["hutIsLogin"] == false) {
-      Future.delayed(const Duration(milliseconds: 100), () {
-        Get.off(() => HutLoginPage());
-      });
+      _queueLoginRedirect();
     } else {
-      //setHutUserInfo("hutIsLogin", true);
-      getDeviceList();
+      _cancelLoginRedirect();
+      await getDeviceList();
+    }
+  }
+
+  void _queueLoginRedirect() {
+    if (_isDisposed) {
+      return;
+    }
+
+    if (_loginRedirectQueued || (_loginRedirectTimer?.isActive ?? false)) {
+      return;
+    }
+
+    _loginRedirectQueued = true;
+    _loginRedirectTimer = Timer(loginRedirectDelay, _redirectToLogin);
+  }
+
+  void _cancelLoginRedirect() {
+    _loginRedirectTimer?.cancel();
+    _loginRedirectTimer = null;
+    _loginRedirectQueued = false;
+  }
+
+  @override
+  void onClose() {
+    _isDisposed = true;
+    _balanceRefreshGeneration++;
+    _cancelLoginRedirect();
+    super.onClose();
+  }
+
+  Future<void> _clearInvalidLoginState() async {
+    await _storage.setHutLoginStatus(false);
+    if (_isDisposed) {
+      return;
+    }
+
+    _hutUserInfo["hutIsLogin"] = false;
+    unawaited(saveUserInfo());
+    state.deviceList.clear();
+    _assignChoiceDevice(-1);
+    state.waterStatus.value = false;
+    state.deviceCheckComplete.value = true;
+    _queueLoginRedirect();
+  }
+
+  Future<void> _applyDeviceList(Map<String, dynamic> value) async {
+    if (_isDisposed) {
+      return;
+    }
+
+    final rawDevices = value["data"];
+    state.deviceList.value = rawDevices is List ? rawDevices : [];
+    _assignChoiceDevice(state.deviceList.isNotEmpty ? 0 : -1);
+    state.deviceCheckComplete.value = false;
+    await Future.wait([_refreshOpenDeviceState(), _refreshBalanceValue()]);
+    if (_isDisposed) {
+      return;
     }
   }
 
@@ -112,163 +320,246 @@ class FunctionHotWaterLogic extends GetxController {
   ///
   /// 返回: 无返回值，通过状态管理更新UI。
   Future<void> getDeviceList() async {
-    //  bool isV =await hutUserApi.checkTokenValidity();
-    // await hutUserApi.userLogin(username: _hutUserInfo["username"], password: _hutUserInfo["password"]);
-    // print("LLLLLLLLLLLLLLLLLLLLLLLLLL:$isV");
-    // 尝试首次获取设备列表
-    await hutUserApi.getHotWaterDevice().then((value) async {
-      // print(value);
+    if (_isDisposed) {
+      return;
+    }
 
-      if (value["code"] == 500) {
-        // 处理登录失效情况：尝试自动重新登录
-        if (_hutUserInfo["hutIsLogin"]) {
-          bool isLogin = await hutUserApi.userLogin(
-            username: _hutUserInfo["username"],
-            password: _hutUserInfo["password"],
-          );
-          if (isLogin) {
-            // 重新登录成功后再次获取设备列表
-            await hutUserApi.getHotWaterDevice().then((value) async {
-              if (value["code"] != 500) {
-                // 更新设备列表及关联状态
-                state.deviceList.value = value["data"];
-                setChoiceDevice(state.deviceList.isNotEmpty ? 0 : -1);
-                await checkHotWaterDevice();
-                await getBalance();
-                update();
-              }
-            });
+    final inFlight = _deviceListLoad;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final load = _loadDeviceList();
+    _deviceListLoad = load;
+    try {
+      await load;
+    } finally {
+      if (identical(_deviceListLoad, load)) {
+        _deviceListLoad = null;
+      }
+    }
+  }
+
+  Future<void> _loadDeviceList() async {
+    if (_isDisposed) {
+      return;
+    }
+
+    var value = await hutUserApi.getHotWaterDevice();
+    if (_isDisposed) {
+      return;
+    }
+
+    if (value["code"] == 500) {
+      final username = _hutUserInfo["username"]?.toString() ?? '';
+      final password = _hutUserInfo["password"]?.toString() ?? '';
+      final canRetryLogin =
+          _hutUserInfo["hutIsLogin"] == true &&
+          username.isNotEmpty &&
+          password.isNotEmpty;
+
+      if (canRetryLogin) {
+        final isLogin = await hutUserApi.userLogin(
+          username: username,
+          password: password,
+        );
+        if (_isDisposed) {
+          return;
+        }
+
+        if (isLogin) {
+          value = await hutUserApi.getHotWaterDevice();
+          if (_isDisposed) {
             return;
           }
         }
-        // 登录失败处理：重置登录状态并清除设备信息
-        await _storage.setHutLoginStatus(false);
-        setHutUserInfo("hutIsLogin", false);
-        state.deviceList.clear();
-        setChoiceDevice(-1);
-        state.waterStatus.value = false;
-        update();
-        checkLogin();
-      } else {
-        // 正常获取到设备列表时更新状态
-        state.deviceList.value = value["data"];
-        setChoiceDevice(state.deviceList.isNotEmpty ? 0 : -1);
-        await checkHotWaterDevice();
-        await getBalance();
-        update();
       }
-    });
+    }
+
+    if (value["code"] == 500) {
+      await _clearInvalidLoginState();
+      return;
+    }
+
+    await _applyDeviceList(value);
   }
 
   /// 获取余额
   Future<void> getBalance() async {
+    await _refreshBalanceValue();
+  }
+
+  Future<void> _refreshBalanceValue() async {
+    if (_isDisposed) {
+      return;
+    }
+
+    final generation = ++_balanceRefreshGeneration;
     try {
       final value = await hutUserApi.getCardBalance();
-      state.balance.value = value;
-      update();
+      if (!_isDisposed && generation == _balanceRefreshGeneration) {
+        state.balance.value = value;
+      }
     } catch (error, stackTrace) {
       AppLogger.error(
         'Failed to load hot water card balance',
         error: error,
         stackTrace: stackTrace,
       );
-      state.balance.value = '--';
-      update();
+      if (!_isDisposed && generation == _balanceRefreshGeneration) {
+        state.balance.value = '--';
+      }
     }
   }
 
   /// 检查是否有未关闭的设备
   Future<void> checkHotWaterDevice() async {
+    if (_isDisposed) {
+      return;
+    }
+
     // 开始检查前设置检查状态为未完成
     state.deviceCheckComplete.value = false;
-    update();
+    await _refreshOpenDeviceState();
+  }
 
-    await hutUserApi
-        .checkHotWaterDevice()
-        .then((value) {
-          AppLogger.debug('Open hot water devices: $value');
-          if (value.isNotEmpty) {
-            state.waterStatus.value = true;
-            state.choiceDevice.value = state.deviceList.indexWhere(
-              (element) => element["poscode"] == value.first,
-            );
-            _showStatusSnackBar('设备状态提醒', '检测到有设备尚未关闭', isWarning: true);
-            update();
-          }
+  Future<void> _refreshOpenDeviceState() async {
+    if (_isDisposed) {
+      return;
+    }
 
-          // 设置检查状态为已完成
-          state.deviceCheckComplete.value = true;
-          update();
-        })
-        .catchError((error) {
-          // 发生错误时也标记为已完成，避免用户无法使用功能
-          state.deviceCheckComplete.value = true;
-          update();
-        });
+    try {
+      final value = await hutUserApi.checkHotWaterDevice();
+      if (_isDisposed) {
+        return;
+      }
+
+      AppLogger.debug('Open hot water devices: $value');
+      _applyOpenDeviceState(value);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to check open hot water devices',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      // 发生错误时也标记为已完成，避免用户无法使用功能
+      if (!_isDisposed) {
+        state.deviceCheckComplete.value = true;
+      }
+    }
+  }
+
+  void _applyOpenDeviceState(List value) {
+    if (value.isEmpty) {
+      state.waterStatus.value = false;
+      return;
+    }
+
+    final deviceIndex = state.deviceList.indexWhere(
+      (element) => element["poscode"] == value.first,
+    );
+    if (deviceIndex == -1) {
+      state.waterStatus.value = false;
+      return;
+    }
+
+    state.waterStatus.value = true;
+    _assignChoiceDevice(deviceIndex);
+    _showStatusSnackBar('设备状态提醒', '检测到有设备尚未关闭', isWarning: true);
   }
 
   /// 改变选中的设备值
   void setChoiceDevice(int device) {
+    _assignChoiceDevice(device);
+  }
+
+  bool _assignChoiceDevice(int device) {
+    if (state.choiceDevice.value == device) {
+      return false;
+    }
     state.choiceDevice.value = device;
-    update();
+    return true;
   }
 
   /// 开始洗澡
   Future<void> startWater() async {
-    state.isLoading.value = true;
-    update();
+    if (_waterOperationInFlight) {
+      return;
+    }
 
-    hutUserApi
-        .startHotWater(
-          device: state.deviceList[state.choiceDevice.value]["poscode"],
-        )
-        .then((value) {
-          state.isLoading.value = false;
-          if (value['success'] && value['result'] == "000000") {
-            _showStatusSnackBar('操作成功', '设备已开启');
-            state.waterStatus.value = true;
-            update();
-          } else {
-            _showStatusSnackBar(
-              '操作失败',
-              '设备开启失败：${value['message']}',
-              isError: true,
-            );
-          }
-          update();
-        })
-        .catchError((error) {
-          state.isLoading.value = false;
-          _showStatusSnackBar('操作失败', '操作失败，请稍后重试', isError: true);
-          update();
-        });
+    _waterOperationInFlight = true;
+    state.isLoading.value = true;
+
+    try {
+      final value = await hutUserApi.startHotWater(
+        device: state.deviceList[state.choiceDevice.value]["poscode"],
+      );
+      if (_isDisposed) {
+        return;
+      }
+
+      if (value['success'] && value['result'] == "000000") {
+        _showStatusSnackBar('操作成功', '设备已开启');
+        state.waterStatus.value = true;
+      } else {
+        _showStatusSnackBar('操作失败', hotWaterStartFailureMessage, isError: true);
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to start hot water device',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!_isDisposed) {
+        _showStatusSnackBar('操作失败', '操作失败，请稍后重试', isError: true);
+      }
+    } finally {
+      if (!_isDisposed) {
+        _waterOperationInFlight = false;
+        state.isLoading.value = false;
+      }
+    }
   }
 
   /// 结束洗澡
-  void endWater() {
-    state.isLoading.value = true;
-    update();
+  Future<void> endWater() async {
+    if (_waterOperationInFlight) {
+      return;
+    }
 
-    hutUserApi
-        .stopHotWater(
-          device: state.deviceList[state.choiceDevice.value]["poscode"],
-        )
-        .then((value) {
-          state.isLoading.value = false;
-          if (value) {
-            _showStatusSnackBar('操作成功', '设备已关闭');
-            state.waterStatus.value = false;
-            update();
-          } else {
-            _showStatusSnackBar('操作失败', '设备关闭失败，请稍后重试', isError: true);
-          }
-          update();
-        })
-        .catchError((error) {
-          state.isLoading.value = false;
-          _showStatusSnackBar('操作失败', '操作失败，请稍后重试', isError: true);
-          update();
-        });
+    _waterOperationInFlight = true;
+    state.isLoading.value = true;
+
+    try {
+      final value = await hutUserApi.stopHotWater(
+        device: state.deviceList[state.choiceDevice.value]["poscode"],
+      );
+      if (_isDisposed) {
+        return;
+      }
+
+      if (value) {
+        _showStatusSnackBar('操作成功', '设备已关闭');
+        state.waterStatus.value = false;
+      } else {
+        _showStatusSnackBar('操作失败', '设备关闭失败，请稍后重试', isError: true);
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to stop hot water device',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!_isDisposed) {
+        _showStatusSnackBar('操作失败', '操作失败，请稍后重试', isError: true);
+      }
+    } finally {
+      if (!_isDisposed) {
+        _waterOperationInFlight = false;
+        state.isLoading.value = false;
+      }
+    }
   }
 
   /// 添加热水设备
@@ -279,31 +570,105 @@ class FunctionHotWaterLogic extends GetxController {
       return false;
     }
 
-    return await hutUserApi.addWaterDevice(deviceCode).then((value) {
-      if (value['result']) {
-        _showStatusSnackBar('操作成功', '设备添加成功');
-        getDeviceList(); // 刷新设备列表
-        return true;
-      } else {
-        _showStatusSnackBar('操作失败', '添加设备失败：${value['msg']}', isError: true);
+    final key = 'add:$deviceCode';
+    final inFlight = _deviceMutationLoads[key];
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final load = _addDevice(deviceCode);
+    _deviceMutationLoads[key] = load;
+    try {
+      return await load;
+    } finally {
+      if (identical(_deviceMutationLoads[key], load)) {
+        _deviceMutationLoads.remove(key);
+      }
+    }
+  }
+
+  Future<bool> _addDevice(String deviceCode) async {
+    try {
+      final value = await hutUserApi.addWaterDevice(deviceCode);
+      if (_isDisposed) {
         return false;
       }
-    });
+
+      if (value['result'] == true) {
+        _showStatusSnackBar('操作成功', '设备添加成功');
+        await getDeviceList(); // 刷新设备列表
+        return true;
+      } else {
+        _showStatusSnackBar(
+          '操作失败',
+          hotWaterAddDeviceFailureMessage,
+          isError: true,
+        );
+        return false;
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to add hot water device',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!_isDisposed) {
+        _showStatusSnackBar('操作失败', '添加设备失败，请稍后重试', isError: true);
+      }
+      return false;
+    }
   }
 
   /// 删除热水设备
   /// [deviceCode] 设备号
   Future<bool> deleteDevice(String deviceCode) async {
-    return await hutUserApi.delWaterDevice(deviceCode).then((value) {
-      if (value['result']) {
+    final key = 'delete:$deviceCode';
+    final inFlight = _deviceMutationLoads[key];
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final load = _deleteDevice(deviceCode);
+    _deviceMutationLoads[key] = load;
+    try {
+      return await load;
+    } finally {
+      if (identical(_deviceMutationLoads[key], load)) {
+        _deviceMutationLoads.remove(key);
+      }
+    }
+  }
+
+  Future<bool> _deleteDevice(String deviceCode) async {
+    try {
+      final value = await hutUserApi.delWaterDevice(deviceCode);
+      if (_isDisposed) {
+        return false;
+      }
+
+      if (value['result'] == true) {
         _showStatusSnackBar('操作成功', '设备删除成功');
-        getDeviceList();
+        await getDeviceList();
 
         return true;
       } else {
-        _showStatusSnackBar('操作失败', '删除设备失败：${value['msg']}', isError: true);
+        _showStatusSnackBar(
+          '操作失败',
+          hotWaterDeleteDeviceFailureMessage,
+          isError: true,
+        );
         return false;
       }
-    });
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to delete hot water device',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!_isDisposed) {
+        _showStatusSnackBar('操作失败', '删除设备失败，请稍后重试', isError: true);
+      }
+      return false;
+    }
   }
 }

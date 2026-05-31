@@ -65,15 +65,17 @@ Future<List<CommentaryPayload>> getCommentaryQuestions(
     }
 
     final commentaryQuestions = _toPayloadList(target['optionData']);
-    final questionList =
-        commentaryQuestions.map((commentaryQuestion) {
-          return QuestionOption(
-            _stringValue(target['targetId']),
-            _stringValue(commentaryQuestion['optionName']),
-            _stringValue(commentaryQuestion['optionId']),
-            _stringValue(commentaryQuestion['optionScoreValue']),
-          );
-        }).toList();
+    final questionList = <QuestionOption>[];
+    for (final commentaryQuestion in commentaryQuestions) {
+      questionList.add(
+        QuestionOption(
+          _stringValue(target['targetId']),
+          _stringValue(commentaryQuestion['optionName']),
+          _stringValue(commentaryQuestion['optionId']),
+          _stringValue(commentaryQuestion['optionScoreValue']),
+        ),
+      );
+    }
 
     resultList.add({
       'targetName': _stringValue(target['targetName']),
@@ -125,10 +127,13 @@ List<CommentaryPayload> _toPayloadList(Object? rawList) {
     return <CommentaryPayload>[];
   }
 
-  return rawList
-      .whereType<Map>()
-      .map((item) => Map<String, dynamic>.from(item))
-      .toList();
+  final payloads = <CommentaryPayload>[];
+  for (final item in rawList) {
+    if (item is Map) {
+      payloads.add(Map<String, dynamic>.from(item));
+    }
+  }
+  return payloads;
 }
 
 String _stringValue(Object? value) {

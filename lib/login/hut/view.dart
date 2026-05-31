@@ -1,13 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../generated/assets.dart';
 import '../../core/ui/app_snack_bar.dart';
-import '../../utils/hut_user_api.dart';
 import 'command.dart';
 
 class HutLoginPage extends StatefulWidget {
-  const HutLoginPage({super.key});
+  const HutLoginPage({super.key, this.command});
+
+  final HutLoginCommand? command;
 
   @override
   State<HutLoginPage> createState() => _HutLoginPageState();
@@ -16,7 +19,20 @@ class HutLoginPage extends StatefulWidget {
 class _HutLoginPageState extends State<HutLoginPage> {
   final TextEditingController _userNoController = TextEditingController();
   final TextEditingController _pwdController = TextEditingController();
-  var api = HutUserApi();
+  late final HutLoginCommand _command;
+
+  @override
+  void initState() {
+    super.initState();
+    _command = widget.command ?? HutLoginCommand();
+  }
+
+  @override
+  void dispose() {
+    _userNoController.dispose();
+    _pwdController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,10 +173,12 @@ class _HutLoginPageState extends State<HutLoginPage> {
                                           return;
                                         }
                                         //SendMessageCode(context, _userNoController.text, _pwdController.text);
-                                        loginToHuT(
-                                          _userNoController.text,
-                                          _pwdController.text,
-                                          context,
+                                        unawaited(
+                                          _command.loginToHuT(
+                                            _userNoController.text,
+                                            _pwdController.text,
+                                            context,
+                                          ),
                                         );
                                       },
                                       child: const Text('登录并继续'),

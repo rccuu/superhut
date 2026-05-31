@@ -7,23 +7,26 @@ import '../core/services/app_logger.dart';
 
 // 密钥
 final String sw = "qzkj1kjghd=876&*";
+final RegExp _unsafeObjectKeyPattern = RegExp(r'[^\w$]');
 
 // 模拟 U 函数
 String U(dynamic data) {
   if (data is Map) {
-    List<String> result = [];
-    data.forEach((key, value) {
+    final result = <String>[];
+    for (final entry in data.entries) {
+      final key = entry.key;
+      final value = entry.value;
       String processedKey;
-      if (key is String && RegExp(r'[^\w$]').hasMatch(key)) {
+      if (key is String && _unsafeObjectKeyPattern.hasMatch(key)) {
         processedKey = jsonEncode(key);
       } else {
         processedKey = key.toString();
       }
       result.add('$processedKey: ${U(value)}');
-    });
+    }
     return "{${result.join(", ")}}";
   } else if (data is List) {
-    List<String> result = [];
+    final result = <String>[];
     for (int i = 0; i < data.length; i++) {
       result.add('$i: ${U(data[i])}');
     }
@@ -44,12 +47,16 @@ String U(dynamic data) {
 // 加密函数
 String encryptPassword(String password, String key) {
   // 处理密钥
-  List<int> keyBytes = utf8.encode(key);
-  keyBytes = keyBytes.take(16).toList();
-  if (keyBytes.length < 16) {
-    keyBytes.addAll(List.filled(16 - keyBytes.length, 0));
+  final sourceKeyBytes = utf8.encode(key);
+  final keyBytes = Uint8List(16);
+  final copyLength =
+      sourceKeyBytes.length < keyBytes.length
+          ? sourceKeyBytes.length
+          : keyBytes.length;
+  for (var index = 0; index < copyLength; index++) {
+    keyBytes[index] = sourceKeyBytes[index];
   }
-  final encryptKey = encrypt.Key(Uint8List.fromList(keyBytes));
+  final encryptKey = encrypt.Key(keyBytes);
 
   // 处理密码
   final processedPassword = U(password);

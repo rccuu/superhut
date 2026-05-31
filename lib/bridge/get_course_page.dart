@@ -1,23 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:superhut/home/homeview/view.dart';
 
 import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_snack_bar.dart';
+import '../home/home_route.dart';
 import '../utils/course/coursemain.dart';
 import '../utils/token.dart';
+
+typedef CourseTokenLoader = Future<String> Function();
+
+typedef CourseClassSaver =
+    Future<CourseSyncResult> Function(String token, {BuildContext? context});
 
 class Getcoursepage extends StatefulWidget {
   final bool renew;
 
-  const Getcoursepage({super.key, required this.renew});
+  const Getcoursepage({
+    super.key,
+    required this.renew,
+    this.loadToken,
+    this.saveClass,
+  });
+
+  final CourseTokenLoader? loadToken;
+  final CourseClassSaver? saveClass;
 
   @override
   State<Getcoursepage> createState() => _GetcoursepageState();
 }
 
 class _GetcoursepageState extends State<Getcoursepage> {
-  bool _isLoading = true;
-  String? _errorMessage;
+  final ValueNotifier<_CourseSyncPanelState> _panelState =
+      ValueNotifier<_CourseSyncPanelState>(
+        const _CourseSyncPanelState.loading(),
+      );
+  bool _isSyncInFlight = false;
 
   @override
   void initState() {
@@ -25,48 +41,89 @@ class _GetcoursepageState extends State<Getcoursepage> {
     _loadClass();
   }
 
+  @override
+  void dispose() {
+    _panelState.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadClass() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    final token = await getToken();
-    if (!mounted) {
-      return;
-    }
-    final result = await saveClassToLocal(token, context: context);
-    if (!mounted) {
+    if (_isSyncInFlight) {
       return;
     }
 
-    if (!result.success) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = result.message;
-      });
+    var didNavigate = false;
+    _isSyncInFlight = true;
+    _showLoadingIfNeeded();
+
+    try {
+      final token = await (widget.loadToken ?? getToken)();
+      if (!mounted) {
+        return;
+      }
+      final result = await (widget.saveClass ?? saveClassToLocal)(
+        token,
+        context: context,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      if (!result.success) {
+        _showError(result.message);
+        return;
+      }
+
+      showAppSnackBar(
+        context,
+        message: widget.renew ? '课表已刷新' : '课表已同步',
+        type: AppSnackBarType.success,
+      );
+      didNavigate = true;
+      Navigator.of(
+        context,
+      ).pushAndRemoveUntil(buildHomePageRoute(), (route) => false);
+    } finally {
+      _isSyncInFlight = false;
+      if (!didNavigate) {
+        _hideLoadingIfNeeded();
+      }
+    }
+  }
+
+  void _showLoadingIfNeeded() {
+    if (!mounted || _panelState.value.isLoading) {
       return;
     }
 
-    showAppSnackBar(
-      context,
-      message: widget.renew ? '课表已刷新' : '课表已同步',
-      type: AppSnackBarType.success,
-    );
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const HomeviewPage()),
-      (route) => false,
-    );
+    _panelState.value = const _CourseSyncPanelState.loading();
+  }
+
+  void _showError(String message) {
+    final panelState = _panelState.value;
+    if (!mounted ||
+        (!panelState.isLoading && panelState.errorMessage == message)) {
+      return;
+    }
+
+    _panelState.value = _CourseSyncPanelState.error(message);
+  }
+
+  void _hideLoadingIfNeeded() {
+    if (!mounted || !_panelState.value.isLoading) {
+      return;
+    }
+
+    _panelState.value = const _CourseSyncPanelState.error('发生未知错误');
   }
 
   void _goToHome() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => const HomeviewPage()),
-      (route) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushAndRemoveUntil(buildHomePageRoute(), (route) => false);
   }
 
-  Widget _buildErrorState(BuildContext context) {
+  Widget _buildErrorState(BuildContext context, String message) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
@@ -84,7 +141,7 @@ class _GetcoursepageState extends State<Getcoursepage> {
           ),
           const SizedBox(height: 12),
           Text(
-            _errorMessage ?? '发生未知错误',
+            message,
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -111,24 +168,49 @@ class _GetcoursepageState extends State<Getcoursepage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body:
-          _isLoading
-              ? SizedBox(
-                width: double.infinity,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AppLoadingIndicator(
-                      color: Theme.of(context).primaryColor,
-                      size: 40,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(widget.renew ? '正在刷新课表' : '正在同步课表'),
-                    Text(widget.renew ? '正在获取最新课表数据' : '正在获取本地尚未同步的课表数据'),
-                  ],
+      body: ValueListenableBuilder<_CourseSyncPanelState>(
+        valueListenable: _panelState,
+        builder: (context, panelState, _) {
+          if (!panelState.isLoading) {
+            return _buildErrorState(
+              context,
+              panelState.errorMessage ?? '发生未知错误',
+            );
+          }
+
+          return SizedBox(
+            width: double.infinity,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AppLoadingIndicator(
+                  color: Theme.of(context).primaryColor,
+                  size: 40,
                 ),
-              )
-              : _buildErrorState(context),
+                const SizedBox(height: 16),
+                Text(widget.renew ? '正在刷新课表' : '正在同步课表'),
+                Text(widget.renew ? '正在获取最新课表数据' : '正在获取本地尚未同步的课表数据'),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
+}
+
+class _CourseSyncPanelState {
+  const _CourseSyncPanelState._({
+    required this.isLoading,
+    required this.errorMessage,
+  });
+
+  const _CourseSyncPanelState.loading()
+    : this._(isLoading: true, errorMessage: null);
+
+  const _CourseSyncPanelState.error(String message)
+    : this._(isLoading: false, errorMessage: message);
+
+  final bool isLoading;
+  final String? errorMessage;
 }

@@ -11,6 +11,17 @@ import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_snack_bar.dart';
 import 'hut_login_system.dart';
 
+typedef HutCasIdTokenLoader = Future<String?> Function();
+
+class HutCasTokenLoadException implements Exception {
+  const HutCasTokenLoadException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class HutCasLoginPage extends StatefulWidget {
   /// 登录完成后的回调函数
   final Function(Map<String, String>)? onLoginComplete;
@@ -24,12 +35,15 @@ class HutCasLoginPage extends StatefulWidget {
   /// 用于储存和获取my_client_ticket的键名
   final String cookieKey;
 
+  final HutCasIdTokenLoader? loadIdToken;
+
   const HutCasLoginPage({
     super.key,
     this.onLoginComplete,
     this.popOnSuccess = true,
     this.tokenKey = 'token',
     this.cookieKey = 'my_client_ticket',
+    this.loadIdToken,
   });
 
   @override
@@ -38,46 +52,125 @@ class HutCasLoginPage extends StatefulWidget {
 
 class _HutCasLoginPageState extends State<HutCasLoginPage> {
   final HutUserApi _api = HutUserApi();
-  bool _isLoading = true;
+  final ValueNotifier<_HutCasTokenLoadState> _tokenLoadState =
+      ValueNotifier<_HutCasTokenLoadState>(
+        const _HutCasTokenLoadState.loading(),
+      );
   String _idToken = '';
-  String? _errorMessage;
   bool _hasSavedCasSession = false;
+  Future<void>? _idTokenLoad;
 
   @override
   void initState() {
     super.initState();
-    _getIdToken();
+    unawaited(_getIdToken());
+  }
+
+  @override
+  void dispose() {
+    _tokenLoadState.dispose();
+    super.dispose();
   }
 
   // 获取用于CAS登录的idToken
-  Future<void> _getIdToken() async {
-    try {
-      final isValid = await _api.checkTokenValidity();
-      if (!isValid) {
-        final refreshed = await _api.refreshToken();
-        if (!refreshed) {
-          throw StateError('智慧工大登录状态已失效，请重新登录一次。');
-        }
-      }
-      _idToken = await _api.getToken();
-      if (_idToken.trim().isEmpty) {
-        throw StateError('未获取到智慧工大登录令牌，请重新登录后再试。');
-      }
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isLoading = false;
-        _errorMessage = '获取统一认证令牌失败：$e';
-      });
+  Future<void> _getIdToken() {
+    final inFlight = _idTokenLoad;
+    if (inFlight != null) {
+      return inFlight;
     }
+
+    late final Future<void> load;
+    load = _runIdTokenLoad(() => load);
+    _idTokenLoad = load;
+    return load;
+  }
+
+  Future<void> _runIdTokenLoad(Future<void> Function() currentLoad) async {
+    try {
+      await _loadIdToken();
+    } finally {
+      if (identical(_idTokenLoad, currentLoad())) {
+        _idTokenLoad = null;
+      }
+    }
+  }
+
+  Future<void> _loadIdToken() async {
+    try {
+      final loader = widget.loadIdToken;
+      final idToken =
+          loader != null ? await loader() : await _loadMountedIdToken();
+      if (idToken == null) {
+        return;
+      }
+      _idToken = idToken;
+      _setTokenLoadState(isLoading: false);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to load HUT CAS id token',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) {
+        return;
+      }
+      _setTokenLoadState(
+        isLoading: false,
+        errorMessage: _resolveIdTokenLoadErrorMessage(error),
+      );
+    }
+  }
+
+  String _resolveIdTokenLoadErrorMessage(Object error) {
+    if (error is HutCasTokenLoadException) {
+      return error.message;
+    }
+    return '获取统一认证令牌失败，请稍后重试';
+  }
+
+  Future<String?> _loadMountedIdToken() async {
+    final isValid = await _api.checkTokenValidity();
+    if (!mounted) {
+      return null;
+    }
+    if (!isValid) {
+      final refreshed = await _api.refreshToken();
+      if (!mounted) {
+        return null;
+      }
+      if (!refreshed) {
+        throw const HutCasTokenLoadException('智慧工大登录状态已失效，请重新登录后再试');
+      }
+    }
+
+    final idToken = await _api.getToken();
+    if (!mounted) {
+      return null;
+    }
+    final normalizedToken = idToken.trim();
+    if (normalizedToken.isEmpty) {
+      throw const HutCasTokenLoadException('未获取到统一认证令牌，请重新登录后再试');
+    }
+    return normalizedToken;
+  }
+
+  void _retryGetIdToken() {
+    _setTokenLoadState(isLoading: true);
+    unawaited(_getIdToken());
+  }
+
+  void _setTokenLoadState({required bool isLoading, String? errorMessage}) {
+    final currentState = _tokenLoadState.value;
+    if (!mounted ||
+        (currentState.isLoading == isLoading &&
+            currentState.errorMessage == errorMessage)) {
+      return;
+    }
+
+    _tokenLoadState.value = _HutCasTokenLoadState(
+      isLoading: isLoading,
+      errorMessage: errorMessage,
+    );
   }
 
   // 保存获取到的新token和cookie
@@ -113,6 +206,10 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
         }
       }
 
+      if (!mounted) {
+        return;
+      }
+
       if (widget.onLoginComplete != null) {
         widget.onLoginComplete!({
           'token': token,
@@ -137,65 +234,75 @@ class _HutCasLoginPageState extends State<HutCasLoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<_HutCasTokenLoadState>(
+      valueListenable: _tokenLoadState,
+      builder: (context, tokenLoadState, _) {
+        final colorScheme = Theme.of(context).colorScheme;
 
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('统一认证登录'), leading: SizedBox()),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AppLoadingIndicator(color: colorScheme.primary),
-              const SizedBox(height: 16),
-              const Text('正在打开统一认证...'),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_errorMessage != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('统一认证登录'), leading: SizedBox()),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, color: colorScheme.error, size: 48),
-              const SizedBox(height: 16),
-              Text(_errorMessage!, textAlign: TextAlign.center),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _errorMessage = null;
-                    _isLoading = true;
-                  });
-                  _getIdToken();
-                },
-                child: const Text('重试'),
+        if (tokenLoadState.isLoading) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('统一认证登录'), leading: SizedBox()),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AppLoadingIndicator(color: colorScheme.primary),
+                  const SizedBox(height: 16),
+                  const Text('正在打开统一认证...'),
+                ],
               ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return HutLoginSystem(
-      initialIdToken: _idToken,
-      onTokenAndCookieExtracted: _saveTokenAndCookie,
-      onError: (errorMessage) {
-        if (mounted) {
-          showAppSnackBar(
-            context,
-            message: errorMessage,
-            type: AppSnackBarType.error,
+            ),
           );
         }
+
+        final errorMessage = tokenLoadState.errorMessage;
+        if (errorMessage != null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('统一认证登录'), leading: SizedBox()),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, color: colorScheme.error, size: 48),
+                  const SizedBox(height: 16),
+                  Text(errorMessage, textAlign: TextAlign.center),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _retryGetIdToken,
+                    child: const Text('重试'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return HutLoginSystem(
+          initialIdToken: _idToken,
+          onTokenAndCookieExtracted: _saveTokenAndCookie,
+          onError: (errorMessage) {
+            if (mounted) {
+              showAppSnackBar(
+                context,
+                message: errorMessage,
+                type: AppSnackBarType.error,
+              );
+            }
+          },
+        );
       },
     );
   }
+}
+
+class _HutCasTokenLoadState {
+  const _HutCasTokenLoadState({required this.isLoading, this.errorMessage});
+
+  const _HutCasTokenLoadState.loading()
+    : this(isLoading: true, errorMessage: null);
+
+  final bool isLoading;
+  final String? errorMessage;
 }
 
 // 使用示例
@@ -229,7 +336,38 @@ class HutCasLoginExample extends StatelessWidget {
 
 // 另一种使用方式 - 获取token和cookie不返回
 class HutCasTokenRetriever {
+  static Future<Map<String, String>?>? _jwxtTokenAndCookieLoad;
+  static Widget Function(Function(Map<String, String>) onLoginComplete)?
+  _loginPageBuilderForTest;
+
   static Future<Map<String, String>?> getJwxtTokenAndCookie(
+    BuildContext context,
+  ) {
+    final inFlight = _jwxtTokenAndCookieLoad;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    late final Future<Map<String, String>?> load;
+    load = _runJwxtTokenAndCookieLoad(context, () => load);
+    _jwxtTokenAndCookieLoad = load;
+    return load;
+  }
+
+  static Future<Map<String, String>?> _runJwxtTokenAndCookieLoad(
+    BuildContext context,
+    Future<Map<String, String>?> Function() currentLoad,
+  ) async {
+    try {
+      return await _loadJwxtTokenAndCookie(context);
+    } finally {
+      if (identical(_jwxtTokenAndCookieLoad, currentLoad())) {
+        _jwxtTokenAndCookieLoad = null;
+      }
+    }
+  }
+
+  static Future<Map<String, String>?> _loadJwxtTokenAndCookie(
     BuildContext context,
   ) async {
     final storage = AppAuthStorage.instance;
@@ -253,23 +391,47 @@ class HutCasTokenRetriever {
       return null;
     }
 
-    Navigator.of(context)
-        .push(
-          MaterialPageRoute(
-            builder:
-                (context) => HutCasLoginPage(
+    final routeResult = Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (context) =>
+                _loginPageBuilderForTest?.call(completeOnce) ??
+                HutCasLoginPage(
                   popOnSuccess: true,
                   onLoginComplete: (data) {
                     completeOnce(data);
                   },
                 ),
-          ),
-        )
-        .then((value) {
-          completeOnce(value as Map<String, String>?);
-        });
+      ),
+    );
+    unawaited(_completeJwxtTokenFromRoute(routeResult, completeOnce));
 
     return completer.future;
+  }
+
+  static Future<void> _completeJwxtTokenFromRoute(
+    Future<Object?> routeResult,
+    void Function(Map<String, String>? value) completeOnce,
+  ) async {
+    final value = await routeResult;
+    if (value is Map<String, String>) {
+      completeOnce(value);
+    } else if (value is Map) {
+      completeOnce(Map<String, String>.from(value));
+    } else {
+      completeOnce(null);
+    }
+  }
+
+  static void setLoginPageBuilderForTest(
+    Widget Function(Function(Map<String, String>) onLoginComplete)? builder,
+  ) {
+    _loginPageBuilderForTest = builder;
+  }
+
+  static void resetForTest() {
+    _jwxtTokenAndCookieLoad = null;
+    _loginPageBuilderForTest = null;
   }
 
   // 保持向后兼容性的方法

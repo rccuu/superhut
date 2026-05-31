@@ -6,6 +6,12 @@ import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_snack_bar.dart';
 import '../core/ui/color_scheme_ext.dart';
 
+const String _casLoginTokenMarker = '#/casLogin?token=';
+const String _tokenQueryMarker = 'token=';
+const int _asciiAmpersand = 0x26;
+const int _asciiSingleQuote = 0x27;
+const int _asciiDoubleQuote = 0x22;
+
 bool _isUsableJwxtTokenCandidate(
   String? token, {
   required String initialIdToken,
@@ -18,8 +24,49 @@ bool _isUsableJwxtTokenCandidate(
 }
 
 String? _extractTokenValue(String source) {
-  final tokenMatch = RegExp("token=([^&'\"]+)").firstMatch(source);
-  return tokenMatch?.group(1);
+  final tokenStart = source.indexOf(_tokenQueryMarker);
+  if (tokenStart < 0) {
+    return null;
+  }
+  return _readTokenValue(source, tokenStart + _tokenQueryMarker.length);
+}
+
+String? _extractCasLoginTokenValue(String source) {
+  final tokenStart = source.indexOf(_casLoginTokenMarker);
+  if (tokenStart < 0) {
+    return null;
+  }
+  return _readTokenValue(source, tokenStart + _casLoginTokenMarker.length);
+}
+
+String? _readTokenValue(String source, int start) {
+  if (start >= source.length) {
+    return null;
+  }
+
+  for (var index = start; index < source.length; index++) {
+    final codeUnit = source.codeUnitAt(index);
+    if (_isTokenTerminator(codeUnit)) {
+      return index == start ? null : source.substring(start, index);
+    }
+  }
+  return source.substring(start);
+}
+
+bool _isTokenTerminator(int codeUnit) {
+  return codeUnit == _asciiAmpersand ||
+      codeUnit == _asciiSingleQuote ||
+      codeUnit == _asciiDoubleQuote;
+}
+
+@visibleForTesting
+String hutLoginCredentialExtractionFailureMessage(Object error) {
+  return '提取登录凭据失败，请稍后重试';
+}
+
+@visibleForTesting
+String hutLoginPageLoadFailureMessage(Object error) {
+  return '页面加载失败，请稍后重试';
 }
 
 @visibleForTesting
@@ -49,10 +96,7 @@ String? extractJwxtTokenFromCasHtml(
   String html, {
   required String initialIdToken,
 }) {
-  final casRedirectMatch = RegExp(
-    "#/casLogin\\?token=([^&'\\\"]+)",
-  ).firstMatch(html);
-  final token = casRedirectMatch?.group(1);
+  final token = _extractCasLoginTokenValue(html);
   if (!_isUsableJwxtTokenCandidate(token, initialIdToken: initialIdToken)) {
     return null;
   }
@@ -82,26 +126,36 @@ class HutLoginSystem extends StatefulWidget {
 
 class _HutLoginSystemState extends State<HutLoginSystem> {
   InAppWebViewController? _webViewController;
-  bool _isLoading = true;
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(true);
   String _currentUrl = '';
+  String? _lastUrlWithoutJwxtToken;
   bool _hasDeliveredCredentials = false;
   bool _isDeliveringCredentials = false;
   static const String _initialUrl = 'https://mycas.hut.edu.cn/cas/login';
+
+  bool get _isLoading => _isLoadingNotifier.value;
 
   @override
   void initState() {
     super.initState();
   }
 
+  @override
+  void dispose() {
+    _webViewController = null;
+    _isLoadingNotifier.dispose();
+    super.dispose();
+  }
+
   Future<void> _deliverExtractedCredentials(String token) async {
-    if (_hasDeliveredCredentials || _isDeliveringCredentials) {
+    if (!mounted || _hasDeliveredCredentials || _isDeliveringCredentials) {
       return;
     }
 
     _isDeliveringCredentials = true;
     try {
       final myClientTicket = await _getCookie('my_client_ticket');
-      if (_hasDeliveredCredentials) {
+      if (!mounted || _hasDeliveredCredentials) {
         return;
       }
 
@@ -110,9 +164,14 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
         'token': token,
         'my_client_ticket': myClientTicket ?? '',
       });
-    } catch (error) {
-      if (widget.onError != null) {
-        widget.onError!('提取登录凭据失败：$error');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to extract HUT login credentials',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted && widget.onError != null) {
+        widget.onError!(hutLoginCredentialExtractionFailureMessage(error));
       }
     } finally {
       _isDeliveringCredentials = false;
@@ -120,26 +179,62 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
   }
 
   Future<void> _checkUrlAndExtractTokenAndCookie(String url) async {
-    _currentUrl = url;
+    if (!mounted) {
+      return;
+    }
+
+    _recordCurrentUrl(url);
+    if (_hasDeliveredCredentials || _lastUrlWithoutJwxtToken == url) {
+      return;
+    }
+
     final token = extractJwxtTokenFromCasUrl(
       url,
       initialIdToken: widget.initialIdToken,
     );
     if (token == null) {
+      _lastUrlWithoutJwxtToken = url;
       return;
     }
 
+    _lastUrlWithoutJwxtToken = null;
     await _deliverExtractedCredentials(token);
+  }
+
+  void _recordCurrentUrl(String url) {
+    _currentUrl = url;
+  }
+
+  void _setLoading(bool isLoading) {
+    if (!mounted || _isLoading == isLoading) {
+      return;
+    }
+
+    _isLoadingNotifier.value = isLoading;
+  }
+
+  void _updateNavigationState({required String url, required bool isLoading}) {
+    if (!mounted) {
+      return;
+    }
+
+    _recordCurrentUrl(url);
+    _setLoading(isLoading);
   }
 
   Future<void> _checkHtmlAndExtractTokenAndCookie() async {
     final controller = _webViewController;
-    if (controller == null || _hasDeliveredCredentials) {
+    if (!mounted || controller == null || _hasDeliveredCredentials) {
       return;
     }
 
     try {
       final html = await controller.getHtml();
+      if (!mounted ||
+          !identical(controller, _webViewController) ||
+          _hasDeliveredCredentials) {
+        return;
+      }
       if (html == null || html.isEmpty) {
         return;
       }
@@ -154,7 +249,9 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
 
       await _deliverExtractedCredentials(token);
     } catch (error) {
-      AppLogger.debug('读取CAS页面HTML时出错: $error');
+      if (mounted) {
+        AppLogger.debug('读取CAS页面HTML时出错: $error');
+      }
     }
   }
 
@@ -266,44 +363,54 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
             },
             onLoadStart: (controller, url) {
               if (url != null) {
-                setState(() {
-                  _isLoading = true;
-                  _currentUrl = url.toString();
-                });
-                _checkUrlAndExtractTokenAndCookie(_currentUrl);
+                final currentUrl = url.toString();
+                _updateNavigationState(url: currentUrl, isLoading: true);
+                _checkUrlAndExtractTokenAndCookie(currentUrl);
               }
             },
             onLoadStop: (controller, url) async {
               if (url != null) {
-                setState(() {
-                  _isLoading = false;
-                  _currentUrl = url.toString();
-                });
-                await _checkUrlAndExtractTokenAndCookie(_currentUrl);
+                final currentUrl = url.toString();
+                _updateNavigationState(url: currentUrl, isLoading: false);
+                await _checkUrlAndExtractTokenAndCookie(currentUrl);
                 await _checkHtmlAndExtractTokenAndCookie();
 
-                AppLogger.debug('页面加载完成: $_currentUrl');
+                AppLogger.debug('页面加载完成: $currentUrl');
               }
             },
             onReceivedError: (controller, request, error) {
-              setState(() {
-                _isLoading = false;
-              });
+              if (!mounted || !identical(controller, _webViewController)) {
+                return;
+              }
+
+              _setLoading(false);
+              AppLogger.error(
+                'Failed to load HUT login page',
+                error: error.description,
+              );
               if (widget.onError != null) {
-                widget.onError!('页面加载失败：${error.description}');
+                widget.onError!(hutLoginPageLoadFailureMessage(error));
               }
             },
             onConsoleMessage: (controller, consoleMessage) {
               AppLogger.debug('Console: ${consoleMessage.message}');
             },
           ),
-          if (_isLoading)
-            Container(
-              color: colorScheme.floatingSurface.withValues(alpha: 0.92),
-              child: Center(
-                child: AppLoadingIndicator(color: colorScheme.primary),
-              ),
-            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: _isLoadingNotifier,
+            builder: (context, isLoading, _) {
+              if (!isLoading) {
+                return const SizedBox.shrink();
+              }
+
+              return Container(
+                color: colorScheme.floatingSurface.withValues(alpha: 0.92),
+                child: Center(
+                  child: AppLoadingIndicator(color: colorScheme.primary),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );

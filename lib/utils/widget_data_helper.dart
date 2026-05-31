@@ -14,22 +14,25 @@ class WidgetDataHelper {
   ) async {
     try {
       final normalizedCourseData = <String, List<Course>>{};
-      courseData.forEach((date, courses) {
-        normalizedCourseData[date] =
-            courses.map((course) {
-              final courseJson = Map<String, dynamic>.from(course);
-              return Course.fromJson({
-                'name': courseJson['name'],
-                'teacherName': courseJson['teacherName'] ?? '',
-                'weekDuration': courseJson['weekDuration'] ?? '',
-                'location': courseJson['location'],
-                'startSection': courseJson['startSection'],
-                'duration': courseJson['duration'],
-                'isExp': courseJson['isExp'] ?? false,
-                'pcid': courseJson['pcid'] ?? '',
-              });
-            }).toList();
-      });
+      for (final entry in courseData.entries) {
+        final courses = entry.value;
+        final normalizedCourses = <Course>[];
+        for (final course in courses) {
+          normalizedCourses.add(
+            Course(
+              name: course['name'],
+              teacherName: course['teacherName'] ?? '',
+              weekDuration: course['weekDuration'] ?? '',
+              location: course['location'],
+              startSection: course['startSection'],
+              duration: course['duration'],
+              isExp: course['isExp'] ?? false,
+              pcid: course['pcid'] ?? '',
+            ),
+          );
+        }
+        normalizedCourseData[entry.key] = normalizedCourses;
+      }
 
       await saveCourseDataToJson(normalizedCourseData);
       return true;
