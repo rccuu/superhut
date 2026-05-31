@@ -1,44 +1,27 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../core/ui/app_loading_indicator.dart';
+import '../../core/ui/app_page_route.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 
+typedef SupportClipboardWriter = Future<void> Function(String text);
+
 class SupportPage extends StatefulWidget {
-  const SupportPage({super.key});
+  const SupportPage({super.key, this.writeClipboard});
+
+  final SupportClipboardWriter? writeClipboard;
 
   static Route<void> route() {
-    final isAndroid =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-    if (!isAndroid) {
-      return MaterialPageRoute<void>(builder: (context) => const SupportPage());
-    }
-
-    return PageRouteBuilder<void>(
-      transitionDuration: const Duration(milliseconds: 180),
-      reverseTransitionDuration: const Duration(milliseconds: 140),
-      pageBuilder:
-          (context, animation, secondaryAnimation) => const SupportPage(),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curve = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
-        );
-        return FadeTransition(
-          opacity: curve,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 0.02),
-              end: Offset.zero,
-            ).animate(curve),
-            child: child,
-          ),
-        );
-      },
+    return buildAppPageRoute<void>(
+      builder: (context) => const SupportPage(),
+      androidTransitionDuration: const Duration(milliseconds: 180),
+      androidReverseTransitionDuration: const Duration(milliseconds: 140),
+      androidSlideOffset: const Offset(0, 0.02),
     );
   }
 
@@ -89,22 +72,72 @@ class _SupportPageState extends State<SupportPage> {
     ),
   };
 
-  _SupportNetwork _selectedNetwork = _SupportNetwork.trc20;
+  late final ValueNotifier<_SupportNetwork> _selectedNetworkNotifier =
+      ValueNotifier<_SupportNetwork>(_SupportNetwork.trc20);
+  late final ValueNotifier<bool> _isCopyingAddressNotifier =
+      ValueNotifier<bool>(false);
 
-  _SupportNetworkSpec get _currentSpec => _networkSpecs[_selectedNetwork]!;
+  _SupportNetworkSpec get _currentSpec =>
+      _networkSpecs[_selectedNetworkNotifier.value]!;
+
+  void _selectNetwork(_SupportNetwork network) {
+    if (_selectedNetworkNotifier.value == network) {
+      return;
+    }
+    _selectedNetworkNotifier.value = network;
+  }
 
   Future<void> _copyCurrentAddress() async {
-    final spec = _currentSpec;
-    await Clipboard.setData(ClipboardData(text: spec.address));
-    if (!mounted) {
+    if (_isCopyingAddressNotifier.value) {
       return;
     }
 
-    showAppSnackBar(
-      context,
-      message: '${spec.fullLabel} 地址已复制到剪贴板',
-      type: AppSnackBarType.success,
-    );
+    final spec = _currentSpec;
+    _setCopyingAddress(true);
+    try {
+      final writeClipboard = widget.writeClipboard ?? _writeClipboard;
+      await writeClipboard(spec.address);
+      if (!mounted) {
+        return;
+      }
+
+      showAppSnackBar(
+        context,
+        message: '${spec.fullLabel} 地址已复制到剪贴板',
+        type: AppSnackBarType.success,
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      showAppSnackBar(
+        context,
+        message: '复制地址失败，请稍后重试',
+        type: AppSnackBarType.error,
+      );
+    } finally {
+      _setCopyingAddress(false);
+    }
+  }
+
+  void _setCopyingAddress(bool isCopyingAddress) {
+    if (!mounted || _isCopyingAddressNotifier.value == isCopyingAddress) {
+      return;
+    }
+
+    _isCopyingAddressNotifier.value = isCopyingAddress;
+  }
+
+  Future<void> _writeClipboard(String text) {
+    return Clipboard.setData(ClipboardData(text: text));
+  }
+
+  @override
+  void dispose() {
+    _selectedNetworkNotifier.dispose();
+    _isCopyingAddressNotifier.dispose();
+    super.dispose();
   }
 
   @override
@@ -112,11 +145,11 @@ class _SupportPageState extends State<SupportPage> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final topInset = MediaQuery.paddingOf(context).top;
-    final useLiteLayout =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final useLiteLayout = AppGlassPerformanceScope.shouldUseLiteLayoutOf(
+      context,
+    );
     final qrPanelWidth =
         (MediaQuery.sizeOf(context).width - 76).clamp(240.0, 360.0).toDouble();
-    final spec = _currentSpec;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -124,128 +157,124 @@ class _SupportPageState extends State<SupportPage> {
         style: AppGlassBackgroundStyle.soft,
         child: Stack(
           children: [
-            ListView(
-              padding: EdgeInsets.fromLTRB(16, topInset + 74, 16, 28),
-              children: [
-                _SupportSectionPanel(
-                  icon: Ionicons.git_branch_outline,
-                  title: '收款网络',
-                  tint: spec.accent,
-                  useLiteEffects: useLiteLayout,
-                  trailing: _SupportChip(
-                    icon: Icons.attach_money_rounded,
-                    label: 'USDT',
-                    tint: spec.accent,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: _networkSpecs.values
-                            .map((item) {
-                              final isSelected =
-                                  item.network == _selectedNetwork;
-                              return _SupportNetworkButton(
-                                key: ValueKey(
-                                  'support-network-${item.network.name}',
-                                ),
-                                label:
-                                    item.network == _SupportNetwork.trc20
-                                        ? item.shortLabel
-                                        : item.fullLabel,
-                                accent: item.accent,
-                                selected: isSelected,
-                                onTap: () {
-                                  if (_selectedNetwork == item.network) {
-                                    return;
-                                  }
-                                  setState(() {
-                                    _selectedNetwork = item.network;
-                                  });
-                                },
-                              );
-                            })
-                            .toList(growable: false),
+            ValueListenableBuilder<_SupportNetwork>(
+              valueListenable: _selectedNetworkNotifier,
+              builder: (context, selectedNetwork, _) {
+                final spec = _networkSpecs[selectedNetwork]!;
+                return ListView(
+                  padding: EdgeInsets.fromLTRB(16, topInset + 74, 16, 28),
+                  children: [
+                    _SupportSectionPanel(
+                      icon: Ionicons.git_branch_outline,
+                      title: '收款网络',
+                      tint: spec.accent,
+                      useLiteEffects: useLiteLayout,
+                      trailing: _SupportChip(
+                        icon: Icons.attach_money_rounded,
+                        label: 'USDT',
+                        tint: spec.accent,
                       ),
-                      const SizedBox(height: 18),
-                      Center(
-                        child: Container(
-                          width: qrPanelWidth,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.white.withValues(alpha: 0.82),
-                                spec.accent.withValues(alpha: 0.10),
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(28),
-                            border: Border.all(
-                              color: spec.accent.withValues(alpha: 0.16),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: colorScheme.shadow.withValues(
-                                  alpha: 0.10,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              for (final item in _networkSpecs.values)
+                                _SupportNetworkButton(
+                                  key: ValueKey(
+                                    'support-network-${item.network.name}',
+                                  ),
+                                  label:
+                                      item.network == _SupportNetwork.trc20
+                                          ? item.shortLabel
+                                          : item.fullLabel,
+                                  accent: item.accent,
+                                  selected: item.network == selectedNetwork,
+                                  onTap: () => _selectNetwork(item.network),
                                 ),
-                                blurRadius: 24,
-                                offset: const Offset(0, 14),
-                              ),
                             ],
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(22),
-                            child: ColoredBox(
-                              color: Colors.white,
-                              child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 220),
-                                child: _SupportGeneratedQr(
-                                  key: ValueKey(spec.network.name),
-                                  spec: spec,
-                                  size: qrPanelWidth - 32,
-                                  embeddedLogo: _usdtLogo,
+                          const SizedBox(height: 18),
+                          Center(
+                            child: Container(
+                              width: qrPanelWidth,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.white.withValues(alpha: 0.82),
+                                    spec.accent.withValues(alpha: 0.10),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                  color: spec.accent.withValues(alpha: 0.16),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: colorScheme.shadow.withValues(
+                                      alpha: 0.10,
+                                    ),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, 14),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(22),
+                                child: ColoredBox(
+                                  color: Colors.white,
+                                  child: _SupportGeneratedQr(
+                                    key: ValueKey(spec.network.name),
+                                    spec: spec,
+                                    size: qrPanelWidth - 32,
+                                    embeddedLogo: _usdtLogo,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 18),
+                          _SupportAddressCard(
+                            spec: spec,
+                            isCopyingListenable: _isCopyingAddressNotifier,
+                            onCopy: _copyCurrentAddress,
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 18),
-                      _SupportAddressCard(
-                        spec: spec,
-                        onCopy: _copyCurrentAddress,
+                    ),
+                    const SizedBox(height: 16),
+                    _SupportSectionPanel(
+                      icon: Ionicons.alert_circle_outline,
+                      title: '转账前请确认',
+                      tint: colorScheme.error,
+                      useLiteEffects: useLiteLayout,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _SupportBullet(
+                            text: '仅向当前选中的 ${spec.fullLabel} 地址转入 USDT。',
+                          ),
+                          const SizedBox(height: 10),
+                          const _SupportBullet(
+                            text: '如果网络、币种或地址填错，链上资产通常无法撤回。',
+                          ),
+                          const SizedBox(height: 10),
+                          _SupportBullet(text: spec.helperText),
+                          const SizedBox(height: 10),
+                          const _SupportBullet(
+                            text: '如果你只是想表达支持，也欢迎继续使用、反馈问题或提交改进建议。',
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _SupportSectionPanel(
-                  icon: Ionicons.alert_circle_outline,
-                  title: '转账前请确认',
-                  tint: colorScheme.error,
-                  useLiteEffects: useLiteLayout,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _SupportBullet(
-                        text: '仅向当前选中的 ${spec.fullLabel} 地址转入 USDT。',
-                      ),
-                      const SizedBox(height: 10),
-                      const _SupportBullet(text: '如果网络、币种或地址填错，链上资产通常无法撤回。'),
-                      const SizedBox(height: 10),
-                      _SupportBullet(text: spec.helperText),
-                      const SizedBox(height: 10),
-                      const _SupportBullet(
-                        text: '如果你只是想表达支持，也欢迎继续使用、反馈问题或提交改进建议。',
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                  ],
+                );
+              },
             ),
             Positioned(
               top: topInset + 12,
@@ -431,8 +460,7 @@ class _SupportNetworkButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color:
@@ -479,9 +507,14 @@ class _SupportNetworkButton extends StatelessWidget {
 }
 
 class _SupportAddressCard extends StatelessWidget {
-  const _SupportAddressCard({required this.spec, required this.onCopy});
+  const _SupportAddressCard({
+    required this.spec,
+    required this.isCopyingListenable,
+    required this.onCopy,
+  });
 
   final _SupportNetworkSpec spec;
+  final ValueListenable<bool> isCopyingListenable;
   final VoidCallback onCopy;
 
   @override
@@ -552,11 +585,23 @@ class _SupportAddressCard extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              FilledButton.icon(
-                key: const ValueKey('support-copy-button'),
-                onPressed: onCopy,
-                icon: const Icon(Ionicons.copy_outline, size: 18),
-                label: const Text('复制地址'),
+              ValueListenableBuilder<bool>(
+                valueListenable: isCopyingListenable,
+                child: const Text('复制地址'),
+                builder: (context, isCopyingAddress, label) {
+                  return FilledButton.icon(
+                    key: const ValueKey('support-copy-button'),
+                    onPressed: isCopyingAddress ? null : onCopy,
+                    icon:
+                        isCopyingAddress
+                            ? AppLoadingIndicator(
+                              size: 18,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            )
+                            : const Icon(Ionicons.copy_outline, size: 18),
+                    label: label!,
+                  );
+                },
               ),
             ],
           ),

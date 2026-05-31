@@ -1,14 +1,19 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:pub_semver/pub_semver.dart';
+import 'package:superhut/core/ui/apple_glass.dart';
+import 'package:superhut/core/services/app_update_service.dart';
 import 'package:superhut/home/coursetable/view.dart';
 import 'package:superhut/home/homeview/view.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/home/Functionpage/view.dart';
 import 'package:superhut/home/userpage/view.dart';
+import 'package:superhut/pages/Electricitybill/electricity_api.dart';
 
 import 'package:superhut/main.dart';
 
@@ -229,7 +234,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+        home: AppGlassPerformanceScope(
+          isLite: false,
+          child: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -253,6 +261,53 @@ void main() {
     );
     expect(slideToCourse.position.value.dx, lessThan(0));
     expect(slideToCourse.position.value.dy, 0);
+  });
+
+  testWidgets('reuses tab transition state after completed animations', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: AppGlassPerformanceScope(
+          isLite: false,
+          child: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('home-tab-slide-2')), findsOneWidget);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-功能')));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('home-tab-slide-1')), findsOneWidget);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('home-tab-slide-2')), findsOneWidget);
+  });
+
+  testWidgets('skips tab transition animation in lite mode', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: HomeviewPage(initialIndex: 1, checkUpdatesOnStartup: false),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('home-tab-slide-2')), findsNothing);
+    expect(find.byType(UserPage), findsOneWidget);
   });
 
   testWidgets('keeps dock style stable during tab transition', (
@@ -362,4 +417,253 @@ void main() {
     final nav = tester.widget<GNav>(find.byType(GNav));
     expect(nav.duration, Duration.zero);
   });
+
+  testWidgets(
+    'electricity alert recharge action closes dialog and opens once',
+    (WidgetTester tester) async {
+      final openCompleter = Completer<void>();
+      var openCalls = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HomeviewPage(
+            initialIndex: 1,
+            checkUpdatesOnStartup: false,
+            electricityAlertChecker: _FakeHomeElectricityAlertChecker(
+              alert: const HomeElectricityAlert(
+                roomCount: '8.00',
+                bill: 20,
+                roomName: '一舍101',
+              ),
+            ),
+            openElectricityPage: (_) {
+              openCalls++;
+              return openCompleter.future;
+            },
+          ),
+        ),
+      );
+      await pumpUntilFound(tester, find.text('电费达到预警值'));
+
+      final rechargeButton = find.widgetWithText(TextButton, '立即充值');
+      final onPressed = tester.widget<TextButton>(rechargeButton).onPressed;
+      onPressed?.call();
+      onPressed?.call();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(openCalls, 1);
+      expect(find.text('电费达到预警值'), findsNothing);
+      expect(rechargeButton, findsNothing);
+
+      openCompleter.complete();
+      await tester.pump();
+    },
+  );
+
+  testWidgets('electricity alert recharge action reports opener errors', (
+    WidgetTester tester,
+  ) async {
+    var openCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeviewPage(
+          initialIndex: 1,
+          checkUpdatesOnStartup: false,
+          electricityAlertChecker: _FakeHomeElectricityAlertChecker(
+            alert: const HomeElectricityAlert(
+              roomCount: '8.00',
+              bill: 20,
+              roomName: '一舍101',
+            ),
+          ),
+          openElectricityPage: (_) async {
+            openCalls++;
+            throw Exception('route unavailable');
+          },
+        ),
+      ),
+    );
+    await pumpUntilFound(tester, find.text('电费达到预警值'));
+
+    final rechargeButton = find.widgetWithText(TextButton, '立即充值');
+    final onPressed = tester.widget<TextButton>(rechargeButton).onPressed;
+    onPressed?.call();
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 1);
+    expect(tester.takeException(), isNull);
+    expect(find.text('打开电费页面失败，请稍后重试'), findsOneWidget);
+    expect(find.text('电费达到预警值'), findsNothing);
+  });
+
+  testWidgets('startup update check failure does not block electricity alert', (
+    WidgetTester tester,
+  ) async {
+    var fetchCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeviewPage(
+          initialIndex: 1,
+          electricityAlertChecker: _FakeHomeElectricityAlertChecker(
+            alert: const HomeElectricityAlert(
+              roomCount: '8.00',
+              bill: 20,
+              roomName: '一舍101',
+            ),
+          ),
+          fetchUpdate: ({required currentVersion}) async {
+            fetchCalls++;
+            throw Exception('update check unavailable');
+          },
+        ),
+      ),
+    );
+    await pumpUntilFound(tester, find.text('电费达到预警值'));
+
+    expect(fetchCalls, 1);
+    expect(tester.takeException(), isNull);
+    expect(find.text('电费达到预警值'), findsOneWidget);
+    expect(find.textContaining('update check unavailable'), findsNothing);
+  });
+
+  testWidgets('startup version read failure still checks electricity alert', (
+    WidgetTester tester,
+  ) async {
+    var fetchCalls = 0;
+    var versionCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeviewPage(
+          initialIndex: 1,
+          electricityAlertChecker: _FakeHomeElectricityAlertChecker(
+            alert: const HomeElectricityAlert(
+              roomCount: '8.00',
+              bill: 20,
+              roomName: '一舍101',
+            ),
+          ),
+          loadCurrentVersion: () async {
+            versionCalls++;
+            throw Exception('package info unavailable');
+          },
+          fetchUpdate: ({required currentVersion}) async {
+            fetchCalls++;
+            return null;
+          },
+        ),
+      ),
+    );
+    await pumpUntilFound(tester, find.text('电费达到预警值'));
+
+    expect(versionCalls, 1);
+    expect(fetchCalls, 0);
+    expect(tester.takeException(), isNull);
+    expect(find.text('电费达到预警值'), findsOneWidget);
+    expect(find.textContaining('package info unavailable'), findsNothing);
+  });
+
+  testWidgets('update release action closes dialog and opens once', (
+    WidgetTester tester,
+  ) async {
+    final openCompleter = Completer<bool>();
+    var openCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeviewPage(
+          initialIndex: 1,
+          electricityAlertChecker: _FakeHomeElectricityAlertChecker(
+            alert: null,
+          ),
+          fetchUpdate:
+              ({required currentVersion}) async => AppUpdateInfo(
+                version: Version(9, 9, 9),
+                tagName: 'v9.9.9',
+                releaseUrl: Uri.parse('https://example.com/releases/v9.9.9'),
+                notes: '测试更新说明',
+              ),
+          openUpdateRelease: (_) {
+            openCalls++;
+            return openCompleter.future;
+          },
+        ),
+      ),
+    );
+    await pumpUntilFound(tester, find.text('发现新版本 v9.9.9'));
+
+    final updateButton = find.widgetWithText(TextButton, '前往更新');
+    final onPressed = tester.widget<TextButton>(updateButton).onPressed;
+    onPressed?.call();
+    onPressed?.call();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(openCalls, 1);
+    expect(find.text('发现新版本 v9.9.9'), findsNothing);
+    expect(updateButton, findsNothing);
+
+    openCompleter.complete(true);
+    await tester.pump();
+  });
+
+  testWidgets('update release action reports opener errors', (
+    WidgetTester tester,
+  ) async {
+    var openCalls = 0;
+    final releaseUrl = Uri.parse('https://example.com/releases/v9.9.9');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomeviewPage(
+          initialIndex: 1,
+          electricityAlertChecker: _FakeHomeElectricityAlertChecker(
+            alert: null,
+          ),
+          fetchUpdate:
+              ({required currentVersion}) async => AppUpdateInfo(
+                version: Version(9, 9, 9),
+                tagName: 'v9.9.9',
+                releaseUrl: releaseUrl,
+                notes: '测试更新说明',
+              ),
+          openUpdateRelease: (_) async {
+            openCalls++;
+            throw Exception('browser unavailable');
+          },
+        ),
+      ),
+    );
+    await pumpUntilFound(tester, find.text('发现新版本 v9.9.9'));
+
+    final updateButton = find.widgetWithText(TextButton, '前往更新');
+    final onPressed = tester.widget<TextButton>(updateButton).onPressed;
+    onPressed?.call();
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 1);
+    expect(tester.takeException(), isNull);
+    expect(find.text('无法打开更新链接，请稍后重试'), findsOneWidget);
+    expect(find.textContaining(releaseUrl.toString()), findsNothing);
+    expect(find.text('发现新版本 v9.9.9'), findsNothing);
+  });
+}
+
+class _FakeHomeElectricityAlertChecker extends HomeElectricityAlertChecker {
+  _FakeHomeElectricityAlertChecker({required this.alert})
+    : super(electricityApiFactory: _neverCreateElectricityApi);
+
+  final HomeElectricityAlert? alert;
+
+  @override
+  Future<HomeElectricityAlert?> check() async => alert;
+}
+
+ElectricityApiClient _neverCreateElectricityApi() {
+  throw StateError('Fake alert checker should not create an API client.');
 }

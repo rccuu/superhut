@@ -1,8 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'color_scheme_ext.dart';
 
 enum AppSnackBarType { info, success, warning, error }
+
+const Duration _appSnackBarAnimationDuration = Duration(milliseconds: 180);
+const Duration _appSnackBarReverseAnimationDuration = Duration(
+  milliseconds: 120,
+);
+const Duration _appSnackBarDuplicateWindow = Duration(milliseconds: 900);
+const AnimationStyle _appSnackBarAnimationStyle = AnimationStyle(
+  duration: _appSnackBarAnimationDuration,
+  reverseDuration: _appSnackBarReverseAnimationDuration,
+);
+
+final Expando<_AppSnackBarRecord> _appSnackBarRecords =
+    Expando<_AppSnackBarRecord>('app_snack_bar_records');
 
 ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? showAppSnackBar(
   BuildContext? context, {
@@ -14,6 +29,7 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? showAppSnackBar(
   Duration duration = const Duration(seconds: 3),
   EdgeInsets margin = const EdgeInsets.fromLTRB(16, 0, 16, 72),
   bool clearPrevious = true,
+  Duration duplicateWindow = _appSnackBarDuplicateWindow,
 }) {
   if (context == null) {
     return null;
@@ -24,11 +40,29 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? showAppSnackBar(
     return null;
   }
 
+  final now = DateTime.now();
+  final previous = _appSnackBarRecords[messenger];
+  if (duplicateWindow > Duration.zero &&
+      previous != null &&
+      previous.isDuplicateOf(
+        message: message,
+        type: type,
+        icon: icon,
+        actionLabel: actionLabel,
+        hasAction: onAction != null,
+      ) &&
+      now.difference(previous.shownAt) <= duplicateWindow) {
+    return previous.controller;
+  }
+
   if (clearPrevious) {
     messenger.clearSnackBars();
   }
 
-  return messenger.showSnackBar(
+  final reduceMotion =
+      MediaQuery.maybeOf(context)?.disableAnimations == true ||
+      !TickerMode.valuesOf(context).enabled;
+  final controller = messenger.showSnackBar(
     SnackBar(
       behavior: SnackBarBehavior.floating,
       backgroundColor: Colors.transparent,
@@ -44,7 +78,68 @@ ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? showAppSnackBar(
         onAction: onAction,
       ),
     ),
+    snackBarAnimationStyle:
+        reduceMotion ? AnimationStyle.noAnimation : _appSnackBarAnimationStyle,
   );
+  final record = _AppSnackBarRecord(
+    message: message,
+    type: type,
+    icon: icon,
+    actionLabel: actionLabel,
+    hasAction: onAction != null,
+    shownAt: now,
+    controller: controller,
+  );
+  _appSnackBarRecords[messenger] = record;
+  unawaited(_clearSnackBarRecordWhenClosed(messenger, record));
+  return controller;
+}
+
+Future<void> _clearSnackBarRecordWhenClosed(
+  ScaffoldMessengerState messenger,
+  _AppSnackBarRecord record,
+) async {
+  try {
+    await record.controller.closed;
+  } finally {
+    if (_appSnackBarRecords[messenger] == record) {
+      _appSnackBarRecords[messenger] = null;
+    }
+  }
+}
+
+class _AppSnackBarRecord {
+  const _AppSnackBarRecord({
+    required this.message,
+    required this.type,
+    required this.icon,
+    required this.actionLabel,
+    required this.hasAction,
+    required this.shownAt,
+    required this.controller,
+  });
+
+  final String message;
+  final AppSnackBarType type;
+  final IconData? icon;
+  final String? actionLabel;
+  final bool hasAction;
+  final DateTime shownAt;
+  final ScaffoldFeatureController<SnackBar, SnackBarClosedReason> controller;
+
+  bool isDuplicateOf({
+    required String message,
+    required AppSnackBarType type,
+    required IconData? icon,
+    required String? actionLabel,
+    required bool hasAction,
+  }) {
+    return this.message == message &&
+        this.type == type &&
+        this.icon == icon &&
+        this.actionLabel == actionLabel &&
+        this.hasAction == hasAction;
+  }
 }
 
 class AppSnackBarContent extends StatelessWidget {

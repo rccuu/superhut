@@ -15,14 +15,10 @@ import '../../../core/ui/app_snack_bar.dart';
 import '../../../core/ui/color_scheme_ext.dart';
 import '../hut_service_auth.dart';
 
-class Type2Webview extends StatefulWidget {
-  final String serviceId;
-  final String serviceUrl;
-  final String serviceName;
-  final String serviceType;
-  final String tokenAccept;
-  final String servicePicUrl;
+typedef HutLocationPermissionHandler = Future<void> Function();
+typedef HutExternalUrlOpener = Future<bool> Function(Uri url);
 
+class Type2Webview extends StatefulWidget {
   const Type2Webview({
     super.key,
     required this.serviceId,
@@ -31,7 +27,22 @@ class Type2Webview extends StatefulWidget {
     required this.serviceType,
     required this.tokenAccept,
     this.servicePicUrl = '',
+    this.loadPortalSession,
+    this.openLoginPage,
+    this.handleLocationPermission,
+    this.openExternalUrl,
   });
+
+  final String serviceId;
+  final String serviceUrl;
+  final String serviceName;
+  final String serviceType;
+  final String tokenAccept;
+  final String servicePicUrl;
+  final HutPortalSessionLoader? loadPortalSession;
+  final HutLoginPageOpener? openLoginPage;
+  final HutLocationPermissionHandler? handleLocationPermission;
+  final HutExternalUrlOpener? openExternalUrl;
 
   @override
   State<Type2Webview> createState() => _Type2WebviewState();
@@ -42,42 +53,27 @@ class _Type2WebviewState extends State<Type2Webview> {
 
   final api = HutUserApi();
   InAppWebViewController? _webViewController;
-  bool _canGoBack = false;
-  bool _isPageLoading = false;
-  bool _isRequestingPermission = false;
+  final ValueNotifier<bool> _canGoBackNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isPageLoadingNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isRequestingPermissionNotifier =
+      ValueNotifier<bool>(false);
   bool _permissionRequested = false; // 添加标志，表示权限已请求过
   bool _hasWarnedLoginRedirect = false;
-  late Future<bool> _initialSetupFuture;
+  bool _isOpeningLogin = false;
+  bool _isLaunchingAlipay = false;
+  bool _isHandlingBackNavigation = false;
+  InAppWebViewController? _alipayHandlerController;
+  late final ValueNotifier<Future<bool>> _initialSetupFutureNotifier;
   String? _setupErrorMessage;
+  String? _cachedTokenAcceptSource;
+  List<Map<String, dynamic>>? _cachedTokenAcceptList;
+  List<String>? _cachedCookieTokenKeys;
+  int _setupGeneration = 0;
+  int _canGoBackGeneration = 0;
 
   Map<String, String> headerMap = {};
   String resultUrl = '';
   String token = '';
-
-  Map<String, String> _baseHeaders(String token) {
-    return {
-      "User-Agent":
-          "Mozilla/5.0 (Linux; Android 15; 24129PN74C Build/AQ3A.240812.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/134.0.6998.39 Mobile Safari/537.36 SuperApp",
-      "Connection": "keep-alive",
-      "Accept":
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-      "Accept-Encoding": "gzip, deflate, br, zstd",
-      "sec-ch-ua":
-          "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Android WebView\";v=\"134\"",
-      "sec-ch-ua-mobile": "?1",
-      "sec-ch-ua-platform": "\"Android\"",
-      "upgrade-insecure-requests": "1",
-      "X-Id-Token": token,
-      "x-id-token": token,
-      "x-requested-with": "com.supwisdom.hut",
-      "sec-fetch-site": "none",
-      "sec-fetch-mode": "navigate",
-      "sec-fetch-user": "?1",
-      "sec-fetch-dest": "document",
-      "accept-language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-      "priority": "u=0, i",
-    };
-  }
 
   List<Map<String, dynamic>> _parseTokenAccept(String tokenAccept) {
     try {
@@ -86,19 +82,40 @@ class _Type2WebviewState extends State<Type2Webview> {
         return <Map<String, dynamic>>[];
       }
 
-      return parsedList
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList();
+      final tokenAcceptList = <Map<String, dynamic>>[];
+      for (final item in parsedList) {
+        if (item is Map) {
+          tokenAcceptList.add(Map<String, dynamic>.from(item));
+        }
+      }
+      return tokenAcceptList;
     } catch (error) {
       AppLogger.debug('Failed to parse tokenAccept: $error');
       return <Map<String, dynamic>>[];
     }
   }
 
-  void _applyTokenAccept() {
-    final tokenAcceptList = _parseTokenAccept(widget.tokenAccept);
-    for (final item in tokenAcceptList) {
+  List<Map<String, dynamic>> _tokenAcceptList() {
+    final source = widget.tokenAccept;
+    final cachedList = _cachedTokenAcceptList;
+    if (cachedList != null && _cachedTokenAcceptSource == source) {
+      return cachedList;
+    }
+
+    final parsedList = _parseTokenAccept(source);
+    _cachedTokenAcceptSource = source;
+    _cachedTokenAcceptList = parsedList;
+    _cachedCookieTokenKeys = null;
+    return parsedList;
+  }
+
+  String _applyTokenAccept({
+    required Map<String, String> headers,
+    required String resultUrl,
+    required String token,
+  }) {
+    var resolvedUrl = resultUrl;
+    for (final item in _tokenAcceptList()) {
       final tokenType = item['tokenType']?.toString();
       final tokenKey = item['tokenKey']?.toString();
       if (tokenKey == null || tokenKey.isEmpty) {
@@ -106,50 +123,82 @@ class _Type2WebviewState extends State<Type2Webview> {
       }
 
       if (tokenType == 'header') {
-        headerMap[tokenKey] = token;
+        headers[tokenKey] = token;
       } else if (tokenType == 'url') {
-        final uri = Uri.tryParse(resultUrl);
+        final uri = Uri.tryParse(resolvedUrl);
         if (uri == null) {
           continue;
         }
         final queryParams = Map<String, String>.from(uri.queryParameters);
         queryParams[tokenKey] = token;
-        resultUrl = uri.replace(queryParameters: queryParams).toString();
+        resolvedUrl = uri.replace(queryParameters: queryParams).toString();
       }
     }
+    return resolvedUrl;
   }
 
   List<String> _getCookieTokenKeys() {
-    final tokenAcceptList = _parseTokenAccept(widget.tokenAccept);
-    final cookieKeys =
-        tokenAcceptList
-            .where((item) => item['tokenType'] == 'cookie')
-            .map((item) => item['tokenKey']?.toString() ?? '')
-            .where((key) => key.isNotEmpty)
-            .toSet()
-            .toList();
-
-    return cookieKeys.isEmpty ? ['userToken'] : cookieKeys;
-  }
-
-  String _buildCookieHeaderWithAttributes() {
-    return _getCookieTokenKeys()
-        .map((key) => '$key=$token; Domain=$_webViewCookieDomain; Path=/')
-        .join('; ');
-  }
-
-  Future<void> _syncWebViewCookies() async {
-    headerMap.remove('cookie');
-    headerMap.remove('Cookie');
-
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      headerMap['Cookie'] = _buildCookieHeaderWithAttributes();
+    final cachedKeys = _cachedCookieTokenKeys;
+    if (cachedKeys != null) {
+      return cachedKeys;
     }
 
-    await _injectWebViewCookies();
+    final cookieKeys = <String>[];
+    for (final item in _tokenAcceptList()) {
+      if (item['tokenType'] != 'cookie') {
+        continue;
+      }
+      final key = item['tokenKey']?.toString() ?? '';
+      if (key.isNotEmpty && !cookieKeys.contains(key)) {
+        cookieKeys.add(key);
+      }
+    }
+
+    final resolvedKeys =
+        cookieKeys.isEmpty ? <String>['userToken'] : cookieKeys;
+    _cachedCookieTokenKeys = resolvedKeys;
+    return resolvedKeys;
   }
 
-  Future<void> _injectWebViewCookies() async {
+  String _buildCookieHeaderWithAttributes(String token) {
+    final buffer = StringBuffer();
+    for (final key in _getCookieTokenKeys()) {
+      if (buffer.isNotEmpty) {
+        buffer.write('; ');
+      }
+      buffer.write('$key=$token; Domain=$_webViewCookieDomain; Path=/');
+    }
+    return buffer.toString();
+  }
+
+  Future<void> _syncWebViewCookies({
+    required Map<String, String> headers,
+    required String resultUrl,
+    required String token,
+    required int generation,
+  }) async {
+    headers.remove('cookie');
+    headers.remove('Cookie');
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      headers['Cookie'] = _buildCookieHeaderWithAttributes(token);
+    }
+
+    await _injectWebViewCookies(
+      resultUrl: resultUrl,
+      token: token,
+      generation: generation,
+    );
+  }
+
+  Future<void> _injectWebViewCookies({
+    required String resultUrl,
+    required String token,
+    required int generation,
+  }) async {
+    if (!_isCurrentSetup(generation)) {
+      return;
+    }
     if (resultUrl.isEmpty || token.isEmpty) {
       return;
     }
@@ -164,6 +213,9 @@ class _Type2WebviewState extends State<Type2Webview> {
       final webUri = WebUri('${uri.scheme}://$_webViewCookieDomain');
 
       for (final cookieName in _getCookieTokenKeys()) {
+        if (!_isCurrentSetup(generation)) {
+          return;
+        }
         await cookieManager.setCookie(
           url: webUri,
           name: cookieName,
@@ -174,15 +226,27 @@ class _Type2WebviewState extends State<Type2Webview> {
           sameSite: HTTPCookieSameSitePolicy.LAX,
         );
       }
+      if (!_isCurrentSetup(generation)) {
+        return;
+      }
 
+      final cookieTokenKeys = _getCookieTokenKeys();
       final cookies = await cookieManager.getCookies(url: webUri);
-      final cookieDebugInfo = cookies
-          .where((cookie) => _getCookieTokenKeys().contains(cookie.name))
-          .map(
-            (cookie) =>
-                '${cookie.name}; domain=${cookie.domain}; path=${cookie.path}',
-          )
-          .join(', ');
+      if (!_isCurrentSetup(generation)) {
+        return;
+      }
+      final cookieDebugInfo = StringBuffer();
+      for (final cookie in cookies) {
+        if (!cookieTokenKeys.contains(cookie.name)) {
+          continue;
+        }
+        if (cookieDebugInfo.isNotEmpty) {
+          cookieDebugInfo.write(', ');
+        }
+        cookieDebugInfo.write(
+          '${cookie.name}; domain=${cookie.domain}; path=${cookie.path}',
+        );
+      }
       AppLogger.debug(
         'Type2 WebView cookies injected for ${webUri.toString()}: $cookieDebugInfo',
       );
@@ -191,34 +255,89 @@ class _Type2WebviewState extends State<Type2Webview> {
     }
   }
 
-  Future<bool> getDetail() async {
+  bool _isCurrentSetup(int generation) {
+    return mounted && generation == _setupGeneration;
+  }
+
+  Future<bool> getDetail() {
+    final generation = ++_setupGeneration;
+    return _loadDetail(generation);
+  }
+
+  @visibleForTesting
+  Future<bool> debugReloadPortalSession() {
+    return getDetail();
+  }
+
+  @visibleForTesting
+  String get debugToken => token;
+
+  @visibleForTesting
+  String get debugResultUrl => resultUrl;
+
+  @visibleForTesting
+  Map<String, String> get debugHeaderMap => headerMap;
+
+  @visibleForTesting
+  Future<void> debugHandleAlipayUrl(String url) {
+    return _handleAlipayUrl(url);
+  }
+
+  Future<bool> _loadDetail(int generation) async {
     try {
-      _setupErrorMessage = null;
-      final session = await loadValidHutPortalSession(api);
-      token = session.token;
-      headerMap = _baseHeaders(token);
+      final session =
+          await widget.loadPortalSession?.call(api) ??
+          await loadValidHutPortalSession(api);
+      final nextToken = session.token;
+      final nextHeaders = buildHutWebViewHeaders(
+        token: nextToken,
+        profile: HutWebViewHeaderProfile.type2,
+      );
+      String nextResultUrl;
       if (widget.serviceType == '5' && widget.serviceId.isNotEmpty) {
         final detailUrl = buildHutPortalServiceDetailUrl(
           serviceId: widget.serviceId,
           serviceName: widget.serviceName,
           servicePicUrl: widget.servicePicUrl,
         );
-        resultUrl = buildHutPortalServiceEntryUrl(
+        nextResultUrl = buildHutPortalServiceEntryUrl(
           targetUrl: detailUrl,
           token: session.token,
           ticket: session.ticket,
         );
       } else {
-        resultUrl = normalizeHutPortalUrl(widget.serviceUrl);
-        _applyTokenAccept();
+        nextResultUrl = _applyTokenAccept(
+          headers: nextHeaders,
+          resultUrl: normalizeHutPortalUrl(widget.serviceUrl),
+          token: nextToken,
+        );
       }
-      await _syncWebViewCookies();
+      if (!_isCurrentSetup(generation)) {
+        return false;
+      }
+
+      await _syncWebViewCookies(
+        headers: nextHeaders,
+        resultUrl: nextResultUrl,
+        token: nextToken,
+        generation: generation,
+      );
+      if (!_isCurrentSetup(generation)) {
+        return false;
+      }
+
+      token = nextToken;
+      headerMap = nextHeaders;
+      resultUrl = nextResultUrl;
+      _setupErrorMessage = null;
       AppLogger.debug(
         'Type2 result url prepared: ${describeHutUrlForLog(resultUrl)}',
       );
       return true;
     } catch (error, stackTrace) {
-      _setupErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+      if (_isCurrentSetup(generation)) {
+        _setupErrorMessage = resolveHutServiceAuthErrorMessage(error);
+      }
       AppLogger.error(
         'Failed to prepare HUT type2 service',
         error: error,
@@ -232,29 +351,69 @@ class _Type2WebviewState extends State<Type2Webview> {
   void initState() {
     super.initState();
     // 在 initState 中初始化而不是在 build 中重复调用
-    _initialSetupFuture = _performInitialSetup();
+    _initialSetupFutureNotifier = ValueNotifier<Future<bool>>(
+      _performInitialSetup(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _initialSetupFutureNotifier.dispose();
+    _canGoBackNotifier.dispose();
+    _isPageLoadingNotifier.dispose();
+    _isRequestingPermissionNotifier.dispose();
+    super.dispose();
   }
 
   // 初始化设置，包括权限请求和数据加载
   Future<bool> _performInitialSetup() async {
-    await _handleLocationPermission();
-    return await getDetail();
+    final generation = ++_setupGeneration;
+    await (widget.handleLocationPermission?.call() ??
+        _handleLocationPermission());
+    if (!_isCurrentSetup(generation)) {
+      return false;
+    }
+    return await _loadDetail(generation);
   }
 
   Future<void> _openLoginAndRetry() async {
-    await openHutLoginPage(context);
-    if (!mounted) {
+    if (!mounted || _isOpeningLogin) {
       return;
     }
-    setState(() {
+
+    _isOpeningLogin = true;
+    try {
+      await (widget.openLoginPage?.call(context) ?? openHutLoginPage(context));
+      if (!mounted) {
+        return;
+      }
       _setupErrorMessage = null;
       _hasWarnedLoginRedirect = false;
-      _initialSetupFuture = _performInitialSetup();
-    });
+      _initialSetupFutureNotifier.value = _performInitialSetup();
+    } finally {
+      _isOpeningLogin = false;
+    }
+  }
+
+  void _setPageLoading(bool isLoading) {
+    if (!mounted || _isPageLoadingNotifier.value == isLoading) {
+      return;
+    }
+
+    _isPageLoadingNotifier.value = isLoading;
+  }
+
+  void _setRequestingPermission(bool isRequestingPermission) {
+    if (!mounted ||
+        _isRequestingPermissionNotifier.value == isRequestingPermission) {
+      return;
+    }
+
+    _isRequestingPermissionNotifier.value = isRequestingPermission;
   }
 
   void _handlePossibleLoginRedirect(WebUri? url) {
-    if (_hasWarnedLoginRedirect || !isLikelyHutLoginUrl(url)) {
+    if (!mounted || _hasWarnedLoginRedirect || !isLikelyHutLoginUrl(url)) {
       return;
     }
 
@@ -298,20 +457,18 @@ class _Type2WebviewState extends State<Type2Webview> {
   Future<void> _handleLocationPermission() async {
     if (_permissionRequested) return; // 如果已经请求过，不再请求
 
-    setState(() {
-      _isRequestingPermission = true;
-      _permissionRequested = true;
-    });
+    _permissionRequested = true;
 
     try {
       final status = await Permission.location.status;
 
       // 已经有权限，不需要再请求
-      if (status == PermissionStatus.granted) {
+      if (!mounted || status == PermissionStatus.granted) {
         return;
       }
 
       // 请求权限
+      _setRequestingPermission(true);
       final result = await Permission.location.request();
       if (result != PermissionStatus.granted) {
         if (!mounted) return;
@@ -324,43 +481,58 @@ class _Type2WebviewState extends State<Type2Webview> {
     } catch (e) {
       AppLogger.debug('请求位置权限错误: $e');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isRequestingPermission = false;
-        });
-      }
+      _setRequestingPermission(false);
     }
   }
 
-  // 处理WebView的回退逻辑
-  Future<bool> _handleBackPressed() async {
-    if (_webViewController != null && await _webViewController!.canGoBack()) {
-      _webViewController!.goBack();
-      return false; // 不关闭页面，只是返回上一个网页
-    } else {
-      return true; // 关闭页面
+  Future<void> _handleBackNavigationRequest() async {
+    if (_isHandlingBackNavigation) {
+      return;
+    }
+
+    _isHandlingBackNavigation = true;
+    var shouldResetBackGuard = true;
+    try {
+      if (_webViewController != null && await _webViewController!.canGoBack()) {
+        await _webViewController!.goBack();
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      shouldResetBackGuard = false;
+      Navigator.of(context).pop();
+    } finally {
+      if (shouldResetBackGuard) {
+        _isHandlingBackNavigation = false;
+      }
     }
   }
 
   // 更新是否可以回退的状态
   void _updateCanGoBackState() async {
-    if (_webViewController != null) {
-      bool canGoBack = await _webViewController!.canGoBack();
-      if (!mounted) {
-        return;
-      }
-      if (canGoBack != _canGoBack) {
-        setState(() {
-          _canGoBack = canGoBack;
-        });
-      }
+    final controller = _webViewController;
+    if (controller == null) {
+      return;
     }
+
+    final generation = ++_canGoBackGeneration;
+    final canGoBack = await controller.canGoBack();
+    if (!mounted ||
+        generation != _canGoBackGeneration ||
+        !identical(controller, _webViewController) ||
+        canGoBack == _canGoBackNotifier.value) {
+      return;
+    }
+
+    _canGoBackNotifier.value = canGoBack;
   }
 
   // 删除网页中的导航栏返回按钮
   void _removeNavigationElement() async {
     if (_webViewController != null) {
-      // 使用JavaScript删除指定元素
       await _webViewController!.evaluateJavascript(
         source: '''
         (function() {
@@ -374,135 +546,135 @@ class _Type2WebviewState extends State<Type2Webview> {
             }
             return false;
           }
-          
-          // 立即尝试移除元素
-          if (!removeElement()) {
-            // 如果元素尚未加载，设置一个观察器来监视DOM变化
-            var observer = new MutationObserver(function(mutations) {
-              if (removeElement()) {
-                observer.disconnect(); // 成功移除后停止观察
-              }
-            });
-            
-            observer.observe(document.body, {
-              childList: true,
-              subtree: true
-            });
-            
-            // 60秒后停止观察以避免内存泄漏
-            setTimeout(function() {
-              observer.disconnect();
-            }, 60000);
+
+          if (removeElement() || window.__superhutHideNavObserver) {
+            return;
           }
+
+          var observer = new MutationObserver(function() {
+            if (removeElement()) {
+              observer.disconnect();
+              window.__superhutHideNavObserver = null;
+            }
+          });
+          window.__superhutHideNavObserver = observer;
+
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true
+          });
+
+          setTimeout(function() {
+            if (window.__superhutHideNavObserver === observer) {
+              observer.disconnect();
+              window.__superhutHideNavObserver = null;
+            }
+          }, 60000);
         })();
       ''',
       );
     }
   }
 
-  // 监听页面中的支付宝链接
+  void _registerAlipayJavaScriptHandler(InAppWebViewController controller) {
+    if (identical(_alipayHandlerController, controller)) {
+      return;
+    }
+
+    _alipayHandlerController = controller;
+    controller.addJavaScriptHandler(
+      handlerName: 'alipayLink',
+      callback: (args) {
+        if (args.isNotEmpty && args[0] is String) {
+          final url = args[0] as String;
+          if (url.startsWith('alipays://')) {
+            _handleAlipayUrl(url);
+          }
+        }
+        return true;
+      },
+    );
+  }
+
+  // 监听页面中的支付宝链接。脚本需要幂等，避免 onLoadStop 多次触发时重复挂监听器。
   void _setupAlipayLinkListener() async {
     if (_webViewController != null) {
       await _webViewController!.evaluateJavascript(
         source: '''
         (function() {
-          // 拦截所有的a标签点击
+          if (window.__superhutAlipayBridgeInstalled) {
+            return;
+          }
+          window.__superhutAlipayBridgeInstalled = true;
+
+          function notifyAlipay(url) {
+            if (!url || !url.toString().startsWith('alipays://')) {
+              return false;
+            }
+            if (
+              window.flutter_inappwebview &&
+              window.flutter_inappwebview.callHandler
+            ) {
+              window.flutter_inappwebview.callHandler('alipayLink', url.toString());
+            }
+            return true;
+          }
+
           document.addEventListener('click', function(e) {
             var target = e.target;
-            // 遍历父元素找到最近的a标签
             while(target && target.tagName !== 'A') {
               target = target.parentElement;
             }
-            
-            if (target && target.href) {
-              var url = target.href;
-              if (url.startsWith('alipays://')) {
-                // 通知Flutter处理支付宝链接
-                window.flutter_inappwebview.callHandler('alipayLink', url);
-                e.preventDefault();
-                return false;
-              }
+
+            if (target && target.href && notifyAlipay(target.href)) {
+              e.preventDefault();
+              return false;
             }
           }, true);
-          
-          // 拦截window.location变更
+
           var originalAssign = window.location.assign;
           window.location.assign = function(url) {
-            if (url && url.toString().startsWith('alipays://')) {
-              window.flutter_inappwebview.callHandler('alipayLink', url);
+            if (notifyAlipay(url)) {
               return;
             }
             originalAssign.apply(this, arguments);
           };
-          
+
           var originalReplace = window.location.replace;
           window.location.replace = function(url) {
-            if (url && url.toString().startsWith('alipays://')) {
-              window.flutter_inappwebview.callHandler('alipayLink', url);
+            if (notifyAlipay(url)) {
               return;
             }
             originalReplace.apply(this, arguments);
           };
-          
-          // 拦截window.open
+
           var originalOpen = window.open;
           window.open = function(url, target, features) {
-            if (url && url.toString().startsWith('alipays://')) {
-              window.flutter_inappwebview.callHandler('alipayLink', url);
+            if (notifyAlipay(url)) {
               return null;
             }
             return originalOpen.call(this, url, target, features);
           };
-          
-          // 监控DOM变化，查找动态添加的支付宝链接
-          var observer = new MutationObserver(function(mutations) {
-            mutations.forEach(function(mutation) {
-              if (mutation.type === 'attributes' && mutation.attributeName === 'href') {
-                var element = mutation.target;
-                if (element.href && element.href.startsWith('alipays://')) {
-                  element.addEventListener('click', function(e) {
-                    window.flutter_inappwebview.callHandler('alipayLink', element.href);
-                    e.preventDefault();
-                  });
-                }
-              }
-            });
-          });
-          
-          observer.observe(document.body, {
-            attributes: true,
-            attributeFilter: ['href'],
-            childList: true,
-            subtree: true
-          });
         })();
       ''',
-      );
-
-      // 注册处理程序来接收JavaScript的回调
-      _webViewController!.addJavaScriptHandler(
-        handlerName: 'alipayLink',
-        callback: (args) {
-          if (args.isNotEmpty && args[0] is String) {
-            String url = args[0];
-            if (url.startsWith('alipays://')) {
-              // 不要尝试使用_handleAlipayUrl的返回值
-              _handleAlipayUrl(url);
-            }
-          }
-          // 确保回调始终返回一个值给JavaScript
-          return true;
-        },
       );
     }
   }
 
   Future<void> _handleAlipayUrl(String url) async {
+    if (_isLaunchingAlipay) {
+      return;
+    }
+
+    _isLaunchingAlipay = true;
     try {
       final Uri uri = Uri.parse(url);
       final navigator = Navigator.of(context);
-      AppLogger.debug('Attempting to open Alipay url: $url');
-      final didLaunch = await launchUrl(uri);
+      AppLogger.debug(
+        'Attempting to open Alipay url: ${describeHutUrlForLog(url)}',
+      );
+      final opener = widget.openExternalUrl ?? launchUrl;
+      final didLaunch = await opener(uri);
       if (!mounted) {
         return;
       }
@@ -510,22 +682,28 @@ class _Type2WebviewState extends State<Type2Webview> {
       if (!didLaunch) {
         showAppSnackBar(
           context,
-          message: '无法打开支付宝: $url',
+          message: '无法打开支付宝，请稍后重试',
           type: AppSnackBarType.error,
         );
         return;
       }
 
       navigator.pop();
-    } catch (e) {
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open Alipay url from Type2 WebView',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         showAppSnackBar(
           context,
-          message: '打开链接失败：$e',
+          message: '无法打开支付宝，请稍后重试',
           type: AppSnackBarType.error,
         );
       }
-      AppLogger.debug('Error launching URL: $e');
+    } finally {
+      _isLaunchingAlipay = false;
     }
   }
 
@@ -533,233 +711,183 @@ class _Type2WebviewState extends State<Type2Webview> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return PopScope(
-      canPop: !_canGoBack,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-
-        final navigator = Navigator.of(context);
-        final shouldPop = await _handleBackPressed();
-        if (!mounted || !shouldPop) {
-          return;
-        }
-        navigator.pop();
-      },
+    return ValueListenableBuilder<bool>(
+      valueListenable: _canGoBackNotifier,
       child: SafeArea(
         child: Scaffold(
           extendBodyBehindAppBar: true,
           // 移除AppBar，使用Stack来实现悬浮返回按钮
-          body: Stack(
-            children: [
-              // WebView占满整个屏幕
-              Positioned.fill(
-                child: EnhancedFutureBuilder(
-                  future: _initialSetupFuture,
-                  rememberFutureResult: true,
-                  whenDone: (v) {
-                    if (v != true) {
-                      return HutServiceAuthErrorPanel(
-                        message: _setupErrorMessage ?? '智慧工大登录状态已失效，请重新登录一次。',
-                        onLogin: _openLoginAndRetry,
+          body: SizedBox.expand(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                // WebView占满整个屏幕
+                Positioned.fill(
+                  child: ValueListenableBuilder<Future<bool>>(
+                    valueListenable: _initialSetupFutureNotifier,
+                    builder: (context, initialSetupFuture, _) {
+                      return EnhancedFutureBuilder(
+                        future: initialSetupFuture,
+                        rememberFutureResult: true,
+                        whenDone: (v) {
+                          if (v != true) {
+                            return HutServiceAuthErrorPanel(
+                              message:
+                                  _setupErrorMessage ?? '智慧工大登录状态已失效，请重新登录一次。',
+                              onLogin: _openLoginAndRetry,
+                            );
+                          }
+
+                          return InAppWebView(
+                            initialUrlRequest: URLRequest(
+                              url: WebUri(resultUrl),
+                              headers: headerMap, // 自定义 Header
+                            ),
+                            initialSettings: InAppWebViewSettings(
+                              javaScriptEnabled: true,
+                              geolocationEnabled: true,
+                              // 启用地理位置功能
+                              supportZoom: true,
+                              mediaPlaybackRequiresUserGesture: false,
+                              // 允许自动播放媒体
+                              allowsInlineMediaPlayback: true,
+                              useShouldOverrideUrlLoading: true,
+                              useOnLoadResource: true,
+                            ),
+                            onGeolocationPermissionsShowPrompt: (
+                              controller,
+                              origin,
+                            ) async {
+                              // 直接允许所有地理位置请求，不再弹出系统对话框
+                              return GeolocationPermissionShowPromptResponse(
+                                origin: origin,
+                                allow: true,
+                                retain: true,
+                              );
+                            },
+                            onLoadStart: (controller, url) {
+                              _setPageLoading(true);
+                              AppLogger.debug(
+                                'Type2 start loading: ${describeHutUrlForLog(url.toString())}',
+                              );
+                            },
+                            onWebViewCreated: (controller) {
+                              _webViewController = controller;
+                              _registerAlipayJavaScriptHandler(controller);
+                            },
+                            onLoadStop: (controller, url) {
+                              _handlePossibleLoginRedirect(url);
+                              _setPageLoading(false);
+                              _updateCanGoBackState();
+                              _removeNavigationElement();
+                              _setupAlipayLinkListener(); // 添加支付宝链接监听
+                              AppLogger.debug(
+                                'Type2 stop loading: ${describeHutUrlForLog(url.toString())}',
+                              );
+                            },
+                            onUpdateVisitedHistory: (
+                              controller,
+                              url,
+                              androidIsReload,
+                            ) {
+                              _handlePossibleLoginRedirect(url);
+                              _updateCanGoBackState();
+                              AppLogger.debug(
+                                'Type2 history updated: ${describeHutUrlForLog(url.toString())}',
+                              );
+                            },
+                            shouldOverrideUrlLoading: (
+                              controller,
+                              navigationAction,
+                            ) async {
+                              final url =
+                                  navigationAction.request.url.toString();
+
+                              // 检查是否是支付宝协议链接
+                              if (url.startsWith('alipays://')) {
+                                _handleAlipayUrl(url);
+                                return NavigationActionPolicy.CANCEL;
+                              }
+
+                              return _rewriteLegacyPortalNavigation(
+                                controller,
+                                navigationAction,
+                              );
+                            },
+                          );
+                        },
+                        whenNotDone: Center(
+                          child: AppLoadingIndicator(
+                            color: colorScheme.primary,
+                            size: 40,
+                          ),
+                        ),
                       );
-                    }
-
-                    return InAppWebView(
-                      initialUrlRequest: URLRequest(
-                        url: WebUri(resultUrl),
-                        headers: headerMap, // 自定义 Header
-                      ),
-                      initialSettings: InAppWebViewSettings(
-                        javaScriptEnabled: true,
-                        geolocationEnabled: true,
-                        // 启用地理位置功能
-                        supportZoom: true,
-                        mediaPlaybackRequiresUserGesture: false,
-                        // 允许自动播放媒体
-                        allowsInlineMediaPlayback: true,
-                        useShouldOverrideUrlLoading: true,
-                        useOnLoadResource: true,
-                      ),
-                      onGeolocationPermissionsShowPrompt: (
-                        controller,
-                        origin,
-                      ) async {
-                        // 直接允许所有地理位置请求，不再弹出系统对话框
-                        return GeolocationPermissionShowPromptResponse(
-                          origin: origin,
-                          allow: true,
-                          retain: true,
-                        );
-                      },
-                      onLoadStart: (controller, url) {
-                        setState(() {
-                          _isPageLoading = true;
-                        });
-                        AppLogger.debug(
-                          'Type2 start loading: ${describeHutUrlForLog(url.toString())}',
-                        );
-                      },
-                      onWebViewCreated: (controller) {
-                        _webViewController = controller;
-                      },
-                      onLoadStop: (controller, url) {
-                        _handlePossibleLoginRedirect(url);
-                        setState(() {
-                          _isPageLoading = false;
-                        });
-                        _updateCanGoBackState();
-                        _removeNavigationElement();
-                        _setupAlipayLinkListener(); // 添加支付宝链接监听
-                        AppLogger.debug(
-                          'Type2 stop loading: ${describeHutUrlForLog(url.toString())}',
-                        );
-                      },
-                      onUpdateVisitedHistory: (
-                        controller,
-                        url,
-                        androidIsReload,
-                      ) {
-                        _handlePossibleLoginRedirect(url);
-                        _updateCanGoBackState();
-                        AppLogger.debug(
-                          'Type2 history updated: ${describeHutUrlForLog(url.toString())}',
-                        );
-                      },
-                      shouldOverrideUrlLoading: (
-                        controller,
-                        navigationAction,
-                      ) async {
-                        final url = navigationAction.request.url.toString();
-
-                        // 检查是否是支付宝协议链接
-                        if (url.startsWith('alipays://')) {
-                          _handleAlipayUrl(url);
-                          return NavigationActionPolicy.CANCEL;
-                        }
-
-                        return _rewriteLegacyPortalNavigation(
-                          controller,
-                          navigationAction,
-                        );
-                      },
-                    );
-                  },
-                  whenNotDone: Center(
-                    child: AppLoadingIndicator(
-                      color: colorScheme.primary,
-                      size: 40,
-                    ),
-                  ),
-                ),
-              ),
-
-              // 悬浮返回按钮，放在左上角，不会阻挡其他内容的点击
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: colorScheme.floatingSurfaceStrong,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: colorScheme.subtleBorder),
-                  ),
-                  child: IconButton(
-                    icon: Icon(
-                      Ionicons.arrow_back_circle_outline,
-                      color: colorScheme.onSurface,
-                      size: 28,
-                    ),
-                    onPressed: () async {
-                      final navigator = Navigator.of(context);
-                      if (!await _handleBackPressed()) {
-                        return;
-                      }
-                      if (!mounted) {
-                        return;
-                      }
-                      navigator.pop();
                     },
                   ),
                 ),
-              ),
 
-              // 网页加载指示器
-              if (_isPageLoading)
-                Positioned.fill(
+                // 悬浮返回按钮，放在左上角，不会阻挡其他内容的点击
+                Positioned(
+                  top: 8,
+                  left: 8,
                   child: Container(
-                    color: colorScheme.overlayScrim,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.floatingSurfaceStrong,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: colorScheme.subtleBorder),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AppLoadingIndicator(
-                              color: colorScheme.primary,
-                              size: 40,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              '加载中...',
-                              style: TextStyle(
-                                color: colorScheme.onSurface,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
+                    decoration: BoxDecoration(
+                      color: colorScheme.floatingSurfaceStrong,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: colorScheme.subtleBorder),
+                    ),
+                    child: IconButton(
+                      onPressed: _handleBackNavigationRequest,
+                      icon: Icon(
+                        Ionicons.arrow_back_circle_outline,
+                        color: colorScheme.onSurface,
+                        size: 28,
                       ),
                     ),
                   ),
                 ),
-              // 权限请求指示器
-              if (_isRequestingPermission)
-                Positioned.fill(
-                  child: Container(
-                    color: colorScheme.overlayScrim,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          color: colorScheme.floatingSurfaceStrong,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: colorScheme.subtleBorder),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AppLoadingIndicator(color: colorScheme.primary),
-                            const SizedBox(height: 16),
-                            Text(
-                              '请求位置权限...',
-                              style: TextStyle(
-                                color: colorScheme.onSurface,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+
+                // 网页加载指示器
+                ValueListenableBuilder<bool>(
+                  valueListenable: _isPageLoadingNotifier,
+                  builder: (context, isPageLoading, _) {
+                    if (!isPageLoading) {
+                      return const SizedBox.shrink();
+                    }
+                    return const Positioned.fill(
+                      child: HutWebViewLoadingOverlay(message: '加载中...'),
+                    );
+                  },
                 ),
-            ],
+                // 权限请求指示器
+                ValueListenableBuilder<bool>(
+                  valueListenable: _isRequestingPermissionNotifier,
+                  builder: (context, isRequestingPermission, _) {
+                    if (!isRequestingPermission) {
+                      return const SizedBox.shrink();
+                    }
+                    return const Positioned.fill(
+                      child: HutWebViewLoadingOverlay(message: '请求位置权限...'),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
+      builder: (context, canGoBack, child) {
+        return PopScope(
+          canPop: !canGoBack,
+          onPopInvokedWithResult: (didPop, result) async {
+            if (didPop) return;
+
+            await _handleBackNavigationRequest();
+          },
+          child: child!,
+        );
+      },
     );
   }
 }

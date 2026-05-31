@@ -1,13 +1,18 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/services/app_logger.dart';
+import '../../core/ui/app_page_route.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 
-class TrustCenterPage extends StatelessWidget {
-  const TrustCenterPage({super.key});
+typedef TrustUrlOpener = Future<bool> Function(Uri url);
+
+class TrustCenterPage extends StatefulWidget {
+  const TrustCenterPage({super.key, this.openUrl});
+
+  final TrustUrlOpener? openUrl;
 
   static final Uri _repoUrl = Uri.parse('https://github.com/rccuu/superhut');
   static final Uri _releaseUrl = Uri.parse(
@@ -18,19 +23,52 @@ class TrustCenterPage extends StatelessWidget {
   );
 
   static Route<void> route() {
-    return MaterialPageRoute<void>(
-      builder: (context) => const TrustCenterPage(),
-    );
+    return buildAppPageRoute<void>(builder: (_) => const TrustCenterPage());
   }
 
+  @override
+  State<TrustCenterPage> createState() => _TrustCenterPageState();
+}
+
+class _TrustCenterPageState extends State<TrustCenterPage> {
+  bool _isOpeningUrl = false;
+
   Future<void> _openUrl(BuildContext context, Uri url) async {
-    final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
-    if (!opened && context.mounted) {
+    if (_isOpeningUrl) {
+      return;
+    }
+
+    _isOpeningUrl = true;
+    try {
+      final opener = widget.openUrl;
+      final opened =
+          opener != null
+              ? await opener(url)
+              : await launchUrl(url, mode: LaunchMode.externalApplication);
+      if (!opened && context.mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开链接，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open trust page link',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!context.mounted) {
+        return;
+      }
+
       showAppSnackBar(
         context,
-        message: '无法打开链接：$url',
+        message: '无法打开链接，请稍后重试',
         type: AppSnackBarType.error,
       );
+    } finally {
+      _isOpeningUrl = false;
     }
   }
 
@@ -39,8 +77,9 @@ class TrustCenterPage extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final topInset = MediaQuery.paddingOf(context).top;
-    final useLiteLayout =
-        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    final useLiteLayout = AppGlassPerformanceScope.shouldUseLiteLayoutOf(
+      context,
+    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -251,12 +290,18 @@ class TrustCenterPage extends StatelessWidget {
                         runSpacing: 10,
                         children: [
                           FilledButton.tonalIcon(
-                            onPressed: () => _openUrl(context, _repoUrl),
+                            onPressed:
+                                () =>
+                                    _openUrl(context, TrustCenterPage._repoUrl),
                             icon: const Icon(Ionicons.logo_github, size: 18),
                             label: const Text('打开仓库'),
                           ),
                           FilledButton.tonalIcon(
-                            onPressed: () => _openUrl(context, _releaseUrl),
+                            onPressed:
+                                () => _openUrl(
+                                  context,
+                                  TrustCenterPage._releaseUrl,
+                                ),
                             icon: const Icon(
                               Ionicons.download_outline,
                               size: 18,
@@ -264,7 +309,9 @@ class TrustCenterPage extends StatelessWidget {
                             label: const Text('查看发布'),
                           ),
                           FilledButton.tonalIcon(
-                            onPressed: () => _openUrl(context, _docUrl),
+                            onPressed:
+                                () =>
+                                    _openUrl(context, TrustCenterPage._docUrl),
                             icon: const Icon(
                               Ionicons.document_text_outline,
                               size: 18,

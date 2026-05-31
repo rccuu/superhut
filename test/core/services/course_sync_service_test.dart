@@ -64,4 +64,39 @@ void main() {
     expect(service.state.message, '登录信息已失效，请重新登录后再试');
     expect(service.state.eventId, 1);
   });
+
+  testWidgets(
+    'CourseSyncService terminal reset timer only resets the latest terminal state',
+    (tester) async {
+      final service = CourseSyncService(
+        terminalStateDuration: const Duration(seconds: 1),
+        runner: (_, {onProgress}) async {
+          fail('runner should not be called when token is empty');
+        },
+      );
+      addTearDown(service.dispose);
+
+      final firstStarted = await service.startManualSync('');
+      expect(firstStarted, isFalse);
+      expect(service.state.status, CourseSyncTaskStatus.failure);
+      expect(service.state.eventId, 1);
+
+      await tester.pump(const Duration(milliseconds: 500));
+
+      final secondStarted = await service.startManualSync('');
+      expect(secondStarted, isFalse);
+      expect(service.state.status, CourseSyncTaskStatus.failure);
+      expect(service.state.eventId, 2);
+
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(service.state.status, CourseSyncTaskStatus.failure);
+      expect(service.state.eventId, 2);
+
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(service.state.status, CourseSyncTaskStatus.idle);
+      expect(service.state.eventId, 0);
+    },
+  );
 }

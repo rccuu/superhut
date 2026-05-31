@@ -1,17 +1,44 @@
 import 'dart:async';
 
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
 import '../../core/services/app_logger.dart';
+import '../../core/ui/app_bottom_sheet.dart';
 import '../../core/ui/app_loading_indicator.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import 'logic.dart';
 
+typedef ScoreSemesterLoader = Future<SemesterListResult> Function();
+typedef ScoreResultLoader =
+    Future<ScoreLoadResult> Function(String semesterId, {bool persistSummary});
+typedef ScoreBottomSheetPresenter =
+    Future<T?> Function<T>({
+      required BuildContext context,
+      required WidgetBuilder builder,
+      bool expand,
+      Color? backgroundColor,
+      Color? barrierColor,
+      Color? transitionBackgroundColor,
+      Radius? topRadius,
+      BoxShadow? shadow,
+    });
+
 class ScorePage extends StatefulWidget {
-  const ScorePage({super.key});
+  const ScorePage({
+    super.key,
+    this.loadSemesters,
+    this.loadScore,
+    this.showBottomSheet,
+  });
+
+  final ScoreSemesterLoader? loadSemesters;
+  final ScoreResultLoader? loadScore;
+  final ScoreBottomSheetPresenter? showBottomSheet;
 
   @override
   State<ScorePage> createState() => _ScorePageState();
@@ -29,55 +56,192 @@ class _ScorePageState extends State<ScorePage> {
   String selectedId = 'all';
   bool first = true;
   bool _isRefreshingSelection = false;
+  bool _isSemesterPickerOpen = false;
+  bool _isScoreDetailOpen = false;
   String? _errorMessage;
   final Map<String, ScoreLoadResult> _scoreCache = <String, ScoreLoadResult>{};
+  final Map<_ScoreLoadKey, Future<ScoreLoadResult>> _scoreLoads =
+      <_ScoreLoadKey, Future<ScoreLoadResult>>{};
+  final ValueNotifier<_ScoreContentState> _contentStateNotifier =
+      ValueNotifier<_ScoreContentState>(const _ScoreContentState.initial());
+  final ValueNotifier<_ScoreSelectionState> _selectionStateNotifier =
+      ValueNotifier<_ScoreSelectionState>(
+        const _ScoreSelectionState(selectedId: 'all', isRefreshing: false),
+      );
   bool _isSemesterProbeStarted = false;
+  int _selectionRefreshGeneration = 0;
+  late final Future<void> _initialScoreFuture = getTimeList();
 
-  void _applyScoreData(ScoreLoadResult scoreData, {String? semesterId}) {
-    setState(() {
-      if (semesterId != null) {
-        selectedId = semesterId;
-      }
-      scoreList = scoreData.achievement;
-      zxf = scoreData.yxzxf;
-      zxfjd = scoreData.zxfjd;
-      pjjd = scoreData.pjxfjd;
-      _errorMessage = scoreData.errorMessage;
-    });
+  @override
+  void dispose() {
+    _contentStateNotifier.dispose();
+    _selectionStateNotifier.dispose();
+    super.dispose();
+  }
+
+  void _assignScoreData(ScoreLoadResult scoreData, {String? semesterId}) {
+    if (semesterId != null) {
+      selectedId = semesterId;
+    }
+    scoreList = scoreData.achievement;
+    zxf = scoreData.yxzxf;
+    zxfjd = scoreData.zxfjd;
+    pjjd = scoreData.pjxfjd;
+    _errorMessage = scoreData.errorMessage;
+  }
+
+  void _setScoreData(ScoreLoadResult scoreData, {String? semesterId}) {
+    _assignScoreData(scoreData, semesterId: semesterId);
+    _syncScoreContentState();
+    _syncSelectionState();
+  }
+
+  void _syncScoreContentState() {
+    final nextState = _ScoreContentState(
+      selectedId: selectedId,
+      scoreList: scoreList,
+      zxf: zxf,
+      zxfjd: zxfjd,
+      pjjd: pjjd,
+      errorMessage: _errorMessage,
+    );
+    if (_contentStateNotifier.value == nextState) {
+      return;
+    }
+
+    _contentStateNotifier.value = nextState;
+  }
+
+  void _syncSelectionState() {
+    final nextState = _ScoreSelectionState(
+      selectedId: selectedId,
+      isRefreshing: _isRefreshingSelection,
+    );
+    if (_selectionStateNotifier.value == nextState) {
+      return;
+    }
+
+    _selectionStateNotifier.value = nextState;
   }
 
   Future<void> _refreshScoresForSelection(String semesterId) async {
+    if (semesterId == selectedId) {
+      return;
+    }
+
+    final generation = ++_selectionRefreshGeneration;
     final cached = _scoreCache[semesterId];
     if (cached != null) {
-      _applyScoreData(cached, semesterId: semesterId);
-      return;
-    }
-
-    setState(() {
-      selectedId = semesterId;
-      _isRefreshingSelection = true;
-    });
-
-    final scoreData = await _loadScoreForSemester(semesterId);
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
       _isRefreshingSelection = false;
-    });
-    _applyScoreData(scoreData, semesterId: semesterId);
+      _assignScoreData(cached, semesterId: semesterId);
+      _syncScoreContentState();
+      _syncSelectionState();
+      return;
+    }
+
+    selectedId = semesterId;
+    _isRefreshingSelection = true;
+    _syncSelectionState();
+
+    final ScoreLoadResult scoreData;
+    try {
+      scoreData = await _loadScoreForSemester(semesterId);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to refresh score selection',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted || generation != _selectionRefreshGeneration) {
+        return;
+      }
+      _isRefreshingSelection = false;
+      _assignScoreData(
+        const ScoreLoadResult(
+          achievement: [],
+          yxzxf: '-',
+          zxfjd: '-',
+          pjxfjd: '-',
+          errorMessage: '成绩加载失败，请稍后重试',
+        ),
+        semesterId: semesterId,
+      );
+      _syncScoreContentState();
+      _syncSelectionState();
+      showAppSnackBar(
+        context,
+        message: '成绩加载失败，请稍后重试',
+        type: AppSnackBarType.error,
+      );
+      return;
+    }
+    if (!mounted || generation != _selectionRefreshGeneration) {
+      return;
+    }
+
+    _isRefreshingSelection = false;
+    _assignScoreData(scoreData, semesterId: semesterId);
+    _syncScoreContentState();
+    _syncSelectionState();
   }
 
-  Future<ScoreLoadResult> _loadScoreForSemester(String semesterId) async {
+  Future<ScoreLoadResult> _loadScoreForSemester(
+    String semesterId, {
+    bool persistSummary = true,
+  }) async {
     final cached = _scoreCache[semesterId];
     if (cached != null) {
       return cached;
     }
 
-    final scoreData = await getScore(semesterId == 'all' ? '' : semesterId);
-    _scoreCache[semesterId] = scoreData;
+    final loadKey = _ScoreLoadKey(
+      semesterId: semesterId,
+      persistSummary: persistSummary,
+    );
+    final inFlight = _scoreLoads[loadKey];
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final load = _loadAndCacheScoreForSemester(
+      semesterId,
+      persistSummary: persistSummary,
+    );
+    _scoreLoads[loadKey] = load;
+    try {
+      return await load;
+    } finally {
+      if (identical(_scoreLoads[loadKey], load)) {
+        _scoreLoads.remove(loadKey);
+      }
+    }
+  }
+
+  Future<ScoreLoadResult> _loadAndCacheScoreForSemester(
+    String semesterId, {
+    required bool persistSummary,
+  }) async {
+    final scoreData = await (widget.loadScore ?? getScore)(
+      semesterId == 'all' ? '' : semesterId,
+      persistSummary: persistSummary,
+    );
+    if (mounted) {
+      _scoreCache[semesterId] = scoreData;
+    }
     return scoreData;
+  }
+
+  @visibleForTesting
+  Future<ScoreLoadResult> debugLoadScoreForSemester(
+    String semesterId, {
+    bool persistSummary = true,
+  }) {
+    return _loadScoreForSemester(semesterId, persistSummary: persistSummary);
+  }
+
+  @visibleForTesting
+  Future<void> debugRefreshScoresForSelection(String semesterId) {
+    return _refreshScoresForSelection(semesterId);
   }
 
   Future<List<String>> _filterSemestersWithScores(
@@ -86,7 +250,26 @@ class _ScorePageState extends State<ScorePage> {
     final availableSemesterIds = <String>[];
 
     for (final semester in semesterIds) {
-      final scoreData = await _loadScoreForSemester(semester);
+      if (!mounted) {
+        return availableSemesterIds;
+      }
+      final ScoreLoadResult scoreData;
+      try {
+        scoreData = await _loadScoreForSemester(
+          semester,
+          persistSummary: false,
+        );
+      } catch (error, stackTrace) {
+        AppLogger.error(
+          'Failed to probe score data for semester $semester',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        return semesterIds;
+      }
+      if (!mounted) {
+        return availableSemesterIds;
+      }
       if (scoreData.errorMessage != null) {
         AppLogger.debug(
           'Failed to probe score data for semester $semester, keeping full semester list.',
@@ -114,23 +297,37 @@ class _ScorePageState extends State<ScorePage> {
 
     final shouldResetSelection =
         selectedId != 'all' && !filteredSemesterIds.contains(selectedId);
+    if (!shouldResetSelection && listEquals(semesterId, filteredSemesterIds)) {
+      return;
+    }
 
-    setState(() {
+    final cachedAllScoreData = shouldResetSelection ? _scoreCache['all'] : null;
+    if (cachedAllScoreData != null) {
       semesterId = filteredSemesterIds;
-      if (shouldResetSelection) {
-        selectedId = 'all';
-      }
-    });
+      _assignScoreData(cachedAllScoreData, semesterId: 'all');
+      _syncScoreContentState();
+      _syncSelectionState();
+      return;
+    }
+
+    semesterId = filteredSemesterIds;
+    if (shouldResetSelection) {
+      selectedId = 'all';
+      _syncScoreContentState();
+    }
+    if (shouldResetSelection) {
+      _syncSelectionState();
+    }
 
     if (!shouldResetSelection) {
       return;
     }
 
     final allScoreData = await _loadScoreForSemester('all');
-    if (!mounted) {
+    if (!mounted || selectedId != 'all') {
       return;
     }
-    _applyScoreData(allScoreData, semesterId: 'all');
+    _setScoreData(allScoreData, semesterId: 'all');
   }
 
   Future<void> getTimeList() async {
@@ -138,18 +335,18 @@ class _ScorePageState extends State<ScorePage> {
       return;
     }
 
-    final timeData = await semesterIdfc();
+    final timeData = await (widget.loadSemesters ?? semesterIdfc)();
     if (!mounted) {
       return;
     }
-    setState(() {
+    if (timeData.errorMessage != null) {
       semesterId = timeData.idList;
       nowSemesterId = timeData.nowId.isEmpty ? 'all' : timeData.nowId;
       _errorMessage = timeData.errorMessage;
       selectedId = 'all';
-    });
-    if (timeData.errorMessage != null) {
       first = false;
+      _syncScoreContentState();
+      _syncSelectionState();
       return;
     }
 
@@ -158,23 +355,28 @@ class _ScorePageState extends State<ScorePage> {
       return;
     }
 
-    _applyScoreData(scoreData, semesterId: 'all');
-    unawaited(_probeAvailableSemesters(timeData.idList));
+    semesterId = timeData.idList;
+    nowSemesterId = timeData.nowId.isEmpty ? 'all' : timeData.nowId;
+    selectedId = 'all';
+    _assignScoreData(scoreData, semesterId: 'all');
     first = false;
+    _syncScoreContentState();
+    _syncSelectionState();
+    unawaited(_probeAvailableSemesters(timeData.idList));
   }
 
   String _formatSemesterLabel(String value) {
-    final parts = value.split('-');
-    if (parts.length != 3) {
+    final parts = _parseSemesterLabelParts(value);
+    if (parts == null) {
       return value;
     }
 
-    final termLabel = switch (parts[2]) {
+    final termLabel = switch (parts.term) {
       '1' => '上学期',
       '2' => '下学期',
-      _ => '${parts[2]}学期',
+      _ => '${parts.term}学期',
     };
-    return '${parts[0]}-${parts[1]} · $termLabel';
+    return '${parts.startYear}-${parts.endYear} · $termLabel';
   }
 
   String _compactSemesterLabel(String value) {
@@ -182,21 +384,68 @@ class _ScorePageState extends State<ScorePage> {
       return '全部学期';
     }
 
-    final parts = value.split('-');
-    if (parts.length != 3) {
+    final parts = _parseSemesterLabelParts(value);
+    if (parts == null) {
       return value;
     }
 
-    final termLabel = switch (parts[2]) {
+    final termLabel = switch (parts.term) {
       '1' => '上',
       '2' => '下',
-      _ => parts[2],
+      _ => parts.term,
     };
-    return '${parts[0]}-${parts[1]} $termLabel';
+    return '${parts.startYear}-${parts.endYear} $termLabel';
+  }
+
+  ({String startYear, String endYear, String term})? _parseSemesterLabelParts(
+    String value,
+  ) {
+    var firstDash = -1;
+    var secondDash = -1;
+    for (var index = 0; index < value.length; index++) {
+      if (value.codeUnitAt(index) != 0x2D) {
+        continue;
+      }
+      if (firstDash == -1) {
+        firstDash = index;
+      } else if (secondDash == -1) {
+        secondDash = index;
+      } else {
+        return null;
+      }
+    }
+
+    if (firstDash == -1 || secondDash == -1) {
+      return null;
+    }
+
+    return (
+      startYear: value.substring(0, firstDash),
+      endYear: value.substring(firstDash + 1, secondDash),
+      term: value.substring(secondDash + 1),
+    );
   }
 
   double? _numericFraction(String text) {
-    final normalized = text.replaceAll(RegExp(r'[^0-9.]'), '');
+    StringBuffer? normalizedBuffer;
+    for (var index = 0; index < text.length; index++) {
+      final codeUnit = text.codeUnitAt(index);
+      final isNumeric = codeUnit >= 0x30 && codeUnit <= 0x39;
+      final isDecimalPoint = codeUnit == 0x2E;
+      if (isNumeric || isDecimalPoint) {
+        normalizedBuffer?.writeCharCode(codeUnit);
+        continue;
+      }
+
+      normalizedBuffer ??=
+          index == 0 ? StringBuffer() : StringBuffer(text.substring(0, index));
+    }
+
+    if (normalizedBuffer == null) {
+      return text.isEmpty ? null : double.tryParse(text);
+    }
+
+    final normalized = normalizedBuffer.toString();
     if (normalized.isEmpty) {
       return null;
     }
@@ -260,10 +509,25 @@ class _ScorePageState extends State<ScorePage> {
     );
   }
 
-  void _showScoreDetail(Score score) {
-    showModalBottomSheet<void>(
+  Future<T?> _showScoreSheet<T>({
+    required WidgetBuilder builder,
+    Color? backgroundColor,
+  }) {
+    final presenter = widget.showBottomSheet ?? showAppAdaptiveBottomSheet;
+    return presenter<T>(
       context: context,
-      isScrollControlled: true,
+      backgroundColor: backgroundColor,
+      builder: builder,
+    );
+  }
+
+  void _showScoreDetail(Score score) {
+    if (_isScoreDetailOpen) {
+      return;
+    }
+
+    _isScoreDetailOpen = true;
+    final sheet = _showScoreSheet<void>(
       backgroundColor: Colors.transparent,
       builder: (context) {
         return _ScoreDetailSheet(
@@ -272,24 +536,41 @@ class _ScorePageState extends State<ScorePage> {
         );
       },
     );
+    unawaited(_trackScoreDetailSheet(sheet));
+  }
+
+  Future<void> _trackScoreDetailSheet(Future<void> sheet) async {
+    try {
+      await sheet;
+    } finally {
+      _isScoreDetailOpen = false;
+    }
   }
 
   Future<void> _showSemesterPicker() async {
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return _SemesterPickerSheet(
-          accent: _scoreAccent,
-          semesterIds: semesterId,
-          selectedId: selectedId,
-          formatSemesterLabel: _formatSemesterLabel,
-        );
-      },
-    );
+    if (_isSemesterPickerOpen) {
+      return;
+    }
 
-    if (result == null || result == selectedId) {
+    _isSemesterPickerOpen = true;
+    final String? result;
+    try {
+      result = await _showScoreSheet<String>(
+        backgroundColor: Colors.transparent,
+        builder: (context) {
+          return _SemesterPickerSheet(
+            accent: _scoreAccent,
+            semesterIds: semesterId,
+            selectedId: selectedId,
+            formatSemesterLabel: _formatSemesterLabel,
+          );
+        },
+      );
+    } finally {
+      _isSemesterPickerOpen = false;
+    }
+
+    if (!mounted || result == null || result == selectedId) {
       return;
     }
     await _refreshScoresForSelection(result);
@@ -298,7 +579,7 @@ class _ScorePageState extends State<ScorePage> {
   @override
   Widget build(BuildContext context) {
     return EnhancedFutureBuilder(
-      future: getTimeList(),
+      future: _initialScoreFuture,
       rememberFutureResult: true,
       whenDone: (_) => _buildScaffold(context),
       whenNotDone: _buildLoadingScaffold(context),
@@ -374,57 +655,15 @@ class _ScorePageState extends State<ScorePage> {
         style: AppGlassBackgroundStyle.soft,
         child: Stack(
           children: [
-            ListView(
-              padding: EdgeInsets.fromLTRB(16, topInset + 76, 16, 28),
-              children: [
-                _ScoreOverviewCard(
-                  accent: _scoreAccent,
-                  zxf: zxf,
-                  zxfjd: zxfjd,
-                  pjjd: pjjd,
-                  courseCount: scoreList.length,
-                ),
-                const SizedBox(height: 16),
-                _SectionHeader(
-                  title: '课程成绩',
-                  subtitle:
-                      _errorMessage != null
-                          ? '当前结果未能正常加载'
-                          : scoreList.isEmpty
-                          ? '暂无成绩记录'
-                          : '共 ${scoreList.length} 门课程',
-                ),
-                const SizedBox(height: 8),
-                if (_errorMessage != null)
-                  _FeatureEmptyState(
-                    icon: Ionicons.alert_circle_outline,
-                    accent: Theme.of(context).colorScheme.error,
-                    title: '成绩加载失败',
-                    subtitle: _errorMessage!,
-                  )
-                else if (scoreList.isEmpty)
-                  _FeatureEmptyState(
-                    icon: Ionicons.receipt_outline,
-                    accent: _scoreAccent,
-                    title: '还没有成绩记录',
-                    subtitle:
-                        selectedId == 'all'
-                            ? '当前账号暂未查询到任何成绩。'
-                            : '这个学期目前没有可展示的成绩条目。',
-                  )
-                else
-                  ...scoreList.map((score) {
-                    final palette = _paletteForScore(context, score);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _ScoreCourseCard(
-                        score: score,
-                        palette: palette,
-                        onTap: () => _showScoreDetail(score),
-                      ),
-                    );
-                  }),
-              ],
+            ValueListenableBuilder<_ScoreContentState>(
+              valueListenable: _contentStateNotifier,
+              builder: (context, contentState, _) {
+                return _buildScoreContentScrollView(
+                  context,
+                  topInset: topInset,
+                  contentState: contentState,
+                );
+              },
             ),
             Positioned(
               top: topInset + 12,
@@ -436,11 +675,18 @@ class _ScorePageState extends State<ScorePage> {
             Positioned(
               top: topInset + 12,
               right: 16,
-              child: _SemesterSelectorButton(
-                accent: _scoreAccent,
-                selectedLabel: _compactSemesterLabel(selectedId),
-                isRefreshing: _isRefreshingSelection,
-                onTap: _showSemesterPicker,
+              child: ValueListenableBuilder<_ScoreSelectionState>(
+                valueListenable: _selectionStateNotifier,
+                builder: (context, selectionState, _) {
+                  return _SemesterSelectorButton(
+                    accent: _scoreAccent,
+                    selectedLabel: _compactSemesterLabel(
+                      selectionState.selectedId,
+                    ),
+                    isRefreshing: selectionState.isRefreshing,
+                    onTap: _showSemesterPicker,
+                  );
+                },
               ),
             ),
           ],
@@ -448,6 +694,173 @@ class _ScorePageState extends State<ScorePage> {
       ),
     );
   }
+
+  Widget _buildScoreContentScrollView(
+    BuildContext context, {
+    required double topInset,
+    required _ScoreContentState contentState,
+  }) {
+    final scoreList = contentState.scoreList;
+    final errorMessage = contentState.errorMessage;
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: EdgeInsets.fromLTRB(16, topInset + 76, 16, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ScoreOverviewCard(
+                  accent: _scoreAccent,
+                  zxf: contentState.zxf,
+                  zxfjd: contentState.zxfjd,
+                  pjjd: contentState.pjjd,
+                  courseCount: scoreList.length,
+                ),
+                const SizedBox(height: 16),
+                _SectionHeader(
+                  title: '课程成绩',
+                  subtitle:
+                      errorMessage != null
+                          ? '当前结果未能正常加载'
+                          : scoreList.isEmpty
+                          ? '暂无成绩记录'
+                          : '共 ${scoreList.length} 门课程',
+                ),
+                const SizedBox(height: 8),
+                if (errorMessage != null)
+                  _FeatureEmptyState(
+                    icon: Ionicons.alert_circle_outline,
+                    accent: Theme.of(context).colorScheme.error,
+                    title: '成绩加载失败',
+                    subtitle: errorMessage,
+                  )
+                else if (scoreList.isEmpty)
+                  _FeatureEmptyState(
+                    icon: Ionicons.receipt_outline,
+                    accent: _scoreAccent,
+                    title: '还没有成绩记录',
+                    subtitle:
+                        contentState.selectedId == 'all'
+                            ? '当前账号暂未查询到任何成绩。'
+                            : '这个学期目前没有可展示的成绩条目。',
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (errorMessage == null && scoreList.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final score = scoreList[index];
+                  final palette = _paletteForScore(context, score);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _ScoreCourseCard(
+                      score: score,
+                      palette: palette,
+                      onTap: () => _showScoreDetail(score),
+                    ),
+                  );
+                },
+                childCount: scoreList.length,
+                addAutomaticKeepAlives: false,
+                addRepaintBoundaries: false,
+              ),
+            ),
+          ),
+        const SliverToBoxAdapter(child: SizedBox(height: 28)),
+      ],
+    );
+  }
+}
+
+class _ScoreLoadKey {
+  const _ScoreLoadKey({required this.semesterId, required this.persistSummary});
+
+  final String semesterId;
+  final bool persistSummary;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ScoreLoadKey &&
+        other.semesterId == semesterId &&
+        other.persistSummary == persistSummary;
+  }
+
+  @override
+  int get hashCode => Object.hash(semesterId, persistSummary);
+}
+
+class _ScoreContentState {
+  const _ScoreContentState({
+    required this.selectedId,
+    required this.scoreList,
+    required this.zxf,
+    required this.zxfjd,
+    required this.pjjd,
+    required this.errorMessage,
+  });
+
+  const _ScoreContentState.initial()
+    : selectedId = 'all',
+      scoreList = const <Score>[],
+      zxf = '-',
+      zxfjd = '-',
+      pjjd = '-',
+      errorMessage = null;
+
+  final String selectedId;
+  final List<Score> scoreList;
+  final String zxf;
+  final String zxfjd;
+  final String pjjd;
+  final String? errorMessage;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ScoreContentState &&
+        other.selectedId == selectedId &&
+        listEquals(other.scoreList, scoreList) &&
+        other.zxf == zxf &&
+        other.zxfjd == zxfjd &&
+        other.pjjd == pjjd &&
+        other.errorMessage == errorMessage;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    selectedId,
+    Object.hashAll(scoreList),
+    zxf,
+    zxfjd,
+    pjjd,
+    errorMessage,
+  );
+}
+
+class _ScoreSelectionState {
+  const _ScoreSelectionState({
+    required this.selectedId,
+    required this.isRefreshing,
+  });
+
+  final String selectedId;
+  final bool isRefreshing;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _ScoreSelectionState &&
+        other.selectedId == selectedId &&
+        other.isRefreshing == isRefreshing;
+  }
+
+  @override
+  int get hashCode => Object.hash(selectedId, isRefreshing);
 }
 
 class _ScoreOverviewCard extends StatelessWidget {
@@ -629,16 +1042,11 @@ class _SemesterPickerSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final items = <({String id, String label})>[
-      (id: 'all', label: '全部学期'),
-      ...semesterIds.map((semester) {
-        return (id: semester, label: formatSemesterLabel(semester));
-      }),
-    ];
-    final separatorCount = items.length > 1 ? items.length - 1 : 0;
+    final itemCount = semesterIds.length + 1;
+    final separatorCount = itemCount > 1 ? itemCount - 1 : 0;
     final maxListHeight = MediaQuery.sizeOf(context).height * 0.42;
     final listHeight =
-        (items.length * 62.0 + separatorCount * 8.0)
+        (itemCount * 62.0 + separatorCount * 8.0)
             .clamp(0.0, maxListHeight)
             .toDouble();
 
@@ -712,18 +1120,22 @@ class _SemesterPickerSheet extends StatelessWidget {
                   child: ListView.separated(
                     padding: EdgeInsets.zero,
                     addAutomaticKeepAlives: false,
-                    itemCount: items.length,
+                    addRepaintBoundaries: false,
+                    itemCount: itemCount,
                     separatorBuilder: (context, index) {
                       return const SizedBox(height: 8);
                     },
                     itemBuilder: (context, index) {
-                      final item = items[index];
-                      final selected = item.id == selectedId;
+                      final itemId =
+                          index == 0 ? 'all' : semesterIds[index - 1];
+                      final itemLabel =
+                          index == 0 ? '全部学期' : formatSemesterLabel(itemId);
+                      final selected = itemId == selectedId;
                       return _SemesterOptionTile(
                         accent: accent,
-                        label: item.label,
+                        label: itemLabel,
                         selected: selected,
-                        onTap: () => Navigator.of(context).pop(item.id),
+                        onTap: () => Navigator.of(context).pop(itemId),
                       );
                     },
                   ),
@@ -1181,12 +1593,11 @@ class _ScoreDetailSheet extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 18),
-                ...detailItems.map((item) {
-                  return Padding(
+                for (final item in detailItems)
+                  Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _DetailRow(item: item, accent: palette.accent),
-                  );
-                }),
+                  ),
               ],
             ),
           ),

@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../../core/services/app_logger.dart';
 import '../../../core/ui/apple_glass.dart';
 import '../../../core/ui/app_snack_bar.dart';
 import '../../../core/ui/color_scheme_ext.dart';
 import '../../../utils/course/coursemain.dart';
+
+typedef CourseDetailClipboardWriter = Future<void> Function(String text);
 
 class CourseTableToolbar extends StatelessWidget {
   const CourseTableToolbar({
@@ -149,12 +152,8 @@ class CourseWeekdayHeader extends StatelessWidget {
     return Row(
       children: [
         SizedBox(width: leadingWidth),
-        ...dayLabels.asMap().entries.map((entry) {
-          final index = entry.key;
-          final label = entry.value;
-          final isToday = index == todayIndex;
-
-          return Expanded(
+        for (var index = 0; index < dayLabels.length; index++)
+          Expanded(
             flex: dayFlexes[index],
             child: Padding(
               padding: const EdgeInsets.fromLTRB(0.6, 0, 0.6, 5),
@@ -162,7 +161,7 @@ class CourseWeekdayHeader extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 5),
                 decoration: BoxDecoration(
                   color:
-                      isToday
+                      index == todayIndex
                           ? colorScheme.primary.withValues(
                             alpha: isDark ? 0.18 : 0.12,
                           )
@@ -172,7 +171,7 @@ class CourseWeekdayHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color:
-                        isToday
+                        index == todayIndex
                             ? colorScheme.primary.withValues(alpha: 0.32)
                             : Colors.white.withValues(
                               alpha: isDark ? 0.10 : 0.62,
@@ -180,12 +179,12 @@ class CourseWeekdayHeader extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  label,
+                  dayLabels[index],
                   textAlign: TextAlign.center,
                   style: theme.textTheme.labelSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color:
-                        isToday
+                        index == todayIndex
                             ? colorScheme.primary
                             : colorScheme.onSurfaceVariant,
                   ),
@@ -193,8 +192,7 @@ class CourseWeekdayHeader extends StatelessWidget {
                 ),
               ),
             ),
-          );
-        }),
+          ),
       ],
     );
   }
@@ -221,30 +219,31 @@ class CourseSectionColumn extends StatelessWidget {
     return SizedBox(
       width: width,
       child: Column(
-        children: List.generate(sectionCount, (index) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(0, 0.2, 0, 0.2),
-            child: Container(
-              height: slotHeight,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.44),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: isDark ? 0.06 : 0.56),
+        children: [
+          for (var index = 0; index < sectionCount; index++)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 0.2, 0, 0.2),
+              child: Container(
+                height: slotHeight,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: isDark ? 0.08 : 0.44),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: isDark ? 0.06 : 0.56),
+                  ),
                 ),
-              ),
-              child: Center(
-                child: Text(
-                  '${index + 1}',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
+                child: Center(
+                  child: Text(
+                    '${index + 1}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
             ),
-          );
-        }),
+        ],
       ),
     );
   }
@@ -355,12 +354,13 @@ class _ScaledLine extends StatelessWidget {
   }
 }
 
-class CourseDetailSheet extends StatelessWidget {
+class CourseDetailSheet extends StatefulWidget {
   const CourseDetailSheet({
     super.key,
     required this.course,
     required this.scheduleText,
     required this.copyText,
+    this.writeClipboard,
     this.onViewStudents,
     this.onDeleteCurrentCourse,
     this.onDeleteWholeScheduleCourse,
@@ -369,29 +369,65 @@ class CourseDetailSheet extends StatelessWidget {
   final Course course;
   final String scheduleText;
   final String copyText;
+  final CourseDetailClipboardWriter? writeClipboard;
   final VoidCallback? onViewStudents;
   final VoidCallback? onDeleteCurrentCourse;
   final VoidCallback? onDeleteWholeScheduleCourse;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+  State<CourseDetailSheet> createState() => _CourseDetailSheetState();
+}
 
-    Future<void> copyValue(String text, String message) async {
-      await Clipboard.setData(ClipboardData(text: text));
-      if (!context.mounted) {
+class _CourseDetailSheetState extends State<CourseDetailSheet> {
+  bool _isCopyingValue = false;
+
+  Future<void> _copyValue(String text, String message) async {
+    if (_isCopyingValue) {
+      return;
+    }
+
+    _isCopyingValue = true;
+    try {
+      final writeClipboard = widget.writeClipboard ?? _writeClipboard;
+      await writeClipboard(text);
+      if (!mounted) {
         return;
       }
       showAppSnackBar(context, message: message, type: AppSnackBarType.success);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to copy course detail value',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          message: '复制课程信息失败，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } finally {
+      _isCopyingValue = false;
     }
+  }
+
+  Future<void> _writeClipboard(String text) {
+    return Clipboard.setData(ClipboardData(text: text));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final course = widget.course;
 
     final detailItems = [
       _CourseDetailItem(
         icon: Ionicons.calendar_outline,
         text: course.weekDuration.isEmpty ? '暂无周数信息' : course.weekDuration,
       ),
-      _CourseDetailItem(icon: Ionicons.time_outline, text: scheduleText),
+      _CourseDetailItem(icon: Ionicons.time_outline, text: widget.scheduleText),
       _CourseDetailItem(
         icon: Ionicons.person_outline,
         text: course.teacherName.isEmpty ? '暂无教师信息' : course.teacherName,
@@ -406,32 +442,34 @@ class CourseDetailSheet extends StatelessWidget {
       _CourseActionItem(
         icon: Ionicons.copy_outline,
         text: '复制课程名称',
-        onTap: () => copyValue(course.name, '已复制课程名称'),
+        onTap: () => _copyValue(course.name, '已复制课程名称'),
       ),
       _CourseActionItem(
         icon: Ionicons.document_text_outline,
         text: '复制课程信息为文本',
-        onTap: () => copyValue(copyText, '已复制课程详情'),
+        onTap: () => _copyValue(widget.copyText, '已复制课程详情'),
       ),
-      if (course.isExp && course.pcid.isNotEmpty && onViewStudents != null)
+      if (course.isExp &&
+          course.pcid.isNotEmpty &&
+          widget.onViewStudents != null)
         _CourseActionItem(
           icon: Ionicons.people_outline,
           text: '查看实验人员名单',
-          onTap: onViewStudents,
+          onTap: widget.onViewStudents,
         ),
-      if (onDeleteCurrentCourse != null)
+      if (widget.onDeleteCurrentCourse != null)
         _CourseActionItem(
           icon: Ionicons.trash_outline,
           text: '删除当前课程',
           accentColor: colorScheme.error,
-          onTap: onDeleteCurrentCourse,
+          onTap: widget.onDeleteCurrentCourse,
         ),
-      if (onDeleteWholeScheduleCourse != null)
+      if (widget.onDeleteWholeScheduleCourse != null)
         _CourseActionItem(
           icon: Ionicons.trash_bin_outline,
           text: '删除整学期该课程',
           accentColor: colorScheme.error,
-          onTap: onDeleteWholeScheduleCourse,
+          onTap: widget.onDeleteWholeScheduleCourse,
         ),
     ];
 
@@ -495,38 +533,33 @@ class CourseDetailSheet extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _CourseDetailGroup(
-              children:
-                  detailItems
-                      .map(
-                        (item) => _CourseDetailRow(
-                          icon: item.icon,
-                          text: item.text,
-                          onLongPress:
-                              () => copyValue(item.text, '已复制${item.text}'),
-                        ),
-                      )
-                      .toList(),
+              children: [
+                for (final item in detailItems)
+                  _CourseDetailRow(
+                    icon: item.icon,
+                    text: item.text,
+                    onLongPress: () => _copyValue(item.text, '已复制${item.text}'),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
             _CourseDetailGroup(
-              children:
-                  actionItems
-                      .map(
-                        (item) => _CourseDetailRow(
-                          icon: item.icon,
-                          text: item.text,
-                          accentColor: item.accentColor ?? colorScheme.primary,
-                          trailing: Icon(
-                            Ionicons.chevron_forward_outline,
-                            size: 18,
-                            color: colorScheme.onSurfaceVariant.withValues(
-                              alpha: 0.72,
-                            ),
-                          ),
-                          onTap: item.onTap,
-                        ),
-                      )
-                      .toList(),
+              children: [
+                for (final item in actionItems)
+                  _CourseDetailRow(
+                    icon: item.icon,
+                    text: item.text,
+                    accentColor: item.accentColor ?? colorScheme.primary,
+                    trailing: Icon(
+                      Ionicons.chevron_forward_outline,
+                      size: 18,
+                      color: colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.72,
+                      ),
+                    ),
+                    onTap: item.onTap,
+                  ),
+              ],
             ),
           ],
         ),
@@ -797,6 +830,17 @@ class _CourseDetailGroup extends StatelessWidget {
 
   final List<Widget> children;
 
+  List<Widget> _buildSeparatedChildren() {
+    final separatedChildren = <Widget>[];
+    for (var index = 0; index < children.length; index++) {
+      if (index > 0) {
+        separatedChildren.add(const GlassHairlineDivider(horizontal: 18));
+      }
+      separatedChildren.add(children[index]);
+    }
+    return separatedChildren;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -827,12 +871,7 @@ class _CourseDetailGroup extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        children: List.generate(children.length * 2 - 1, (index) {
-          if (index.isOdd) {
-            return const GlassHairlineDivider(horizontal: 18);
-          }
-          return children[index ~/ 2];
-        }),
+        children: _buildSeparatedChildren(),
       ),
     );
   }

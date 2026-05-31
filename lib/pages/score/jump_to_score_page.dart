@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../core/services/app_logger.dart';
 import '../../core/ui/app_loading_indicator.dart';
+import '../../core/ui/app_page_route.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import '../../utils/token.dart';
 import 'scorepage.dart';
 
+typedef ScoreLoginRenewer = Future<bool> Function(BuildContext context);
+
 class JumpToScorePage extends StatefulWidget {
-  const JumpToScorePage({super.key});
+  const JumpToScorePage({super.key, this.renewLogin});
+
+  final ScoreLoginRenewer? renewLogin;
 
   @override
   State<JumpToScorePage> createState() => _JumpToScorePageState();
@@ -18,13 +24,20 @@ class JumpToScorePage extends StatefulWidget {
 class _JumpToScorePageState extends State<JumpToScorePage> {
   static const Color _scoreAccent = Color(0xFF22966C);
 
-  bool _isLoading = true;
-  String? _errorMessage;
+  final ValueNotifier<_ScoreJumpPanelState> _panelState =
+      ValueNotifier<_ScoreJumpPanelState>(const _ScoreJumpPanelState.loading());
+  bool _isJumpInFlight = false;
 
   @override
   void initState() {
     super.initState();
     _jumpToScorePage();
+  }
+
+  @override
+  void dispose() {
+    _panelState.dispose();
+    super.dispose();
   }
 
   void _showSnackBar(String message) {
@@ -40,32 +53,74 @@ class _JumpToScorePageState extends State<JumpToScorePage> {
     );
   }
 
+  void _showLoadingIfNeeded() {
+    if (!mounted || _panelState.value.isLoading) {
+      return;
+    }
+
+    _panelState.value = const _ScoreJumpPanelState.loading();
+  }
+
+  void _showError(String message) {
+    final panelState = _panelState.value;
+    if (!mounted ||
+        (!panelState.isLoading && panelState.errorMessage == message)) {
+      return;
+    }
+
+    _panelState.value = _ScoreJumpPanelState.error(message);
+  }
+
+  void _hideLoadingIfNeeded() {
+    if (!mounted || !_panelState.value.isLoading) {
+      return;
+    }
+
+    _panelState.value = const _ScoreJumpPanelState.error('成绩页面暂时无法打开');
+  }
+
   Future<void> _jumpToScorePage() async {
+    if (_isJumpInFlight) {
+      return;
+    }
+
     final navigator = Navigator.of(context);
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
-    }
+    var didNavigate = false;
+    _isJumpInFlight = true;
+    _showLoadingIfNeeded();
 
-    final renewed = await renewToken(context);
-    if (!mounted) {
-      return;
-    }
+    try {
+      final renewed = await (widget.renewLogin ?? renewToken)(context);
+      if (!mounted) {
+        return;
+      }
 
-    if (!renewed) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = '教务系统登录状态已失效，请重新登录后重试。';
-      });
-      _showSnackBar('教务系统登录状态已失效，请重新登录后重试');
-      return;
-    }
+      if (!renewed) {
+        _showError('教务系统登录状态已失效，请重新登录后重试。');
+        _showSnackBar('教务系统登录状态已失效，请重新登录后重试');
+        return;
+      }
 
-    navigator.pushReplacement(
-      MaterialPageRoute(builder: (context) => const ScorePage()),
-    );
+      didNavigate = true;
+      navigator.pushReplacement(
+        buildAppPageRoute(builder: (_) => const ScorePage()),
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to jump to score page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        _showError('成绩页面暂时无法打开，请稍后重试。');
+        _showSnackBar('成绩页面暂时无法打开，请稍后重试');
+      }
+    } finally {
+      _isJumpInFlight = false;
+      if (!didNavigate) {
+        _hideLoadingIfNeeded();
+      }
+    }
   }
 
   @override
@@ -83,14 +138,20 @@ class _JumpToScorePageState extends State<JumpToScorePage> {
                 constraints: const BoxConstraints(maxWidth: 460),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child:
-                      _isLoading
-                          ? _LoadingPanel(accent: _scoreAccent)
-                          : _ErrorPanel(
-                            accent: _scoreAccent,
-                            message: _errorMessage ?? '成绩页面暂时无法打开',
-                            onRetry: _jumpToScorePage,
-                          ),
+                  child: ValueListenableBuilder<_ScoreJumpPanelState>(
+                    valueListenable: _panelState,
+                    builder: (context, panelState, _) {
+                      if (panelState.isLoading) {
+                        return _LoadingPanel(accent: _scoreAccent);
+                      }
+
+                      return _ErrorPanel(
+                        accent: _scoreAccent,
+                        message: panelState.errorMessage ?? '成绩页面暂时无法打开',
+                        onRetry: _jumpToScorePage,
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -106,6 +167,22 @@ class _JumpToScorePageState extends State<JumpToScorePage> {
       ),
     );
   }
+}
+
+class _ScoreJumpPanelState {
+  const _ScoreJumpPanelState._({
+    required this.isLoading,
+    required this.errorMessage,
+  });
+
+  const _ScoreJumpPanelState.loading()
+    : this._(isLoading: true, errorMessage: null);
+
+  const _ScoreJumpPanelState.error(String message)
+    : this._(isLoading: false, errorMessage: message);
+
+  final bool isLoading;
+  final String? errorMessage;
 }
 
 class _LoadingPanel extends StatelessWidget {

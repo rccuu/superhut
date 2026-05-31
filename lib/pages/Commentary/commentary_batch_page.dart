@@ -2,20 +2,94 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../core/services/app_logger.dart';
 import '../../core/ui/app_loading_indicator.dart';
+import '../../core/ui/app_page_route.dart';
+import '../../core/ui/app_snack_bar.dart';
 import 'commentary_api.dart';
 import 'commentary_course_list_page.dart';
 
+typedef CommentaryBatchLoader = Future<List<CommentaryPayload>> Function();
+typedef CommentaryCourseListPageBuilder =
+    Widget Function(CommentaryPayload batch);
+typedef CommentaryBatchRoutePusher =
+    Future<T?> Function<T>(BuildContext context, Route<T> route);
+
 class CommentaryBatchPage extends StatefulWidget {
-  const CommentaryBatchPage({super.key});
+  const CommentaryBatchPage({
+    super.key,
+    this.loadBatches,
+    this.buildCoursePage,
+    this.pushRoute,
+  });
+
+  final CommentaryBatchLoader? loadBatches;
+  final CommentaryCourseListPageBuilder? buildCoursePage;
+  final CommentaryBatchRoutePusher? pushRoute;
 
   @override
   State<CommentaryBatchPage> createState() => _CommentaryBatchPageState();
 }
 
 class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
+  late Future<List<CommentaryPayload>> _batchesFuture;
+  bool _isOpeningBatch = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _batchesFuture = _getBatches();
+  }
+
   Future<List<CommentaryPayload>> _getBatches() async {
-    return getCommentaryBatches();
+    return (widget.loadBatches ?? getCommentaryBatches)();
+  }
+
+  Widget _buildCoursePage(CommentaryPayload batch) {
+    final builder = widget.buildCoursePage;
+    if (builder != null) {
+      return builder(batch);
+    }
+
+    return CommentaryCourseListPage(
+      batchId: batch['BATCHID'].toString(),
+      pj01id: batch['PJ01ID'].toString(),
+      pj05id: batch['PJ05ID'].toString(),
+    );
+  }
+
+  Future<void> _openBatch(CommentaryPayload batch) async {
+    if (_isOpeningBatch) {
+      return;
+    }
+
+    _isOpeningBatch = true;
+    try {
+      final pusher = widget.pushRoute ?? _pushRoute;
+      await pusher<void>(
+        context,
+        buildAppPageRoute<void>(builder: (_) => _buildCoursePage(batch)),
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open commentary course list',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开评教课程列表，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } finally {
+      _isOpeningBatch = false;
+    }
+  }
+
+  Future<T?> _pushRoute<T>(BuildContext context, Route<T> route) {
+    return Navigator.of(context).push<T>(route);
   }
 
   @override
@@ -30,31 +104,19 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
         backgroundColor: Colors.transparent,
       ),
       body: EnhancedFutureBuilder(
-        future: _getBatches(),
+        future: _batchesFuture,
         rememberFutureResult: false,
-        whenDone: (List batchesList) {
-          final typedBatchesList = List<CommentaryPayload>.from(batchesList);
+        whenDone: (List<CommentaryPayload> batchesList) {
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 10),
             child: ListView.builder(
               addAutomaticKeepAlives: false,
-              itemCount: typedBatchesList.length,
+              addRepaintBoundaries: false,
+              itemCount: batchesList.length,
               itemBuilder: (BuildContext context, int index) {
-                final batch = typedBatchesList[index];
+                final batch = batchesList[index];
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder:
-                            (context) => CommentaryCourseListPage(
-                              batchId: batch['BATCHID'].toString(),
-                              pj01id: batch['PJ01ID'].toString(),
-                              pj05id: batch['PJ05ID'].toString(),
-                            ),
-                      ),
-                    );
-                  },
+                  onTap: () => _openBatch(batch),
                   child: Card.filled(
                     color: colorScheme.surfaceContainer,
                     child: Padding(

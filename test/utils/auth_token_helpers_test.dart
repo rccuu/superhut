@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/core/services/app_auth_storage.dart';
@@ -26,7 +28,10 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     SecureStorageMock.reset();
+    jwxt_token.resetRenewTokenForTest();
   });
+
+  tearDown(jwxt_token.resetRenewTokenForTest);
 
   test(
     'saveToken updates JWXT token and clears stale cached cookies',
@@ -88,6 +93,76 @@ void main() {
 
     expect(session.token, 'portal-id-token');
     expect(session.ticket, ticket);
+  });
+
+  test('decodeHutJwtPayload scans signed and unsigned payload segments', () {
+    final unsignedTicket = _fakeJwt({
+      'idToken': 'unsigned-id-token',
+      'exp': 2000000000,
+    }).replaceFirst(RegExp(r'\.$'), '');
+    final signedTicket =
+        '${_fakeJwt({'idToken': 'signed-id-token', 'exp': 2000000000})}sig';
+
+    expect(
+      decodeHutJwtPayload(unsignedTicket)?['idToken'],
+      'unsigned-id-token',
+    );
+    expect(decodeHutJwtPayload(signedTicket)?['idToken'], 'signed-id-token');
+    expect(decodeHutJwtPayload('header.'), isNull);
+    expect(decodeHutJwtPayload('not-a-jwt'), isNull);
+  });
+
+  test('describeHutUrlForLog keeps query and fragment values out of logs', () {
+    final description = describeHutUrlForLog(
+      'https://portal.hut.edu.cn/main.html'
+      '?ticket=secret-ticket&redirect=true'
+      '&service%20name=secret-service&ticket=second-ticket'
+      '#/ServiceDetail?token=secret-token&name=score',
+    );
+
+    expect(
+      description,
+      'portal.hut.edu.cn/main.html queryKeys=[redirect, service name, ticket] '
+      'fragment=/ServiceDetail',
+    );
+    expect(description, isNot(contains('secret-ticket')));
+    expect(description, isNot(contains('second-ticket')));
+    expect(description, isNot(contains('secret-service')));
+    expect(description, isNot(contains('secret-token')));
+    expect(description, isNot(contains('score')));
+  });
+
+  test('buildHutWebViewHeaders keeps profile specific headers', () {
+    final type1Headers = buildHutWebViewHeaders(
+      token: 'id-token',
+      profile: HutWebViewHeaderProfile.type1,
+    );
+    final type2Headers = buildHutWebViewHeaders(
+      token: 'id-token',
+      profile: HutWebViewHeaderProfile.type2,
+    );
+
+    expect(type1Headers['User-Agent'], type2Headers['User-Agent']);
+    expect(type1Headers['X-Id-Token'], 'id-token');
+    expect(type1Headers['x-id-token'], 'id-token');
+    expect(type2Headers['X-Id-Token'], 'id-token');
+    expect(type2Headers['x-id-token'], 'id-token');
+
+    expect(type1Headers['Cookie'], 'userToken=id-token');
+    expect(type1Headers['X-Requested-With'], 'com.supwisdom.hut');
+    expect(
+      type1Headers['Accept-Language'],
+      'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+    );
+    expect(type1Headers, isNot(contains('priority')));
+
+    expect(type2Headers, isNot(contains('Cookie')));
+    expect(type2Headers['x-requested-with'], 'com.supwisdom.hut');
+    expect(
+      type2Headers['accept-language'],
+      'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7',
+    );
+    expect(type2Headers['priority'], 'u=0, i');
   });
 
   test('FunctionItem.fromJson accepts current portal field names', () {
@@ -234,6 +309,68 @@ void main() {
       expect(await api.refreshToken(), isFalse);
     },
   );
+
+  testWidgets('renewToken reuses in-flight JWXT refresh work', (tester) async {
+    await storage.saveLoginType('jwxt');
+    await storage.saveJwxtCredentials(
+      username: 'jwxt-user',
+      password: 'jwxt-pass',
+    );
+
+    final loginCompleters = [Completer<bool>(), Completer<bool>()];
+    var tokenChecks = 0;
+    var loginCalls = 0;
+    final loginUsers = <String>[];
+    final loginPasswords = <String>[];
+
+    jwxt_token.setRenewTokenTestOverrides(
+      checkTokenValid: () async {
+        tokenChecks++;
+        return false;
+      },
+      loginHut: (userNo, password) {
+        loginCalls++;
+        loginUsers.add(userNo);
+        loginPasswords.add(password);
+        return loginCompleters[loginCalls - 1].future;
+      },
+    );
+
+    late BuildContext pageContext;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            pageContext = context;
+            return const Scaffold(body: Text('home'));
+          },
+        ),
+      ),
+    );
+
+    final first = jwxt_token.renewToken(pageContext);
+    final second = jwxt_token.renewToken(pageContext);
+    await tester.pump();
+
+    expect(tokenChecks, 1);
+    expect(loginCalls, 1);
+    expect(loginUsers, ['jwxt-user']);
+    expect(loginPasswords, ['jwxt-pass']);
+
+    loginCompleters[0].complete(true);
+    expect(await Future.wait([first, second]), [true, true]);
+
+    final third = jwxt_token.renewToken(pageContext);
+    await tester.pump();
+
+    expect(tokenChecks, 2);
+    expect(loginCalls, 2);
+    expect(loginUsers, ['jwxt-user', 'jwxt-user']);
+    expect(loginPasswords, ['jwxt-pass', 'jwxt-pass']);
+
+    loginCompleters[1].complete(true);
+    expect(await third, isTrue);
+  });
 
   test('isLikelyHutLoginUrl detects HUT login redirects', () {
     expect(

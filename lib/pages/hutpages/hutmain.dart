@@ -1,26 +1,36 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:superhut/pages/hutpages/hutmain_logic.dart';
 import 'package:superhut/pages/hutpages/type1/type1webview.dart';
 import 'package:superhut/pages/hutpages/type2/type2webview.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
+import '../../core/services/app_logger.dart';
 import '../../core/ui/app_loading_indicator.dart';
+import '../../core/ui/app_page_route.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 
 typedef HutFunctionListLoader = Future<List> Function();
+typedef HutServicePageBuilder =
+    Widget Function(FunctionItem service, String servicePicUrl);
+typedef HutServiceRoutePusher =
+    Future<T?> Function<T>(BuildContext context, Route<T> route);
 
 class HutMainPage extends StatefulWidget {
   const HutMainPage({
     super.key,
     this.loadFunctionList,
+    this.buildServicePage,
+    this.pushRoute,
     this.checkLoginOnInit = true,
   });
 
   final HutFunctionListLoader? loadFunctionList;
+  final HutServicePageBuilder? buildServicePage;
+  final HutServiceRoutePusher? pushRoute;
   final bool checkLoginOnInit;
 
   @override
@@ -34,12 +44,18 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
     '8aaa84f692e5ae560193f24790e76752',
   };
 
-  final logic = Get.put(HutMainLogic());
+  final logic = HutMainLogic();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
 
   late Future<List> _functionListFuture;
-  String _searchText = '';
+  List? _serviceDirectorySource;
+  _ServiceDirectory? _cachedServiceDirectory;
+  _ServiceDirectory? _searchResultsDirectory;
+  String? _searchResultsKeyword;
+  List<_ServiceWithCategory>? _cachedSearchResults;
+  final ValueNotifier<String> _searchTextNotifier = ValueNotifier<String>('');
+  bool _isOpeningService = false;
 
   @override
   void initState() {
@@ -49,18 +65,17 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
       logic.checkLogin();
     }
     WidgetsBinding.instance.addObserver(this);
-    _searchController.addListener(() {
-      setState(() {
-        _searchText = _searchController.text.trim();
-      });
-    });
+    _searchController.addListener(_handleSearchTextChanged);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _searchController.removeListener(_handleSearchTextChanged);
     _searchController.dispose();
+    _searchTextNotifier.dispose();
     _searchFocusNode.dispose();
+    logic.onClose();
     super.dispose();
   }
 
@@ -73,6 +88,15 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
 
   Future<List> _loadFunctionList() {
     return widget.loadFunctionList?.call() ?? logic.getFunList();
+  }
+
+  void _handleSearchTextChanged() {
+    final nextSearchText = _searchController.text.trim();
+    if (_searchTextNotifier.value == nextSearchText) {
+      return;
+    }
+
+    _searchTextNotifier.value = nextSearchText;
   }
 
   void _unfocusSearchField() {
@@ -159,57 +183,91 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
 
   Widget _buildContent(BuildContext context, List data) {
     final topInset = MediaQuery.paddingOf(context).top;
-    final categories = _normalizeCategories(data);
-    final allServices = _flattenServices(categories);
-    final searchableServices =
-        allServices.where((item) => item.service.serviceType != '4').toList();
-    final visibleServices =
-        _searchText.isEmpty
-            ? allServices
-            : searchableServices.where((item) {
-              final keyword = _searchText.toLowerCase();
-              return item.service.serviceName.toLowerCase().contains(keyword) ||
-                  item.category.toLowerCase().contains(keyword);
-            }).toList();
+    final directory = _serviceDirectoryFor(data);
+    final categories = directory.categories;
+    final allServices = directory.allServices;
 
     return Stack(
       children: [
-        ListView(
-          padding: EdgeInsets.fromLTRB(16, topInset + 76, 16, 28),
-          children: [
-            _HutOverviewCard(
-              accent: _hutAccent,
-              serviceCount: allServices.length,
-              categoryCount: categories.length,
+        CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(16, topInset + 76, 16, 0),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _HutOverviewCard(
+                      accent: _hutAccent,
+                      serviceCount: allServices.length,
+                      categoryCount: categories.length,
+                    ),
+                    const SizedBox(height: 14),
+                    ValueListenableBuilder<String>(
+                      valueListenable: _searchTextNotifier,
+                      builder: (context, searchText, _) {
+                        final visibleServices =
+                            searchText.isEmpty
+                                ? allServices
+                                : _searchResultsFor(directory, searchText);
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _SearchPanel(
+                              accent: _hutAccent,
+                              controller: _searchController,
+                              focusNode: _searchFocusNode,
+                              searchText: searchText,
+                            ),
+                            const SizedBox(height: 16),
+                            if (searchText.isNotEmpty)
+                              _buildSearchResultList(
+                                context,
+                                visibleServices,
+                                searchText,
+                              )
+                            else if (categories.isEmpty)
+                              const _FeatureEmptyState(
+                                icon: Ionicons.apps_outline,
+                                accent: _hutAccent,
+                                title: '暂无智慧工大服务',
+                                subtitle: '当前账号暂未获取到可展示的服务入口，稍后再试一次。',
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: 14),
-            _SearchPanel(
-              accent: _hutAccent,
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              searchText: _searchText,
-            ),
-            const SizedBox(height: 16),
-            if (_searchText.isNotEmpty)
-              _buildSearchResultList(context, visibleServices)
-            else if (categories.isEmpty)
-              const _FeatureEmptyState(
-                icon: Ionicons.apps_outline,
-                accent: _hutAccent,
-                title: '暂无智慧工大服务',
-                subtitle: '当前账号暂未获取到可展示的服务入口，稍后再试一次。',
-              )
-            else
-              ...categories.map((category) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _ServiceCategoryPanel(
-                    accent: _accentForCategory(category.label),
-                    category: category,
-                    onOpenService: _openService,
+            ValueListenableBuilder<String>(
+              valueListenable: _searchTextNotifier,
+              builder: (context, searchText, _) {
+                if (searchText.isNotEmpty || categories.isEmpty) {
+                  return const SliverToBoxAdapter(child: SizedBox.shrink());
+                }
+
+                return SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final category = categories[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _ServiceCategoryPanel(
+                          accent: _accentForCategory(category.label),
+                          category: category,
+                          onOpenService: _openService,
+                        ),
+                      );
+                    }, childCount: categories.length),
                   ),
                 );
-              }),
+              },
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
           ],
         ),
         Positioned(
@@ -240,13 +298,14 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
   Widget _buildSearchResultList(
     BuildContext context,
     List<_ServiceWithCategory> services,
+    String searchText,
   ) {
     if (services.isEmpty) {
       return _FeatureEmptyState(
         icon: Ionicons.search_outline,
         accent: _hutAccent,
         title: '没有找到相关服务',
-        subtitle: '未找到与“$_searchText”匹配的智慧工大功能。',
+        subtitle: '未找到与“$searchText”匹配的智慧工大功能。',
       );
     }
 
@@ -257,8 +316,22 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
     );
   }
 
-  List<_ServiceCategory> _normalizeCategories(List data) {
+  _ServiceDirectory _serviceDirectoryFor(List data) {
+    final cachedDirectory = _cachedServiceDirectory;
+    if (cachedDirectory != null && identical(_serviceDirectorySource, data)) {
+      return cachedDirectory;
+    }
+
+    final directory = _buildServiceDirectory(data);
+    _serviceDirectorySource = data;
+    _cachedServiceDirectory = directory;
+    return directory;
+  }
+
+  _ServiceDirectory _buildServiceDirectory(List data) {
     final categories = <_ServiceCategory>[];
+    final allServices = <_ServiceWithCategory>[];
+    final searchableServices = <_ServiceWithCategory>[];
     for (final item in data) {
       if (item is! Map) {
         continue;
@@ -270,41 +343,108 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
         continue;
       }
 
-      final services =
-          rawServices
-              .whereType<FunctionItem>()
-              .where(_isVisibleService)
-              .toList();
-      if (services.isEmpty) {
+      final categoryLabel = label.isEmpty ? '全部服务' : label;
+      final categoryServices = <_ServiceWithCategory>[];
+      for (final rawService in rawServices) {
+        if (rawService is! FunctionItem || !_isVisibleService(rawService)) {
+          continue;
+        }
+        final serviceWithCategory = _ServiceWithCategory(
+          category: categoryLabel,
+          service: rawService,
+          icon: _iconForService(rawService),
+          typeLabel: _serviceTypeLabel(rawService.serviceType, categoryLabel),
+          normalizedServiceName: rawService.serviceName.toLowerCase(),
+          normalizedCategory: categoryLabel.toLowerCase(),
+        );
+        categoryServices.add(serviceWithCategory);
+        allServices.add(serviceWithCategory);
+        if (rawService.serviceType != '4') {
+          searchableServices.add(serviceWithCategory);
+        }
+      }
+      if (categoryServices.isEmpty) {
         continue;
       }
 
       categories.add(
         _ServiceCategory(
-          label: label.isEmpty ? '全部服务' : label,
-          services:
-              services
-                  .map(
-                    (service) => _ServiceWithCategory(
-                      category: label.isEmpty ? '全部服务' : label,
-                      service: service,
-                    ),
-                  )
-                  .toList(),
+          label: categoryLabel,
+          services: List<_ServiceWithCategory>.unmodifiable(categoryServices),
         ),
       );
     }
-    return categories;
+    return _ServiceDirectory(
+      categories: List<_ServiceCategory>.unmodifiable(categories),
+      allServices: List<_ServiceWithCategory>.unmodifiable(allServices),
+      searchableServices: List<_ServiceWithCategory>.unmodifiable(
+        searchableServices,
+      ),
+    );
   }
 
-  List<_ServiceWithCategory> _flattenServices(
-    List<_ServiceCategory> categories,
+  List<_ServiceWithCategory> _filterSearchResults(
+    List<_ServiceWithCategory> services,
+    String keyword,
   ) {
-    return categories.expand((category) => category.services).toList();
+    final normalizedKeyword = keyword.toLowerCase();
+    final filteredServices = <_ServiceWithCategory>[];
+    for (final item in services) {
+      if (item.normalizedServiceName.contains(normalizedKeyword) ||
+          item.normalizedCategory.contains(normalizedKeyword)) {
+        filteredServices.add(item);
+      }
+    }
+    return filteredServices;
+  }
+
+  List<_ServiceWithCategory> _searchResultsFor(
+    _ServiceDirectory directory,
+    String keyword,
+  ) {
+    final cachedSearchResults = _cachedSearchResults;
+    if (cachedSearchResults != null &&
+        identical(_searchResultsDirectory, directory) &&
+        _searchResultsKeyword == keyword) {
+      return cachedSearchResults;
+    }
+
+    final searchResults = _filterSearchResults(
+      directory.searchableServices,
+      keyword,
+    );
+    _searchResultsDirectory = directory;
+    _searchResultsKeyword = keyword;
+    _cachedSearchResults = searchResults;
+    return searchResults;
   }
 
   bool _isVisibleService(FunctionItem service) {
     return !_hiddenServiceIds.contains(service.id);
+  }
+
+  IconData _iconForService(FunctionItem service) {
+    if (service.serviceName.contains('卡')) {
+      return Ionicons.card_outline;
+    }
+    if (service.serviceName.contains('图书')) {
+      return Ionicons.library_outline;
+    }
+    if (service.serviceName.contains('课') ||
+        service.serviceName.contains('教务')) {
+      return Ionicons.school_outline;
+    }
+    return Ionicons.apps_outline;
+  }
+
+  String _serviceTypeLabel(String serviceType, String categoryLabel) {
+    final typeLabel = switch (serviceType) {
+      '1' => '网页服务',
+      '2' => '认证服务',
+      '5' => '应用服务',
+      _ => '校园服务',
+    };
+    return '$categoryLabel · $typeLabel';
   }
 
   Color _accentForCategory(String label) {
@@ -320,38 +460,91 @@ class _HutMainPageState extends State<HutMainPage> with WidgetsBindingObserver {
     return _hutAccent;
   }
 
-  void _openService(FunctionItem service) {
-    final servicePicUrl =
-        service.servicePicUrl.isNotEmpty
-            ? service.servicePicUrl
-            : service.iconUrl;
+  Widget? _buildServicePage(FunctionItem service, String servicePicUrl) {
+    final builder = widget.buildServicePage;
+    if (builder != null) {
+      return builder(service, servicePicUrl);
+    }
+
     if (service.serviceType == '1') {
-      Get.to(
-        () => Type1Webview(
-          serviceId: '',
-          serviceUrl: service.serviceUrl,
-          serviceName: service.serviceName,
-          servicePicUrl: servicePicUrl,
-        ),
+      return Type1Webview(
+        serviceId: '',
+        serviceUrl: service.serviceUrl,
+        serviceName: service.serviceName,
+        servicePicUrl: servicePicUrl,
       );
-      return;
     }
 
     if (service.serviceType == '2' ||
         service.serviceType == '4' ||
         service.serviceType == '5') {
-      Get.to(
-        () => Type2Webview(
-          serviceId: service.serviceType == '5' ? service.id : '',
-          serviceUrl: service.serviceUrl,
-          serviceName: service.serviceName,
-          serviceType: service.serviceType,
-          tokenAccept: service.tokenAccept,
-          servicePicUrl: servicePicUrl,
-        ),
+      return Type2Webview(
+        serviceId: service.serviceType == '5' ? service.id : '',
+        serviceUrl: service.serviceUrl,
+        serviceName: service.serviceName,
+        serviceType: service.serviceType,
+        tokenAccept: service.tokenAccept,
+        servicePicUrl: servicePicUrl,
       );
     }
+
+    return null;
   }
+
+  Future<void> _openService(FunctionItem service) async {
+    if (_isOpeningService) {
+      return;
+    }
+
+    final servicePicUrl =
+        service.servicePicUrl.isNotEmpty
+            ? service.servicePicUrl
+            : service.iconUrl;
+    final page = _buildServicePage(service, servicePicUrl);
+    if (page == null) {
+      return;
+    }
+
+    _isOpeningService = true;
+    try {
+      final pusher = widget.pushRoute ?? _pushRoute;
+      await pusher<void>(
+        context,
+        buildAppPageRoute<void>(builder: (_) => page),
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open HUT service page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开服务页面，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } finally {
+      _isOpeningService = false;
+    }
+  }
+
+  Future<T?> _pushRoute<T>(BuildContext context, Route<T> route) {
+    return Navigator.of(context).push<T>(route);
+  }
+}
+
+class _ServiceDirectory {
+  const _ServiceDirectory({
+    required this.categories,
+    required this.allServices,
+    required this.searchableServices,
+  });
+
+  final List<_ServiceCategory> categories;
+  final List<_ServiceWithCategory> allServices;
+  final List<_ServiceWithCategory> searchableServices;
 }
 
 class _ServiceCategory {
@@ -362,10 +555,21 @@ class _ServiceCategory {
 }
 
 class _ServiceWithCategory {
-  const _ServiceWithCategory({required this.category, required this.service});
+  const _ServiceWithCategory({
+    required this.category,
+    required this.service,
+    required this.icon,
+    required this.typeLabel,
+    required this.normalizedServiceName,
+    required this.normalizedCategory,
+  });
 
   final String category;
   final FunctionItem service;
+  final IconData icon;
+  final String typeLabel;
+  final String normalizedServiceName;
+  final String normalizedCategory;
 }
 
 class _HutOverviewCard extends StatelessWidget {
@@ -509,7 +713,7 @@ class _ServiceCategoryPanel extends StatelessWidget {
 
   final Color accent;
   final _ServiceCategory category;
-  final ValueChanged<FunctionItem> onOpenService;
+  final Future<void> Function(FunctionItem service) onOpenService;
 
   @override
   Widget build(BuildContext context) {
@@ -557,17 +761,17 @@ class _ServiceCategoryPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          ...category.services.map((item) {
-            return Padding(
+          for (final item in category.services)
+            Padding(
               padding: const EdgeInsets.only(bottom: 9),
               child: _ServiceTile(
                 accent: accent,
                 service: item.service,
-                categoryLabel: item.category,
+                icon: item.icon,
+                typeLabel: item.typeLabel,
                 onTap: () => onOpenService(item.service),
               ),
-            );
-          }),
+            ),
         ],
       ),
     );
@@ -578,13 +782,15 @@ class _ServiceTile extends StatelessWidget {
   const _ServiceTile({
     required this.accent,
     required this.service,
-    required this.categoryLabel,
+    required this.icon,
+    required this.typeLabel,
     required this.onTap,
   });
 
   final Color accent;
   final FunctionItem service;
-  final String categoryLabel;
+  final IconData icon;
+  final String typeLabel;
   final VoidCallback onTap;
 
   @override
@@ -618,7 +824,7 @@ class _ServiceTile extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(_iconForService(service), color: accent, size: 19),
+            child: Icon(icon, color: accent, size: 19),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -636,7 +842,7 @@ class _ServiceTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  _serviceTypeLabel(service.serviceType, categoryLabel),
+                  typeLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -655,30 +861,6 @@ class _ServiceTile extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  IconData _iconForService(FunctionItem service) {
-    if (service.serviceName.contains('卡')) {
-      return Ionicons.card_outline;
-    }
-    if (service.serviceName.contains('图书')) {
-      return Ionicons.library_outline;
-    }
-    if (service.serviceName.contains('课') ||
-        service.serviceName.contains('教务')) {
-      return Ionicons.school_outline;
-    }
-    return Ionicons.apps_outline;
-  }
-
-  String _serviceTypeLabel(String serviceType, String categoryLabel) {
-    final typeLabel = switch (serviceType) {
-      '1' => '网页服务',
-      '2' => '认证服务',
-      '5' => '应用服务',
-      _ => '校园服务',
-    };
-    return '$categoryLabel · $typeLabel';
   }
 }
 

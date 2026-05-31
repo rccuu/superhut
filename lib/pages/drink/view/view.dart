@@ -1,22 +1,65 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../core/ui/ambient_bubble_field.dart';
+import '../../../core/ui/app_bottom_sheet.dart';
 import '../../../core/ui/app_loading_indicator.dart';
+import '../../../core/ui/app_page_route.dart';
 import '../../../core/ui/app_snack_bar.dart';
 import 'logic.dart';
 import 'widgets/drink_page_widgets.dart';
 
+typedef DrinkCameraPermissionRequester = Future<PermissionStatus> Function();
+typedef DrinkQrScannerOpener = Future<String?> Function(BuildContext context);
+typedef DrinkBottomSheetPresenter =
+    Future<T?> Function<T>({
+      required BuildContext context,
+      required WidgetBuilder builder,
+      bool expand,
+      Color? backgroundColor,
+    });
+
 class FunctionDrinkPage extends StatefulWidget {
-  const FunctionDrinkPage({super.key});
+  const FunctionDrinkPage({
+    super.key,
+    this.logic,
+    this.requestCameraPermission,
+    this.openQrScanner,
+    this.showBottomSheet,
+  });
+
+  final FunctionDrinkLogic? logic;
+  final DrinkCameraPermissionRequester? requestCameraPermission;
+  final DrinkQrScannerOpener? openQrScanner;
+  final DrinkBottomSheetPresenter? showBottomSheet;
 
   @override
   State<FunctionDrinkPage> createState() => _FunctionDrinkPageState();
 }
 
 class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
-  final FunctionDrinkLogic logic = Get.put(FunctionDrinkLogic());
+  late final FunctionDrinkLogic logic;
+  late final bool _ownsLogic;
+  bool _isAddingDevice = false;
+  bool _isDeviceSelectionSheetOpen = false;
+  bool _isDeviceManagementSheetOpen = false;
+  bool _isDeleteConfirmationOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final injectedLogic = widget.logic;
+    if (injectedLogic != null) {
+      logic = injectedLogic;
+      _ownsLogic = false;
+    } else {
+      logic = Get.put(FunctionDrinkLogic());
+      _ownsLogic = true;
+    }
+  }
 
   void _showSnackBar(
     String message, {
@@ -61,17 +104,31 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     }
   }
 
-  void _showDeviceSelectionDialog() {
-    showCupertinoModalBottomSheet(
+  Future<T?> _showDrinkSheet<T>({required WidgetBuilder builder}) {
+    final presenter = widget.showBottomSheet ?? showAppAdaptiveBottomSheet;
+    return presenter<T>(
       context: context,
       expand: false,
       backgroundColor: Colors.transparent,
+      builder: builder,
+    );
+  }
+
+  void _showDeviceSelectionDialog() {
+    if (_isDeviceSelectionSheetOpen) {
+      return;
+    }
+
+    _isDeviceSelectionSheetOpen = true;
+    final sheet = _showDrinkSheet<void>(
       builder:
           (sheetContext) => Obx(() {
-            final devices = List<dynamic>.from(logic.state.deviceList);
+            final devices = logic.state.deviceList;
+            final deviceCount = devices.length;
 
             return DrinkDeviceSelectionSheet(
               devices: devices,
+              deviceCount: deviceCount,
               selectedIndex: logic.state.choiceDevice.value,
               formatDeviceName: logic.formatDeviceName,
               onSelectDevice: (index) {
@@ -86,66 +143,98 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
             );
           }),
     );
+    unawaited(_trackDeviceSelectionSheet(sheet));
+  }
+
+  Future<void> _trackDeviceSelectionSheet(Future<void> sheet) async {
+    try {
+      await sheet;
+    } finally {
+      _isDeviceSelectionSheetOpen = false;
+    }
   }
 
   Future<void> _confirmDeleteDevice(String deviceName, String deviceId) async {
-    final shouldDelete =
-        await showDialog<bool>(
-          context: context,
-          builder:
-              (dialogContext) => AlertDialog(
-                title: const Text('确认删除'),
-                content: Text('确定要删除设备"$deviceName"吗？'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(false),
-                    child: const Text('取消'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(true),
-                    style: TextButton.styleFrom(
-                      foregroundColor:
-                          Theme.of(dialogContext).colorScheme.error,
-                    ),
-                    child: const Text('删除'),
-                  ),
-                ],
-              ),
-        ) ??
-        false;
-
-    if (!shouldDelete) {
+    if (_isDeleteConfirmationOpen) {
       return;
     }
 
-    final bool removed = await logic.favoDevice(deviceId, true);
-    if (removed) {
-      logic.removeDeviceByName(deviceName);
-      _showResultSnackBar(
-        success: true,
-        successMessage: '设备删除成功',
-        failureMessage: '',
-      );
-    } else {
+    _isDeleteConfirmationOpen = true;
+    try {
+      final shouldDelete =
+          await showDialog<bool>(
+            context: context,
+            builder:
+                (dialogContext) => AlertDialog(
+                  title: const Text('确认删除'),
+                  content: Text('确定要删除设备"$deviceName"吗？'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(false),
+                      child: const Text('取消'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(true),
+                      style: TextButton.styleFrom(
+                        foregroundColor:
+                            Theme.of(dialogContext).colorScheme.error,
+                      ),
+                      child: const Text('删除'),
+                    ),
+                  ],
+                ),
+          ) ??
+          false;
+
+      if (!shouldDelete) {
+        return;
+      }
+
+      final bool removed = await logic.favoDevice(deviceId, true);
+      if (!mounted) {
+        return;
+      }
+
+      if (removed) {
+        logic.removeDeviceByName(deviceName);
+        _showResultSnackBar(
+          success: true,
+          successMessage: '设备删除成功',
+          failureMessage: '',
+        );
+      } else {
+        _showResultSnackBar(
+          success: false,
+          successMessage: '',
+          failureMessage: '设备删除失败，请稍后重试',
+        );
+      }
+    } catch (_) {
       _showResultSnackBar(
         success: false,
         successMessage: '',
         failureMessage: '设备删除失败，请稍后重试',
       );
+    } finally {
+      _isDeleteConfirmationOpen = false;
     }
   }
 
   void _showDeviceManagementSheet() {
-    showCupertinoModalBottomSheet(
-      context: context,
-      expand: false,
-      backgroundColor: Colors.transparent,
+    if (_isDeviceManagementSheetOpen) {
+      return;
+    }
+
+    _isDeviceManagementSheetOpen = true;
+    final sheet = _showDrinkSheet<void>(
       builder:
           (sheetContext) => Obx(() {
-            final devices = List<dynamic>.from(logic.state.deviceList);
+            final devices = logic.state.deviceList;
+            final deviceCount = devices.length;
 
             return DrinkDeviceManagementSheet(
               devices: devices,
+              deviceCount: deviceCount,
               formatDeviceName: logic.formatDeviceName,
               onClose: () => Navigator.of(sheetContext).pop(),
               onAddDevice: () async {
@@ -153,13 +242,11 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
                 await _scanQRCodeAndAddDevice();
               },
               onDeleteDevice: (index) {
-                if (index < 0 || index >= devices.length) {
+                if (index < 0 || index >= deviceCount) {
                   return;
                 }
 
-                final Map<String, dynamic> device = Map<String, dynamic>.from(
-                  devices[index] as Map,
-                );
+                final device = devices[index] as Map;
                 _confirmDeleteDevice(
                   logic.formatDeviceName(device['name']?.toString() ?? '未知设备'),
                   device['id']?.toString() ?? '',
@@ -168,12 +255,26 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
             );
           }),
     );
+    unawaited(_trackDeviceManagementSheet(sheet));
+  }
+
+  Future<void> _trackDeviceManagementSheet(Future<void> sheet) async {
+    try {
+      await sheet;
+    } finally {
+      _isDeviceManagementSheetOpen = false;
+    }
   }
 
   Future<bool> _scanQRCodeAndAddDevice() async {
+    if (_isAddingDevice) {
+      return false;
+    }
+
+    _isAddingDevice = true;
     try {
       final PermissionStatus cameraPermission =
-          await Permission.camera.request();
+          await (widget.requestCameraPermission ?? Permission.camera.request)();
       if (!cameraPermission.isGranted) {
         if (!mounted) {
           return false;
@@ -194,12 +295,15 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
         return false;
       }
 
-      final result = await Get.to<String>(() => const DrinkQrCodeScannerPage());
+      if (!mounted) {
+        return false;
+      }
+      final result = await (widget.openQrScanner ?? _openQrScanner)(context);
       if (result == null || result.isEmpty) {
         return false;
       }
 
-      final String enc = result.split('/').last;
+      final String enc = _deviceCodeFromQrResult(result);
       final bool isFavo = await logic.favoDevice(enc, false);
       _showResultSnackBar(
         success: isFavo,
@@ -218,12 +322,30 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
         failureMessage: '扫描二维码失败，请稍后重试',
       );
       return false;
+    } finally {
+      _isAddingDevice = false;
     }
+  }
+
+  String _deviceCodeFromQrResult(String result) {
+    final slashIndex = result.lastIndexOf('/');
+    if (slashIndex == -1) {
+      return result;
+    }
+    return result.substring(slashIndex + 1);
+  }
+
+  Future<String?> _openQrScanner(BuildContext context) {
+    return Navigator.of(context).push<String>(
+      buildAppPageRoute(builder: (_) => const DrinkQrCodeScannerPage()),
+    );
   }
 
   @override
   void dispose() {
-    Get.delete<FunctionDrinkLogic>();
+    if (_ownsLogic) {
+      Get.delete<FunctionDrinkLogic>();
+    }
     super.dispose();
   }
 
@@ -285,11 +407,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
         children: [
           Positioned.fill(
             child: Obx(
-              () => RepaintBoundary(
-                child: DrinkBackground(
-                  drinkStatus: logic.state.drinkStatus.value,
-                ),
-              ),
+              () => DrinkBackground(drinkStatus: logic.state.drinkStatus.value),
             ),
           ),
           SafeArea(
@@ -417,7 +535,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
           ),
           Positioned.fill(
             child: Obx(
-              () => DrinkBubbleAnimation(
+              () => AmbientBubbleField.drink(
                 isActive: logic.state.drinkStatus.value,
                 color: Theme.of(context).colorScheme.primary,
               ),

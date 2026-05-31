@@ -6,8 +6,10 @@ import 'package:ionicons/ionicons.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
 import '../../../../core/ui/app_loading_indicator.dart';
+import '../../../../core/ui/app_progress_indicator.dart';
 import '../../../../core/ui/apple_glass.dart';
 import '../../../../core/ui/color_scheme_ext.dart';
+import '../../../../core/ui/scanner_line.dart';
 
 class DrinkBackground extends StatelessWidget {
   const DrinkBackground({super.key, required this.drinkStatus});
@@ -18,7 +20,6 @@ class DrinkBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final Color accent = colorScheme.primary;
-    final useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
     final decoration = BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topCenter,
@@ -32,15 +33,7 @@ class DrinkBackground extends StatelessWidget {
       ),
     );
 
-    if (useLiteEffects) {
-      return DecoratedBox(decoration: decoration);
-    }
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.easeOutCubic,
-      decoration: decoration,
-    );
+    return DecoratedBox(decoration: decoration);
   }
 }
 
@@ -89,8 +82,6 @@ class DrinkStatusHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final bool isDark = colorScheme.isDarkMode;
-    final bool reduceMotion =
-        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final bool useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
     final Color restingCardTop =
         isDark
@@ -104,16 +95,8 @@ class DrinkStatusHeader extends StatelessWidget {
     final Color restingSubtleText = colorScheme.onSurfaceVariant;
     final Color emphasisColor =
         drinkStatus ? colorScheme.onPrimary : restingText;
-    final duration =
-        reduceMotion
-            ? Duration.zero
-            : useLiteEffects
-            ? const Duration(milliseconds: 140)
-            : const Duration(milliseconds: 260);
 
-    return AnimatedContainer(
-      duration: duration,
-      curve: Curves.easeOutCubic,
+    return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -228,12 +211,10 @@ class DrinkStatusHeader extends StatelessWidget {
             const SizedBox(height: 14),
             ClipRRect(
               borderRadius: BorderRadius.circular(99),
-              child: LinearProgressIndicator(
+              child: AppLinearProgressIndicator(
                 minHeight: 6,
                 backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.22),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  colorScheme.onPrimary,
-                ),
+                color: colorScheme.onPrimary,
               ),
             ),
           ],
@@ -863,12 +844,14 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
   const DrinkDeviceSelectionSheet({
     super.key,
     required this.devices,
+    required this.deviceCount,
     required this.selectedIndex,
     required this.formatDeviceName,
     required this.onSelectDevice,
   });
 
   final List<dynamic> devices;
+  final int deviceCount;
   final int selectedIndex;
   final String Function(String name) formatDeviceName;
   final ValueChanged<int> onSelectDevice;
@@ -876,7 +859,7 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxListHeight = MediaQuery.sizeOf(context).height * 0.5;
-    final listHeight = min(maxListHeight, devices.length * 92.0);
+    final listHeight = min(maxListHeight, deviceCount * 92.0);
 
     return DrinkBottomSheetScaffold(
       child: Column(
@@ -886,9 +869,9 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
           _DrinkSheetHeader(
             title: '选择设备',
             subtitle: '选择本次要使用的饮水设备',
-            badge: '${devices.length} 台',
+            badge: '$deviceCount 台',
           ),
-          if (devices.isEmpty)
+          if (deviceCount == 0)
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
               child: _DrinkSheetEmptyCard(
@@ -903,11 +886,10 @@ class DrinkDeviceSelectionSheet extends StatelessWidget {
               child: ListView.builder(
                 padding: EdgeInsets.zero,
                 addAutomaticKeepAlives: false,
-                itemCount: devices.length,
+                addRepaintBoundaries: false,
+                itemCount: deviceCount,
                 itemBuilder: (context, index) {
-                  final Map<String, dynamic> device = Map<String, dynamic>.from(
-                    devices[index] as Map,
-                  );
+                  final device = devices[index] as Map;
                   final String deviceName = formatDeviceName(
                     device['name']?.toString() ?? '未知设备',
                   );
@@ -944,6 +926,7 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
   const DrinkDeviceManagementSheet({
     super.key,
     required this.devices,
+    required this.deviceCount,
     required this.formatDeviceName,
     required this.onClose,
     required this.onAddDevice,
@@ -951,6 +934,7 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
   });
 
   final List<dynamic> devices;
+  final int deviceCount;
   final String Function(String name) formatDeviceName;
   final VoidCallback onClose;
   final VoidCallback onAddDevice;
@@ -959,7 +943,7 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxListHeight = MediaQuery.sizeOf(context).height * 0.42;
-    final listHeight = min(maxListHeight, devices.length * 92.0);
+    final listHeight = min(maxListHeight, deviceCount * 92.0);
 
     return DrinkBottomSheetScaffold(
       child: Column(
@@ -969,9 +953,9 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
           _DrinkSheetHeader(
             title: '设备管理',
             subtitle: '查看已收藏设备，删除不再使用的设备',
-            badge: '${devices.length} 台',
+            badge: '$deviceCount 台',
           ),
-          if (devices.isEmpty)
+          if (deviceCount == 0)
             const Padding(
               padding: EdgeInsets.only(bottom: 12),
               child: _DrinkSheetEmptyCard(
@@ -986,11 +970,10 @@ class DrinkDeviceManagementSheet extends StatelessWidget {
               child: ListView.builder(
                 padding: EdgeInsets.zero,
                 addAutomaticKeepAlives: false,
-                itemCount: devices.length,
+                addRepaintBoundaries: false,
+                itemCount: deviceCount,
                 itemBuilder: (context, index) {
-                  final Map<String, dynamic> device = Map<String, dynamic>.from(
-                    devices[index] as Map,
-                  );
+                  final device = devices[index] as Map;
                   final String deviceName = formatDeviceName(
                     device['name']?.toString() ?? '未知设备',
                   );
@@ -1042,13 +1025,15 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
   final GlobalKey _qrKey = GlobalKey(debugLabel: 'QR');
   QRViewController? _controller;
   StreamSubscription<Barcode>? _scanSubscription;
-  bool _isFlashOn = false;
+  final ValueNotifier<bool> _isFlashOnNotifier = ValueNotifier<bool>(false);
+  bool _isTogglingFlash = false;
   bool _isScanning = true;
 
   @override
   void dispose() {
     _scanSubscription?.cancel();
     _controller?.dispose();
+    _isFlashOnNotifier.dispose();
     super.dispose();
   }
 
@@ -1060,13 +1045,35 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
         return;
       }
 
-      setState(() {
-        _isScanning = false;
-      });
+      _isScanning = false;
       _scanSubscription?.cancel();
       controller.pauseCamera();
       Navigator.of(context).pop(code);
     });
+  }
+
+  Future<void> _toggleFlash() async {
+    if (_isTogglingFlash) {
+      return;
+    }
+
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+
+    _isTogglingFlash = true;
+    try {
+      await controller.toggleFlash();
+      final current = await controller.getFlashStatus() ?? false;
+      if (!mounted || _isFlashOnNotifier.value == current) {
+        return;
+      }
+
+      _isFlashOnNotifier.value = current;
+    } finally {
+      _isTogglingFlash = false;
+    }
   }
 
   @override
@@ -1167,17 +1174,17 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _DrinkScannerActionButton(
-                          icon:
-                              _isFlashOn
-                                  ? Ionicons.flash
-                                  : Ionicons.flash_outline,
-                          label: _isFlashOn ? '关闭闪光灯' : '打开闪光灯',
-                          onTap: () {
-                            setState(() {
-                              _isFlashOn = !_isFlashOn;
-                            });
-                            _controller?.toggleFlash();
+                        ValueListenableBuilder<bool>(
+                          valueListenable: _isFlashOnNotifier,
+                          builder: (context, isFlashOn, _) {
+                            return _DrinkScannerActionButton(
+                              icon:
+                                  isFlashOn
+                                      ? Ionicons.flash
+                                      : Ionicons.flash_outline,
+                              label: isFlashOn ? '关闭闪光灯' : '打开闪光灯',
+                              onTap: _toggleFlash,
+                            );
                           },
                         ),
                         const SizedBox(width: 32),
@@ -1201,7 +1208,7 @@ class _DrinkQrCodeScannerPageState extends State<DrinkQrCodeScannerPage> {
                 child: SizedBox(
                   width: cutOutSize,
                   height: cutOutSize,
-                  child: _DrinkScannerLine(color: colorScheme.primary),
+                  child: AppScannerLine(color: colorScheme.primary),
                 ),
               ),
             ),
@@ -1248,286 +1255,5 @@ class _DrinkScannerActionButton extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _DrinkScannerLine extends StatefulWidget {
-  const _DrinkScannerLine({required this.color});
-
-  final Color color;
-
-  @override
-  State<_DrinkScannerLine> createState() => _DrinkScannerLineState();
-}
-
-class _DrinkScannerLineState extends State<_DrinkScannerLine>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    )..repeat();
-    _animation = Tween<double>(
-      begin: 0,
-      end: 1,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return CustomPaint(
-          size: Size.infinite,
-          painter: _DrinkScannerLinePainter(
-            progress: _animation.value,
-            color: widget.color,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _DrinkScannerLinePainter extends CustomPainter {
-  const _DrinkScannerLinePainter({required this.progress, required this.color});
-
-  final double progress;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint =
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              Colors.transparent,
-              color.withValues(alpha: 0.78),
-              color,
-              color.withValues(alpha: 0.78),
-              Colors.transparent,
-            ],
-            stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
-          ).createShader(Rect.fromLTWH(0, 0, size.width, 4));
-
-    final double y = size.height * progress;
-    canvas.drawRect(Rect.fromLTWH(0, y, size.width, 3), paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _DrinkScannerLinePainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color;
-  }
-}
-
-class DrinkBubbleAnimation extends StatefulWidget {
-  const DrinkBubbleAnimation({
-    super.key,
-    required this.isActive,
-    required this.color,
-  });
-
-  final bool isActive;
-  final Color color;
-
-  @override
-  State<DrinkBubbleAnimation> createState() => _DrinkBubbleAnimationState();
-}
-
-class _DrinkBubbleAnimationState extends State<DrinkBubbleAnimation>
-    with SingleTickerProviderStateMixin {
-  static const List<_DrinkBubbleSpec> _bubbleSpecs = [
-    _DrinkBubbleSpec(xFactor: 0.08, size: 24, speed: 0.54, drift: 18, phase: 0),
-    _DrinkBubbleSpec(
-      xFactor: 0.18,
-      size: 34,
-      speed: 0.48,
-      drift: -22,
-      phase: 0.18,
-    ),
-    _DrinkBubbleSpec(
-      xFactor: 0.31,
-      size: 18,
-      speed: 0.62,
-      drift: 12,
-      phase: 0.36,
-    ),
-    _DrinkBubbleSpec(
-      xFactor: 0.44,
-      size: 30,
-      speed: 0.42,
-      drift: -16,
-      phase: 0.52,
-    ),
-    _DrinkBubbleSpec(
-      xFactor: 0.58,
-      size: 22,
-      speed: 0.58,
-      drift: 20,
-      phase: 0.70,
-    ),
-    _DrinkBubbleSpec(
-      xFactor: 0.72,
-      size: 38,
-      speed: 0.38,
-      drift: -14,
-      phase: 0.10,
-    ),
-    _DrinkBubbleSpec(
-      xFactor: 0.86,
-      size: 26,
-      speed: 0.50,
-      drift: 16,
-      phase: 0.82,
-    ),
-    _DrinkBubbleSpec(
-      xFactor: 0.95,
-      size: 16,
-      speed: 0.66,
-      drift: -10,
-      phase: 0.44,
-    ),
-  ];
-
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 12),
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.isActive) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void didUpdateWidget(DrinkBubbleAnimation oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isActive != oldWidget.isActive) {
-      if (widget.isActive) {
-        _controller.repeat();
-      } else {
-        _controller.stop();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.isActive) {
-      return const SizedBox.shrink();
-    }
-
-    return IgnorePointer(
-      child: RepaintBoundary(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) {
-            return CustomPaint(
-              size: Size.infinite,
-              isComplex: true,
-              willChange: true,
-              painter: _DrinkBubblePainter(
-                progress: _controller.value,
-                color: widget.color,
-                bubbles: _bubbleSpecs,
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _DrinkBubbleSpec {
-  const _DrinkBubbleSpec({
-    required this.xFactor,
-    required this.size,
-    required this.speed,
-    required this.drift,
-    required this.phase,
-  });
-
-  final double xFactor;
-  final double size;
-  final double speed;
-  final double drift;
-  final double phase;
-}
-
-class _DrinkBubblePainter extends CustomPainter {
-  const _DrinkBubblePainter({
-    required this.progress,
-    required this.color,
-    required this.bubbles,
-  });
-
-  final double progress;
-  final Color color;
-  final List<_DrinkBubbleSpec> bubbles;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) {
-      return;
-    }
-
-    final fillPaint = Paint()..style = PaintingStyle.fill;
-    final strokePaint =
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1;
-    final travel = size.height + 140;
-
-    for (final bubble in bubbles) {
-      final cycle = (progress * bubble.speed + bubble.phase) % 1.0;
-      final fadeIn = (cycle / 0.14).clamp(0.0, 1.0);
-      final fadeOut = ((1.0 - cycle) / 0.26).clamp(0.0, 1.0);
-      final opacity = fadeIn < fadeOut ? fadeIn : fadeOut;
-      if (opacity <= 0.01) {
-        continue;
-      }
-
-      final wave = sin((cycle + bubble.phase) * pi * 2);
-      final x = size.width * bubble.xFactor + wave * bubble.drift;
-      final y = size.height + bubble.size - cycle * travel;
-      final radius = bubble.size / 2;
-      final center = Offset(x, y);
-
-      fillPaint.color = color.withValues(alpha: opacity * 0.22);
-      strokePaint.color = color.withValues(alpha: opacity * 0.34);
-      canvas.drawCircle(center, radius, fillPaint);
-      canvas.drawCircle(center, radius, strokePaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DrinkBubblePainter oldDelegate) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.color != color ||
-        oldDelegate.bubbles != bubbles;
   }
 }

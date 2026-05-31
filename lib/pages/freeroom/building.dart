@@ -2,15 +2,32 @@ import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../core/services/app_logger.dart';
 import '../../core/ui/app_loading_indicator.dart';
+import '../../core/ui/app_page_route.dart';
+import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../core/ui/color_scheme_ext.dart';
 import '../../utils/roomapi.dart';
 import 'building_bridge.dart';
 import 'room.dart';
 
+typedef FreeRoomPageBuilder =
+    Widget Function(Building building, String displayName);
+typedef FreeRoomRoutePusher =
+    Future<T?> Function<T>(BuildContext context, Route<T> route);
+
 class BuildingPage extends StatefulWidget {
-  const BuildingPage({super.key});
+  const BuildingPage({
+    super.key,
+    this.loadBuildings,
+    this.buildRoomPage,
+    this.pushRoute,
+  });
+
+  final FreeRoomBuildingLoader? loadBuildings;
+  final FreeRoomPageBuilder? buildRoomPage;
+  final FreeRoomRoutePusher? pushRoute;
 
   @override
   State<BuildingPage> createState() => _BuildingPageState();
@@ -19,7 +36,12 @@ class BuildingPage extends StatefulWidget {
 class _BuildingPageState extends State<BuildingPage> {
   static const Color _emptyRoomAccent = Color(0xFF3768D6);
   static const List<String> _campusOrder = ['河西校区', '河东校区', '其他'];
+  static const List<String> _campusFullPrefixes = ['河西校区', '河东校区'];
+  static const List<String> _campusShortPrefixes = ['河西', '河东'];
   late Future<List<Building>> _buildingFuture;
+  List<Building>? _buildingDirectorySource;
+  _BuildingDirectory? _cachedBuildingDirectory;
+  bool _isOpeningBuilding = false;
 
   @override
   void initState() {
@@ -28,42 +50,141 @@ class _BuildingPageState extends State<BuildingPage> {
   }
 
   Future<List<Building>> _loadBuildings() {
-    return getBuildingList();
+    return getBuildingList(loadBuildings: widget.loadBuildings);
   }
 
   String _campusLabel(String name) {
-    final normalized = name.replaceAll(' ', '');
-    if (normalized.contains('河西')) {
+    if (_containsCampusToken(name, '河西')) {
       return '河西校区';
     }
-    if (normalized.contains('河东')) {
+    if (_containsCampusToken(name, '河东')) {
       return '河东校区';
     }
     return '其他';
   }
 
+  bool _containsCampusToken(String name, String token) {
+    for (var index = 0; index < name.length; index++) {
+      if (_startsWithCampusToken(name, index, token)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _startsWithCampusToken(String name, int start, String token) {
+    var nameIndex = start;
+    var tokenIndex = 0;
+    while (nameIndex < name.length && tokenIndex < token.length) {
+      final nameCodeUnit = name.codeUnitAt(nameIndex);
+      if (nameCodeUnit == 0x20) {
+        nameIndex++;
+        continue;
+      }
+      if (nameCodeUnit != token.codeUnitAt(tokenIndex)) {
+        return false;
+      }
+      nameIndex++;
+      tokenIndex++;
+    }
+    return tokenIndex == token.length;
+  }
+
   String _compactBuildingName(String name) {
-    final compactName =
-        name
-            .replaceFirst(RegExp(r'^[\s\-—–]+'), '')
-            .replaceFirst(RegExp(r'^(河西|河东)校区'), '')
-            .replaceFirst(RegExp(r'^(河西|河东)'), '')
-            .replaceFirst(RegExp(r'^[\s\-—–]+'), '')
-            .trim();
+    var start = _buildingNameContentStart(name, 0);
+    start = _stripBuildingNamePrefix(name, start, _campusFullPrefixes);
+    start = _stripBuildingNamePrefix(name, start, _campusShortPrefixes);
+    start = _buildingNameContentStart(name, start);
+    final compactName = name.substring(start).trim();
     return compactName.isEmpty ? name : compactName;
   }
 
-  List<MapEntry<String, List<Building>>> _groupBuildings(List<Building> data) {
-    final grouped = <String, List<Building>>{};
-    for (final building in data) {
-      final campus = _campusLabel(building.name);
-      grouped.putIfAbsent(campus, () => <Building>[]).add(building);
+  int _stripBuildingNamePrefix(String value, int start, List<String> prefixes) {
+    for (final prefix in prefixes) {
+      if (value.startsWith(prefix, start)) {
+        return start + prefix.length;
+      }
+    }
+    return start;
+  }
+
+  int _buildingNameContentStart(String value, int start) {
+    for (var index = start; index < value.length; index++) {
+      final codeUnit = value.codeUnitAt(index);
+      if (!_isBuildingNameSeparator(codeUnit)) {
+        return index;
+      }
+    }
+    return value.length;
+  }
+
+  bool _isBuildingNameSeparator(int codeUnit) {
+    return codeUnit <= 0x20 ||
+        codeUnit == 0x3000 ||
+        codeUnit == 0x2D ||
+        codeUnit == 0x2013 ||
+        codeUnit == 0x2014;
+  }
+
+  _BuildingDirectory _buildingDirectoryFor(List<Building> data) {
+    final cachedDirectory = _cachedBuildingDirectory;
+    if (cachedDirectory != null && identical(_buildingDirectorySource, data)) {
+      return cachedDirectory;
     }
 
-    return _campusOrder
-        .where((campus) => grouped[campus]?.isNotEmpty ?? false)
-        .map((campus) => MapEntry(campus, grouped[campus]!))
-        .toList();
+    final directory = _buildBuildingDirectory(data);
+    _buildingDirectorySource = data;
+    _cachedBuildingDirectory = directory;
+    return directory;
+  }
+
+  _BuildingDirectory _buildBuildingDirectory(List<Building> data) {
+    final grouped = <String, List<_BuildingGridItem>>{};
+    final allDisplayNames = <String>[];
+    final allRoomCountLabels = <String>[];
+    var totalClassrooms = 0;
+
+    for (final building in data) {
+      final campus = _campusLabel(building.name);
+      final displayName = _compactBuildingName(building.name);
+      final roomCountLabel = '${building.count}间';
+      final freeLabel =
+          building.free.trim().isEmpty ? '空闲数未知' : '空闲${building.free}间';
+      totalClassrooms += int.tryParse(building.count) ?? 0;
+      allDisplayNames.add(displayName);
+      allRoomCountLabels.add(roomCountLabel);
+      grouped
+          .putIfAbsent(campus, () => <_BuildingGridItem>[])
+          .add(
+            _BuildingGridItem(
+              building: building,
+              displayName: displayName,
+              roomCountLabel: roomCountLabel,
+              freeLabel: freeLabel,
+            ),
+          );
+    }
+
+    final groups = <_CampusBuildingGroup>[];
+    for (final campus in _campusOrder) {
+      final buildings = grouped[campus];
+      if (buildings == null || buildings.isEmpty) {
+        continue;
+      }
+      groups.add(
+        _CampusBuildingGroup(
+          campus: campus,
+          buildings: List<_BuildingGridItem>.unmodifiable(buildings),
+        ),
+      );
+    }
+
+    return _BuildingDirectory(
+      groups: List<_CampusBuildingGroup>.unmodifiable(groups),
+      totalClassrooms: totalClassrooms,
+      allDisplayNames: List<String>.unmodifiable(allDisplayNames),
+      allRoomCountLabels: List<String>.unmodifiable(allRoomCountLabels),
+    );
   }
 
   Color _campusAccent(String campus) {
@@ -74,11 +195,52 @@ class _BuildingPageState extends State<BuildingPage> {
     };
   }
 
-  int _totalClassrooms(List<Building> data) {
-    return data.fold<int>(
-      0,
-      (sum, building) => sum + (int.tryParse(building.count) ?? 0),
+  Widget _buildRoomPage(Building building, String displayName) {
+    final builder = widget.buildRoomPage;
+    if (builder != null) {
+      return builder(building, displayName);
+    }
+
+    return FreeRoomPage(
+      buildingId: building.buildingId,
+      buildingName: displayName,
     );
+  }
+
+  Future<void> _openBuilding(Building building, String displayName) async {
+    if (_isOpeningBuilding) {
+      return;
+    }
+
+    _isOpeningBuilding = true;
+    try {
+      final pusher = widget.pushRoute ?? _pushRoute;
+      await pusher<void>(
+        context,
+        buildAppPageRoute<void>(
+          builder: (_) => _buildRoomPage(building, displayName),
+        ),
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open free room building',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (mounted) {
+        showAppSnackBar(
+          context,
+          message: '无法打开空教室列表，请稍后重试',
+          type: AppSnackBarType.error,
+        );
+      }
+    } finally {
+      _isOpeningBuilding = false;
+    }
+  }
+
+  Future<T?> _pushRoute<T>(BuildContext context, Route<T> route) {
+    return Navigator.of(context).push<T>(route);
   }
 
   @override
@@ -192,12 +354,7 @@ class _BuildingPageState extends State<BuildingPage> {
   }
 
   Widget _buildContent(BuildContext context, List<Building> data) {
-    final groupedBuildings = _groupBuildings(data);
-    final totalClassrooms = _totalClassrooms(data);
-    final allCompactNames =
-        data.map((building) => _compactBuildingName(building.name)).toList();
-    final allRoomCountLabels =
-        data.map((building) => '${building.count}间').toList();
+    final directory = _buildingDirectoryFor(data);
 
     return LayoutBuilder(
       builder: (context, outerConstraints) {
@@ -210,8 +367,8 @@ class _BuildingPageState extends State<BuildingPage> {
           context,
           availableWidth: availableWidth,
           crossAxisCount: crossAxisCount,
-          displayNames: allCompactNames,
-          roomCountLabels: allRoomCountLabels,
+          displayNames: directory.allDisplayNames,
+          roomCountLabels: directory.allRoomCountLabels,
         );
 
         return CustomScrollView(
@@ -225,7 +382,7 @@ class _BuildingPageState extends State<BuildingPage> {
               sliver: SliverToBoxAdapter(
                 child: _CampusHeroCard(
                   accent: _emptyRoomAccent,
-                  totalClassrooms: totalClassrooms,
+                  totalClassrooms: directory.totalClassrooms,
                 ),
               ),
             ),
@@ -254,27 +411,19 @@ class _BuildingPageState extends State<BuildingPage> {
                 ),
               )
             else
-              ...groupedBuildings.expand((group) {
-                final campus = group.key;
-                final buildings = group.value;
-
-                return <Widget>[
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                    sliver: SliverToBoxAdapter(
-                      child: _CampusSection(
-                        campus: campus,
-                        accent: _campusAccent(campus),
-                        buildings: buildings,
-                        compactBuildingName: _compactBuildingName,
-                        allDisplayNames: allCompactNames,
-                        allRoomCountLabels: allRoomCountLabels,
-                        cachedTitleFontSize: titleFontSize,
-                      ),
+              for (final group in directory.groups)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: _CampusSection(
+                      campus: group.campus,
+                      accent: _campusAccent(group.campus),
+                      buildings: group.buildings,
+                      cachedTitleFontSize: titleFontSize,
+                      onOpenBuilding: _openBuilding,
                     ),
                   ),
-                ];
-              }),
+                ),
             const SliverToBoxAdapter(child: SizedBox(height: 28)),
           ],
         );
@@ -346,26 +495,58 @@ class _CampusHeroCard extends StatelessWidget {
   }
 }
 
+class _BuildingDirectory {
+  const _BuildingDirectory({
+    required this.groups,
+    required this.totalClassrooms,
+    required this.allDisplayNames,
+    required this.allRoomCountLabels,
+  });
+
+  final List<_CampusBuildingGroup> groups;
+  final int totalClassrooms;
+  final List<String> allDisplayNames;
+  final List<String> allRoomCountLabels;
+}
+
+class _CampusBuildingGroup {
+  const _CampusBuildingGroup({required this.campus, required this.buildings});
+
+  final String campus;
+  final List<_BuildingGridItem> buildings;
+}
+
+class _BuildingGridItem {
+  const _BuildingGridItem({
+    required this.building,
+    required this.displayName,
+    required this.roomCountLabel,
+    required this.freeLabel,
+  });
+
+  final Building building;
+  final String displayName;
+  final String roomCountLabel;
+  final String freeLabel;
+}
+
 class _CampusSection extends StatelessWidget {
   const _CampusSection({
     required this.campus,
     required this.accent,
     required this.buildings,
-    required this.compactBuildingName,
-    required this.allDisplayNames,
-    required this.allRoomCountLabels,
     required this.cachedTitleFontSize,
+    required this.onOpenBuilding,
   });
 
   final String campus;
   final Color accent;
-  final List<Building> buildings;
-  final String Function(String name) compactBuildingName;
-  final List<String> allDisplayNames;
-  final List<String> allRoomCountLabels;
+  final List<_BuildingGridItem> buildings;
   // Perf: 字体大小计算结果由父级一次性计算并缓存传入，避免
   // LayoutBuilder 每次 rebuild 都跑 12×N 次 TextPainter.layout()。
   final double cachedTitleFontSize;
+  final Future<void> Function(Building building, String displayName)
+  onOpenBuilding;
 
   @override
   Widget build(BuildContext context) {
@@ -436,9 +617,9 @@ class _CampusSection extends StatelessWidget {
                 crossAxisCount: crossAxisCount,
                 childAspectRatio: childAspectRatio,
                 buildings: buildings,
-                compactBuildingName: compactBuildingName,
                 accent: accent,
                 titleFontSize: cachedTitleFontSize,
+                onOpenBuilding: onOpenBuilding,
               ),
             ],
           );
@@ -454,9 +635,9 @@ class _CampusBuildingGrid extends StatelessWidget {
     required this.crossAxisCount,
     required this.childAspectRatio,
     required this.buildings,
-    required this.compactBuildingName,
     required this.accent,
     required this.titleFontSize,
+    required this.onOpenBuilding,
   });
 
   static const double _spacing = 12;
@@ -464,10 +645,11 @@ class _CampusBuildingGrid extends StatelessWidget {
   final double width;
   final int crossAxisCount;
   final double childAspectRatio;
-  final List<Building> buildings;
-  final String Function(String name) compactBuildingName;
+  final List<_BuildingGridItem> buildings;
   final Color accent;
   final double titleFontSize;
+  final Future<void> Function(Building building, String displayName)
+  onOpenBuilding;
 
   @override
   Widget build(BuildContext context) {
@@ -487,17 +669,15 @@ class _CampusBuildingGrid extends StatelessWidget {
       spacing: _spacing,
       runSpacing: _spacing,
       children: [
-        for (final building in buildings)
+        for (final item in buildings)
           SizedBox(
             width: itemWidth,
             height: itemHeight,
-            child: RepaintBoundary(
-              child: _BuildingCard(
-                building: building,
-                displayName: compactBuildingName(building.name),
-                accent: accent,
-                titleFontSize: titleFontSize,
-              ),
+            child: _BuildingCard(
+              item: item,
+              accent: accent,
+              titleFontSize: titleFontSize,
+              onOpenBuilding: onOpenBuilding,
             ),
           ),
       ],
@@ -566,24 +746,22 @@ double _maxTextWidth(List<String> texts, TextStyle style) {
 
 class _BuildingCard extends StatelessWidget {
   const _BuildingCard({
-    required this.building,
-    required this.displayName,
+    required this.item,
     required this.accent,
     required this.titleFontSize,
+    required this.onOpenBuilding,
   });
 
-  final Building building;
-  final String displayName;
+  final _BuildingGridItem item;
   final Color accent;
   final double titleFontSize;
+  final Future<void> Function(Building building, String displayName)
+  onOpenBuilding;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final borderRadius = BorderRadius.circular(24);
-    final roomCountLabel = '${building.count}间';
-    final freeLabel =
-        building.free.trim().isEmpty ? '空闲数未知' : '空闲${building.free}间';
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -614,18 +792,7 @@ class _BuildingCard extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder:
-                      (context) => FreeRoomPage(
-                        buildingId: building.buildingId,
-                        buildingName: displayName,
-                      ),
-                ),
-              );
-            },
+            onTap: () => onOpenBuilding(item.building, item.displayName),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
               child: Column(
@@ -660,7 +827,7 @@ class _BuildingCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          displayName,
+                          item.displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(
@@ -675,14 +842,14 @@ class _BuildingCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       _BuildingInfoPill(
-                        label: roomCountLabel,
+                        label: item.roomCountLabel,
                         accent: accent,
                         emphasized: true,
                       ),
                     ],
                   ),
                   const SizedBox(height: 6),
-                  _BuildingInfoPill(label: freeLabel, accent: accent),
+                  _BuildingInfoPill(label: item.freeLabel, accent: accent),
                 ],
               ),
             ),

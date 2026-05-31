@@ -1,36 +1,62 @@
 // token_display_page.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import '../home/homeview/view.dart';
+import '../home/home_route.dart';
 import '../utils/token.dart';
+
+typedef TokenDisplaySaver = Future<void> Function(String token);
+typedef TokenDisplayHomeRouteBuilder = Route<void> Function({int initialIndex});
 
 class TokenDisplayPage extends StatefulWidget {
   final String token;
   final bool renew;
+  final TokenDisplaySaver? saveTokenOverride;
+  final TokenDisplayHomeRouteBuilder? buildHomeRoute;
 
-  const TokenDisplayPage({super.key, required this.token, required this.renew});
+  const TokenDisplayPage({
+    super.key,
+    required this.token,
+    required this.renew,
+    this.saveTokenOverride,
+    this.buildHomeRoute,
+  });
 
   @override
   State<TokenDisplayPage> createState() => _TokenDisplayPageState();
 }
 
 class _TokenDisplayPageState extends State<TokenDisplayPage> {
+  bool _hasScheduledHomeRedirect = false;
+
   @override
   void initState() {
     super.initState();
-    saveToken(widget.token);
+    unawaited(_saveTokenAndMaybeRedirect());
+  }
+
+  Future<void> _saveTokenAndMaybeRedirect() async {
+    await (widget.saveTokenOverride ?? saveToken)(widget.token);
     if (widget.renew) {
       //  Navigator.pop(context,"200");
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => const HomeviewPage(initialIndex: 0),
-          ),
-          (route) => false,
-        );
-      });
+      return;
     }
+    if (!mounted || _hasScheduledHomeRedirect) {
+      return;
+    }
+
+    _hasScheduledHomeRedirect = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pushAndRemoveUntil(
+        (widget.buildHomeRoute ?? buildHomePageRoute)(initialIndex: 0),
+        (route) => false,
+      );
+    });
   }
 
   @override
