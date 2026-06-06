@@ -92,9 +92,11 @@ flutter run
 # Android 分架构 APK → releases/
 bash scripts/build_android_release.sh
 
-# iOS 未签名 IPA
+# iOS 未签名 IPA，供用户自行使用证书重签安装
 bash scripts/build_ios_quick.sh
 ```
+
+iOS Release 产物由 GitHub Actions 构建为未签名包，仓库不处理用户证书、profile 或重签工具。
 
 ## 信任与隐私
 
