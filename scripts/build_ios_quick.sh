@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# SuperHUT iOS 快速构建脚本（简化版）
+# SuperHUT iOS 未签名构建脚本。
+# CI 只产出可由用户自行重签的 IPA，不处理证书、profile 或重签工具。
 
 set -e
 
@@ -8,14 +9,14 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-echo "🚀 开始快速构建 SuperHUT iOS 应用..."
+echo "🚀 开始构建 SuperHUT iOS 未签名 IPA..."
+echo "ℹ️  此脚本只负责打包 Payload，不做任何签名处理。"
 
 cd "$PROJECT_ROOT"
 
 # 获取版本号
 VERSION=$(grep "version:" pubspec.yaml | awk '{print $2}' | tr -d '\r')
 APP_BUNDLE_NAME="Superhut.app"
-LDID_BIN="${LDID_BIN:-$(command -v ldid || true)}"
 
 # 清理并构建
 echo "📦 清理项目..."
@@ -50,35 +51,21 @@ mkdir -p build/ios/ipa/Payload
 cp -R "$SOURCE_APP_PATH" "build/ios/ipa/Payload/${APP_BUNDLE_NAME}"
 echo "📦 已将 $(basename "$SOURCE_APP_PATH") 重命名为 ${APP_BUNDLE_NAME}"
 
-APP_INFO_PLIST="build/ios/ipa/Payload/${APP_BUNDLE_NAME}/Info.plist"
-APP_EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_INFO_PLIST")
-APP_BINARY="build/ios/ipa/Payload/${APP_BUNDLE_NAME}/${APP_EXECUTABLE_NAME}"
-
-WIDGET_INFO_PLIST="build/ios/ipa/Payload/${APP_BUNDLE_NAME}/PlugIns/CourseWidget.appex/Info.plist"
-WIDGET_EXECUTABLE_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$WIDGET_INFO_PLIST")
-WIDGET_BINARY="build/ios/ipa/Payload/${APP_BUNDLE_NAME}/PlugIns/CourseWidget.appex/${WIDGET_EXECUTABLE_NAME}"
-
-if [ -z "$LDID_BIN" ]; then
-  echo "❌ 未找到 ldid，无法为 TrollStore 安装保留 App Group entitlement。"
+WIDGET_APP_PATH="build/ios/ipa/Payload/${APP_BUNDLE_NAME}/PlugIns/CourseWidget.appex"
+if [ ! -d "$WIDGET_APP_PATH" ]; then
+  echo "❌ 缺少小组件扩展产物: $WIDGET_APP_PATH"
   exit 1
 fi
 
-echo "🔏 使用 ldid 为 TrollStore 补写 entitlements..."
-"$LDID_BIN" -S"${PROJECT_ROOT}/ios/Runner/Runner.entitlements" "$APP_BINARY"
-
-if [ -f "$WIDGET_BINARY" ]; then
-  "$LDID_BIN" -S"${PROJECT_ROOT}/ios/CourseWidget/CourseWidget.entitlements" "$WIDGET_BINARY"
-else
-  echo "❌ 缺少小组件可执行文件: $WIDGET_BINARY"
-  exit 1
-fi
+find "build/ios/ipa/Payload/${APP_BUNDLE_NAME}" -name "_CodeSignature" -type d -prune -exec rm -rf {} +
+find "build/ios/ipa/Payload/${APP_BUNDLE_NAME}" -name "embedded.mobileprovision" -type f -delete
 
 # 创建输出目录
 mkdir -p releases
 
 # 生成文件名
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-IPA_NAME="superhut-v${VERSION}-trollstore-${TIMESTAMP}.ipa"
+IPA_NAME="superhut-v${VERSION}-unsigned-${TIMESTAMP}.ipa"
 
 cd build/ios/ipa
 zip -r "../../../releases/${IPA_NAME}" Payload > /dev/null
