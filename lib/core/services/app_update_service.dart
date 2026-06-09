@@ -1,6 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:html/dom.dart';
-import 'package:html/parser.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pub_semver/pub_semver.dart';
 
 import 'app_logger.dart';
@@ -13,14 +12,21 @@ class AppUpdateInfo {
     required this.tagName,
     required this.releaseUrl,
     required this.notes,
+    this.downloadUrl,
+    this.downloadFileName,
   });
 
   final Version version;
   final String tagName;
   final Uri releaseUrl;
   final String notes;
+  final Uri? downloadUrl;
+  final String? downloadFileName;
 
   String get displayVersion => tagName.isEmpty ? version.toString() : tagName;
+  Uri get updateUrl => downloadUrl ?? releaseUrl;
+  bool get hasDirectDownload => downloadUrl != null;
+  String get updateActionLabel => hasDirectDownload ? '下载安装包' : '打开发布页';
 }
 
 enum AppUpdateCheckStatus {
@@ -47,17 +53,17 @@ class AppUpdateCheckResult {
 }
 
 abstract final class AppUpdateService {
-  static final Uri _releasesFeedUrl = Uri.parse(
-    'https://github.com/rccuu/superhut/releases.atom',
+  static final Uri _releasesApiUrl = Uri.parse(
+    'https://api.github.com/repos/rccuu/superhut/releases?per_page=20',
   );
   static final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 8),
       receiveTimeout: const Duration(seconds: 8),
-      responseType: ResponseType.plain,
+      responseType: ResponseType.json,
       headers: const {
-        'Accept':
-            'application/atom+xml,application/xml,text/xml;q=0.9,*/*;q=0.8',
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
       },
     ),
   );
@@ -85,15 +91,15 @@ abstract final class AppUpdateService {
     }
 
     try {
-      final response = await _dio.getUri<String>(_releasesFeedUrl);
-      final feedXml = response.data?.trim();
-      if (feedXml == null || feedXml.isEmpty) {
+      final response = await _dio.getUri<dynamic>(_releasesApiUrl);
+      final releases = response.data;
+      if (releases is! List || releases.isEmpty) {
         return const AppUpdateCheckResult(
           status: AppUpdateCheckStatus.noPublishedRelease,
         );
       }
 
-      final latestRelease = _selectNewestRelease(feedXml);
+      final latestRelease = _selectNewestRelease(releases);
       if (latestRelease == null) {
         return const AppUpdateCheckResult(
           status: AppUpdateCheckStatus.noPublishedRelease,
@@ -128,12 +134,15 @@ abstract final class AppUpdateService {
     }
   }
 
-  static AppUpdateInfo? _selectNewestRelease(String feedXml) {
-    final document = parse(feedXml);
+  static AppUpdateInfo? _selectNewestRelease(List<dynamic> releases) {
     AppUpdateInfo? newestRelease;
 
-    for (final entry in document.getElementsByTagName('entry')) {
-      final parsedRelease = _parseReleaseEntry(entry);
+    for (final release in releases) {
+      if (release is! Map) {
+        continue;
+      }
+
+      final parsedRelease = _parseRelease(release);
       if (parsedRelease == null) {
         continue;
       }
@@ -147,14 +156,18 @@ abstract final class AppUpdateService {
     return newestRelease;
   }
 
-  static AppUpdateInfo? _parseReleaseEntry(Element entry) {
-    final releaseUrl = _extractReleaseUrl(entry);
-    if (releaseUrl == null) {
+  static AppUpdateInfo? _parseRelease(Map<dynamic, dynamic> release) {
+    if (release['draft'] == true || release['prerelease'] == true) {
       return null;
     }
 
-    final tagName = _extractTagName(releaseUrl);
+    final tagName = _stringValue(release['tag_name']);
     if (tagName == null || tagName.isEmpty) {
+      return null;
+    }
+
+    final releaseUrl = Uri.tryParse(_stringValue(release['html_url']) ?? '');
+    if (releaseUrl == null) {
       return null;
     }
 
@@ -163,42 +176,77 @@ abstract final class AppUpdateService {
       return null;
     }
 
-    final notes = _extractNotes(entry);
+    final assets = release['assets'];
+    final installerAsset =
+        assets is List ? _selectInstallerAsset(assets) : null;
+
     return AppUpdateInfo(
       version: version,
       tagName: tagName,
       releaseUrl: releaseUrl,
-      notes: notes,
+      notes: _releaseNotesFromBody(_stringValue(release['body']) ?? ''),
+      downloadUrl: installerAsset?.downloadUrl,
+      downloadFileName: installerAsset?.name,
     );
   }
 
-  static Uri? _extractReleaseUrl(Element entry) {
-    for (final link in entry.getElementsByTagName('link')) {
-      if (link.attributes['rel'] != 'alternate') {
+  static _ReleaseInstallerAsset? _selectInstallerAsset(List<dynamic> assets) {
+    final candidates = <_ReleaseInstallerAsset>[];
+    for (final asset in assets) {
+      if (asset is! Map) {
         continue;
       }
-
-      final href = link.attributes['href'];
-      if (href == null || href.isEmpty) {
+      final name = _stringValue(asset['name']);
+      final downloadUrl = Uri.tryParse(
+        _stringValue(asset['browser_download_url']) ?? '',
+      );
+      if (name == null || name.isEmpty || downloadUrl == null) {
         continue;
       }
-
-      return Uri.tryParse(href);
+      candidates.add(
+        _ReleaseInstallerAsset(name: name, downloadUrl: downloadUrl),
+      );
     }
 
-    return null;
+    if (candidates.isEmpty) {
+      return null;
+    }
+
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return _firstMatchingAsset(
+              candidates,
+              (name) => name.endsWith('.apk') && name.contains('arm64-v8a'),
+            ) ??
+            _firstMatchingAsset(candidates, (name) => name.endsWith('.apk'));
+      case TargetPlatform.iOS:
+        return _firstMatchingAsset(
+              candidates,
+              (name) => name.endsWith('.ipa') && name.contains('trollstore'),
+            ) ??
+            _firstMatchingAsset(
+              candidates,
+              (name) => name.endsWith('.ipa') && name.contains('unsigned'),
+            ) ??
+            _firstMatchingAsset(candidates, (name) => name.endsWith('.ipa'));
+      case TargetPlatform.fuchsia:
+      case TargetPlatform.linux:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+        return null;
+    }
   }
 
-  static String? _extractTagName(Uri releaseUrl) {
-    final pathSegments = releaseUrl.pathSegments;
-    if (pathSegments.length < 5) {
-      return null;
+  static _ReleaseInstallerAsset? _firstMatchingAsset(
+    List<_ReleaseInstallerAsset> assets,
+    bool Function(String lowerCaseName) predicate,
+  ) {
+    for (final asset in assets) {
+      if (predicate(asset.name.toLowerCase())) {
+        return asset;
+      }
     }
-    if (pathSegments[2] != 'releases' || pathSegments[3] != 'tag') {
-      return null;
-    }
-
-    return Uri.decodeComponent(pathSegments[4]).trim();
+    return null;
   }
 
   static Version? _tryParseVersion(String input) {
@@ -267,37 +315,15 @@ abstract final class AppUpdateService {
     return buffer.toString();
   }
 
-  static String _extractNotes(Element entry) {
-    final contentElements = entry.getElementsByTagName('content');
-    if (contentElements.isEmpty) {
-      return '';
+  static String _releaseNotesFromBody(String body) {
+    return _normalizeWhitespace(body);
+  }
+
+  static String? _stringValue(Object? value) {
+    if (value is String) {
+      return value.trim();
     }
-
-    final encodedHtml = contentElements.first.text.trim();
-    if (encodedHtml.isEmpty) {
-      return '';
-    }
-
-    final decodedHtml = parseFragment(encodedHtml).text;
-    final fragment = parseFragment(decodedHtml);
-    final blocks = fragment.querySelectorAll(
-      'h1, h2, h3, h4, h5, h6, p, li, pre, blockquote',
-    );
-
-    if (blocks.isNotEmpty) {
-      final sections = <String>[];
-      for (final block in blocks) {
-        final section = _normalizeWhitespace(block.text);
-        if (section.isNotEmpty) {
-          sections.add(section);
-        }
-      }
-      if (sections.isNotEmpty) {
-        return sections.join('\n\n');
-      }
-    }
-
-    return _normalizeWhitespace(fragment.text ?? '');
+    return null;
   }
 
   static String _normalizeWhitespace(String text) {
@@ -344,4 +370,11 @@ abstract final class AppUpdateService {
 
     return buffer.toString().trim();
   }
+}
+
+class _ReleaseInstallerAsset {
+  const _ReleaseInstallerAsset({required this.name, required this.downloadUrl});
+
+  final String name;
+  final Uri downloadUrl;
 }

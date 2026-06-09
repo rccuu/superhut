@@ -571,6 +571,10 @@ void main() {
     WidgetTester tester,
   ) async {
     final openCompleter = Completer<bool>();
+    final openedUrls = <Uri>[];
+    final downloadUrl = Uri.parse(
+      'https://github.com/rccuu/superhut/releases/download/v9.9.9/superhut-v9.9.9+99-arm64-v8a-release.apk',
+    );
     var openCalls = 0;
 
     await tester.pumpWidget(
@@ -585,10 +589,13 @@ void main() {
                 version: Version(9, 9, 9),
                 tagName: 'v9.9.9',
                 releaseUrl: Uri.parse('https://example.com/releases/v9.9.9'),
+                downloadUrl: downloadUrl,
+                downloadFileName: 'superhut-v9.9.9+99-arm64-v8a-release.apk',
                 notes: '测试更新说明',
               ),
-          openUpdateRelease: (_) {
+          openUpdateRelease: (url) {
             openCalls++;
+            openedUrls.add(url);
             return openCompleter.future;
           },
         ),
@@ -596,7 +603,7 @@ void main() {
     );
     await pumpUntilFound(tester, find.text('发现新版本 v9.9.9'));
 
-    final updateButton = find.widgetWithText(TextButton, '前往更新');
+    final updateButton = find.widgetWithText(TextButton, '下载安装包');
     final onPressed = tester.widget<TextButton>(updateButton).onPressed;
     onPressed?.call();
     onPressed?.call();
@@ -604,6 +611,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(openCalls, 1);
+    expect(openedUrls, [downloadUrl]);
     expect(find.text('发现新版本 v9.9.9'), findsNothing);
     expect(updateButton, findsNothing);
 
@@ -616,6 +624,9 @@ void main() {
   ) async {
     var openCalls = 0;
     final releaseUrl = Uri.parse('https://example.com/releases/v9.9.9');
+    final downloadUrl = Uri.parse(
+      'https://github.com/rccuu/superhut/releases/download/v9.9.9/superhut-v9.9.9+99-arm64-v8a-release.apk',
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -629,6 +640,8 @@ void main() {
                 version: Version(9, 9, 9),
                 tagName: 'v9.9.9',
                 releaseUrl: releaseUrl,
+                downloadUrl: downloadUrl,
+                downloadFileName: 'superhut-v9.9.9+99-arm64-v8a-release.apk',
                 notes: '测试更新说明',
               ),
           openUpdateRelease: (_) async {
@@ -640,7 +653,7 @@ void main() {
     );
     await pumpUntilFound(tester, find.text('发现新版本 v9.9.9'));
 
-    final updateButton = find.widgetWithText(TextButton, '前往更新');
+    final updateButton = find.widgetWithText(TextButton, '下载安装包');
     final onPressed = tester.widget<TextButton>(updateButton).onPressed;
     onPressed?.call();
     await tester.pump();
@@ -648,8 +661,9 @@ void main() {
 
     expect(openCalls, 1);
     expect(tester.takeException(), isNull);
-    expect(find.text('无法打开更新链接，请稍后重试'), findsOneWidget);
+    expect(find.text('无法打开下载链接，请稍后重试'), findsOneWidget);
     expect(find.textContaining(releaseUrl.toString()), findsNothing);
+    expect(find.textContaining(downloadUrl.toString()), findsNothing);
     expect(find.text('发现新版本 v9.9.9'), findsNothing);
   });
 }

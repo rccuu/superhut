@@ -230,10 +230,10 @@ class _AboutPageState extends State<AboutPage> {
               },
             ),
             TextButton(
-              child: const Text('前往更新'),
+              child: Text(update.updateActionLabel),
               onPressed: () async {
                 Navigator.of(context).pop();
-                await _openUrl(update.releaseUrl);
+                await _openUrl(update.updateUrl);
               },
             ),
           ],
@@ -243,7 +243,7 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   String _buildUpdateDescription(String releaseNotes) {
-    const fallbackText = '工大盒子已发布新版本，可前往 GitHub Release 页面查看更新说明并下载安装。';
+    const fallbackText = '工大盒子已发布新版本，点击下载安装包即可直接获取对应平台的更新包。';
     if (releaseNotes.trim().isEmpty) {
       return fallbackText;
     }

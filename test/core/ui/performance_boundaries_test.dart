@@ -479,7 +479,7 @@ void main() {
     expect(glassPanelClass, isNot(contains('Container(margin: margin')));
   });
 
-  test('app update notes extraction avoids mapped block list allocation', () {
+  test('app update notes parsing avoids unnecessary string allocations', () {
     final updateService =
         File('lib/core/services/app_update_service.dart').readAsStringSync();
     final tryParseVersionMethod = RegExp(
@@ -489,10 +489,10 @@ void main() {
       r'static int _versionSuffixStart\(String rawVersion\) \{[\s\S]*?\n  static String\? _normalizeVersionCore',
     ).firstMatch(updateService)?.group(0);
     final normalizeVersionCoreMethod = RegExp(
-      r'static String\? _normalizeVersionCore\(String rawVersion, int end\) \{[\s\S]*?\n  static String _extractNotes',
+      r'static String\? _normalizeVersionCore\(String rawVersion, int end\) \{[\s\S]*?\n  static String _releaseNotesFromBody',
     ).firstMatch(updateService)?.group(0);
-    final extractNotesMethod = RegExp(
-      r'static String _extractNotes\(Element entry\) \{[\s\S]*?\n  static String _normalizeWhitespace',
+    final releaseNotesMethod = RegExp(
+      r'static String _releaseNotesFromBody\(String body\) \{[\s\S]*?\n  static String\? _stringValue',
     ).firstMatch(updateService)?.group(0);
     final normalizeWhitespaceMethod = RegExp(
       r'static String _normalizeWhitespace\(String text\) \{[\s\S]*?\n  \}\n\}',
@@ -549,17 +549,17 @@ void main() {
     expect(normalizeVersionCoreMethod, isNot(contains('.split(')));
     expect(normalizeVersionCoreMethod, isNot(contains('.join(')));
 
-    expect(extractNotesMethod, isNotNull);
+    expect(releaseNotesMethod, isNotNull);
     expect(
-      extractNotesMethod,
-      contains('final sections = <String>[];'),
-      reason: '更新说明解析应一次构造有效块列表，避免 map/where/toList 链式临时对象。',
+      releaseNotesMethod,
+      contains('return _normalizeWhitespace(body);'),
+      reason: 'GitHub Release body 已是文本内容，应直接走单次扫描清洗。',
     );
-    expect(extractNotesMethod, contains('for (final block in blocks)'));
-    expect(extractNotesMethod, contains('sections.add(section);'));
-    expect(extractNotesMethod, isNot(contains('.map(')));
-    expect(extractNotesMethod, isNot(contains('.where(')));
-    expect(extractNotesMethod, isNot(contains('.toList(')));
+    expect(releaseNotesMethod, isNot(contains('replaceAll')));
+    expect(releaseNotesMethod, isNot(contains('.split(')));
+    expect(releaseNotesMethod, isNot(contains('.map(')));
+    expect(releaseNotesMethod, isNot(contains('.where(')));
+    expect(releaseNotesMethod, isNot(contains('.toList(')));
 
     expect(normalizeWhitespaceMethod, isNotNull);
     expect(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:pub_semver/pub_semver.dart';
 import 'package:superhut/core/services/app_update_service.dart';
 import 'package:superhut/home/about/view.dart';
 
@@ -307,6 +308,54 @@ void main() {
     await tester.pump();
 
     expect(openedUrls, [releaseUrl, releaseUrl]);
+  });
+
+  testWidgets('update dialog opens package download URL when available', (
+    tester,
+  ) async {
+    final openedUrls = <Uri>[];
+    final releaseUrl = Uri.parse('https://example.com/releases/v9.9.9');
+    final downloadUrl = Uri.parse(
+      'https://github.com/rccuu/superhut/releases/download/v9.9.9/superhut-v9.9.9+99-arm64-v8a-release.apk',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AboutPage(
+          openUrl: (url) async {
+            openedUrls.add(url);
+            return true;
+          },
+          checkForUpdate:
+              ({required currentVersion}) async => AppUpdateCheckResult(
+                status: AppUpdateCheckStatus.available,
+                update: AppUpdateInfo(
+                  version: Version(9, 9, 9),
+                  tagName: 'v9.9.9',
+                  releaseUrl: releaseUrl,
+                  downloadUrl: downloadUrl,
+                  downloadFileName: 'superhut-v9.9.9+99-arm64-v8a-release.apk',
+                  notes: '测试更新说明',
+                ),
+              ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.text('检查更新'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('发现新版本 v9.9.9'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, '下载安装包'));
+    await tester.pump();
+
+    expect(openedUrls, [downloadUrl]);
+    expect(find.textContaining(releaseUrl.toString()), findsNothing);
+    expect(find.textContaining(downloadUrl.toString()), findsNothing);
   });
 
   testWidgets('update check ignores duplicate taps while pending', (
