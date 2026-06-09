@@ -73,3 +73,5 @@ zip -r "../../../releases/${IPA_NAME}" Payload > /dev/null
 echo "✅ 构建完成！"
 echo "📦 文件位置: releases/${IPA_NAME}"
 echo "📏 文件大小: $(ls -lh "../../../releases/${IPA_NAME}" | awk '{print $5}')"
+echo "ℹ️  重签后请运行: bash scripts/verify_ios_widget_signing.sh <signed.ipa>"
+echo "ℹ️  TrollStore 专用包请运行: bash scripts/build_ios_trollstore.sh releases/${IPA_NAME}"

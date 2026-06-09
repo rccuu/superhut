@@ -1,7 +1,22 @@
+import Foundation
+import Security
 import SwiftUI
 import WidgetKit
 
-private let courseWidgetAppGroupId = "group.com.tune.superhut.coursewidget"
+private typealias SuperhutSecTask = OpaquePointer
+
+@_silgen_name("SecTaskCreateFromSelf")
+private func superhutSecTaskCreateFromSelf(_ allocator: CFAllocator?) -> SuperhutSecTask?
+
+@_silgen_name("SecTaskCopyValueForEntitlement")
+private func superhutSecTaskCopyValueForEntitlement(
+  _ task: SuperhutSecTask,
+  _ entitlement: CFString,
+  _ error: UnsafeMutablePointer<Unmanaged<CFError>?>?
+) -> CFTypeRef?
+
+private let courseWidgetDefaultAppGroupIds = ["group.com.tune.superhut.coursewidget"]
+private let courseWidgetInfoAppGroupsKey = "SuperhutAppGroups"
 private let courseWidgetStoreKey = "course_widget_store"
 
 private struct CourseWidgetCourse: Decodable, Hashable, Identifiable {
@@ -57,15 +72,106 @@ private struct CourseWidgetEntry: TimelineEntry {
 
 private enum CourseWidgetRepository {
   static func loadStore() -> CourseWidgetStoreData? {
-    let defaults = UserDefaults(suiteName: courseWidgetAppGroupId)
-    if
-      let storeString = defaults?.string(forKey: courseWidgetStoreKey),
-      let storeData = storeString.data(using: .utf8),
-      let store = try? JSONDecoder().decode(CourseWidgetStoreData.self, from: storeData)
-    {
-      return store
+    guard
+      let appGroupId = resolveAppGroupId(),
+      let defaults = UserDefaults(suiteName: appGroupId)
+    else {
+      NSLog(
+        "SuperHUT widget load failed: no usable App Group. Check signed entitlements and provisioning profiles."
+      )
+      return nil
     }
+
+    guard let storeString = defaults.string(forKey: courseWidgetStoreKey) else {
+      NSLog(
+        "SuperHUT widget load skipped: no course widget store found in App Group %@.",
+        appGroupId
+      )
+      return nil
+    }
+
+    guard let storeData = storeString.data(using: .utf8) else {
+      NSLog("SuperHUT widget load failed: course widget store is not valid UTF-8.")
+      return nil
+    }
+
+    do {
+      let store = try JSONDecoder().decode(CourseWidgetStoreData.self, from: storeData)
+      return store
+    } catch {
+      NSLog("SuperHUT widget load failed: could not decode course widget store: %@.", "\(error)")
+      return nil
+    }
+  }
+
+  private static func resolveAppGroupId() -> String? {
+    let candidates = candidateAppGroupIds()
+    for appGroupId in candidates {
+      if FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: appGroupId
+      ) != nil {
+        return appGroupId
+      }
+    }
+
+    NSLog(
+      "SuperHUT widget load failed: no candidate App Group is accessible. candidates=%@",
+      candidates.joined(separator: ", ")
+    )
     return nil
+  }
+
+  private static func candidateAppGroupIds() -> [String] {
+    var candidates = infoPlistAppGroups()
+    candidates.append(contentsOf: signedAppGroups())
+    candidates.append(contentsOf: courseWidgetDefaultAppGroupIds)
+    return uniqueNonEmptyAppGroupIds(candidates)
+  }
+
+  private static func infoPlistAppGroups() -> [String] {
+    if let groups = Bundle.main.object(forInfoDictionaryKey: courseWidgetInfoAppGroupsKey) as? [String] {
+      return groups
+    }
+    if let group = Bundle.main.object(forInfoDictionaryKey: courseWidgetInfoAppGroupsKey) as? String {
+      return [group]
+    }
+    return []
+  }
+
+  private static func signedAppGroups() -> [String] {
+    var error: Unmanaged<CFError>?
+    guard
+      let task = superhutSecTaskCreateFromSelf(nil),
+      let value = superhutSecTaskCopyValueForEntitlement(
+        task,
+        "com.apple.security.application-groups" as CFString,
+        &error
+      )
+    else {
+      return []
+    }
+
+    if let groups = value as? [String] {
+      return groups
+    }
+    if let group = value as? String {
+      return [group]
+    }
+    return []
+  }
+
+  private static func uniqueNonEmptyAppGroupIds(_ values: [String]) -> [String] {
+    var seen = Set<String>()
+    var result = [String]()
+    for value in values {
+      let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.isEmpty || seen.contains(trimmed) {
+        continue
+      }
+      seen.insert(trimmed)
+      result.append(trimmed)
+    }
+    return result
   }
 
   static func loadPayload(at date: Date = Date()) -> CourseWidgetPayload {
