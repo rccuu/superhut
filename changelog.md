@@ -12,9 +12,21 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
+## v1.6.1
+
+## 2026-06-09 ·  feat(update): 支持平台安装包直链下载
+- 版本号提升到 `1.6.1+14`，用于发布包含小组件签名兼容与更新下载优化的新版本。
+- 应用内更新检查从 GitHub Releases Atom feed 改为读取 GitHub Releases API，直接解析 Release assets。
+- Android 更新弹窗会优先选择 `arm64-v8a` APK 资产，点击“下载安装包”后直接打开 APK 下载链接，不再让用户先进入 GitHub Release 页面再手动找包。
+- iOS 更新弹窗会优先选择 TrollStore IPA，找不到时回退到普通 unsigned IPA，同样直接打开 IPA 下载链接。
+- 首页启动更新提醒和“关于”页手动检查更新都复用同一套直链下载逻辑；如果某个 Release 缺少当前平台安装包，则自动退回打开发布页。
+- 同步更新信任说明、首页更新弹窗测试和更新服务性能边界测试，确保不会暴露底层下载链接错误信息。
+- 关键文件：`pubspec.yaml`、`lib/core/services/app_update_service.dart`、`lib/home/homeview/view.dart`、`lib/home/about/view.dart`、`lib/home/about/trust_page.dart`、`test/widget_test.dart`、`test/core/ui/performance_boundaries_test.dart`
+- 代码统计（待提交时回填）：版本号提升 + 更新检查 API 切换 + 平台安装包直链选择 + 弹窗文案与测试更新
+
 ## v1.6.0
 
-## 2026-05-31 · `待提交` · feat(ui): 发布 1.6.0 重构预览版
+## 2026-05-31 · feat(ui): 发布 1.6.0 重构预览版
 - 工大盒子 1.6.0 主要带来一轮全应用体验打磨：页面风格保持一致，但动画、弹层、加载和提示反馈更轻、更统一。
 - 优化首页、课程表、成绩、水电、饮水机、空教室、评教和 HUT 服务等常用页面，减少卡顿感和重复刷新。
 - 改进登录、认证、课程数据和接口异常处理，提升状态恢复与失败提示的稳定性。

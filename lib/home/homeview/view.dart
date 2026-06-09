@@ -444,12 +444,12 @@ class _HomeviewPageState extends State<HomeviewPage> {
               },
             ),
             TextButton(
-              child: Text('前往更新'),
+              child: Text(update.updateActionLabel),
               onPressed: () {
                 unawaited(
                   _openUpdateReleaseFromDialog(
                     dialogContext: context,
-                    releaseUrl: update.releaseUrl,
+                    updateUrl: update.updateUrl,
                   ),
                 );
               },
@@ -461,7 +461,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
   }
 
   String _buildUpdateDescription(String releaseNotes) {
-    const fallbackText = '工大盒子已发布新版本，可前往 GitHub Release 页面查看更新说明并下载安装。';
+    const fallbackText = '工大盒子已发布新版本，点击下载安装包即可直接获取对应平台的更新包。';
     if (releaseNotes.trim().isEmpty) {
       return fallbackText;
     }
@@ -476,7 +476,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
 
   Future<void> _openUpdateReleaseFromDialog({
     required BuildContext dialogContext,
-    required Uri releaseUrl,
+    required Uri updateUrl,
   }) async {
     if (_isOpeningUpdateRelease) {
       return;
@@ -486,11 +486,11 @@ class _HomeviewPageState extends State<HomeviewPage> {
     try {
       await Navigator.of(dialogContext).maybePop();
       final openRelease = widget.openUpdateRelease ?? _launchUpdateRelease;
-      final opened = await openRelease(releaseUrl);
+      final opened = await openRelease(updateUrl);
       if (!opened && mounted) {
         showAppSnackBar(
           context,
-          message: '无法打开更新链接，请稍后重试',
+          message: '无法打开下载链接，请稍后重试',
           type: AppSnackBarType.error,
           icon: CupertinoIcons.exclamationmark_circle_fill,
           duration: const Duration(seconds: 2),
@@ -508,7 +508,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
 
       showAppSnackBar(
         context,
-        message: '无法打开更新链接，请稍后重试',
+        message: '无法打开下载链接，请稍后重试',
         type: AppSnackBarType.error,
         icon: CupertinoIcons.exclamationmark_circle_fill,
         duration: const Duration(seconds: 2),
@@ -518,8 +518,8 @@ class _HomeviewPageState extends State<HomeviewPage> {
     }
   }
 
-  Future<bool> _launchUpdateRelease(Uri releaseUrl) {
-    return launchUrl(releaseUrl, mode: LaunchMode.externalApplication);
+  Future<bool> _launchUpdateRelease(Uri updateUrl) {
+    return launchUrl(updateUrl, mode: LaunchMode.externalApplication);
   }
 
   @override

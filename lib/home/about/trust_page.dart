@@ -276,7 +276,7 @@ class _TrustCenterPageState extends State<TrustCenterPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const _TrustBullet(
-                        text: '只从当前仓库公开的 GitHub Release 页面下载安装包。',
+                        text: '应用内更新会从当前仓库公开的 GitHub Release 资产链接直接获取安装包。',
                       ),
                       const SizedBox(height: 10),
                       const _TrustBullet(text: '对照仓库源码和构建脚本，确认更新来源是公开的。'),
