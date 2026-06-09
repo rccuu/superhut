@@ -1,12 +1,26 @@
 import Flutter
+import Security
 import UIKit
 import WidgetKit
+
+private typealias SuperhutSecTask = OpaquePointer
+
+@_silgen_name("SecTaskCreateFromSelf")
+private func superhutSecTaskCreateFromSelf(_ allocator: CFAllocator?) -> SuperhutSecTask?
+
+@_silgen_name("SecTaskCopyValueForEntitlement")
+private func superhutSecTaskCopyValueForEntitlement(
+  _ task: SuperhutSecTask,
+  _ entitlement: CFString,
+  _ error: UnsafeMutablePointer<Unmanaged<CFError>?>?
+) -> CFTypeRef?
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private let courseWidgetChannelName = "com.superhut.rice.superhut/coursetable_widget"
   private let widgetActionsChannelName = "com.superhut.rice.superhut/widget_actions"
-  private let courseWidgetAppGroupId = "group.com.tune.superhut.coursewidget"
+  private let courseWidgetDefaultAppGroupIds = ["group.com.tune.superhut.coursewidget"]
+  private let courseWidgetInfoAppGroupsKey = "SuperhutAppGroups"
   private let courseWidgetStoreKey = "course_widget_store"
   private let courseWidgetPayloadKey = "course_widget_payload"
 
@@ -63,10 +77,10 @@ import WidgetKit
         let arguments = call.arguments as? [String: Any]
         let payloadJson = arguments?["payloadJson"] as? String
         let storeJson = arguments?["storeJson"] as? String
-        self.persistCourseWidgetStore(storeJson)
-        self.persistCourseWidgetPayload(payloadJson)
+        let didPersistStore = self.persistCourseWidgetStore(storeJson)
+        let didPersistPayload = self.persistCourseWidgetPayload(payloadJson)
         self.reloadCourseWidgetTimelines()
-        result(true)
+        result(didPersistStore && didPersistPayload)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -93,24 +107,110 @@ import WidgetKit
     self.widgetActionsChannel = widgetActionsChannel
   }
 
-  private func persistCourseWidgetPayload(_ payloadJson: String?) {
+  private func persistCourseWidgetPayload(_ payloadJson: String?) -> Bool {
     guard let payloadJson, !payloadJson.isEmpty else {
-      return
+      return true
     }
 
-    let defaults = UserDefaults(suiteName: courseWidgetAppGroupId)
-    defaults?.set(payloadJson, forKey: courseWidgetPayloadKey)
-    defaults?.synchronize()
+    return persistCourseWidgetValue(payloadJson, forKey: courseWidgetPayloadKey)
   }
 
-  private func persistCourseWidgetStore(_ storeJson: String?) {
+  private func persistCourseWidgetStore(_ storeJson: String?) -> Bool {
     guard let storeJson, !storeJson.isEmpty else {
-      return
+      return true
     }
 
-    let defaults = UserDefaults(suiteName: courseWidgetAppGroupId)
-    defaults?.set(storeJson, forKey: courseWidgetStoreKey)
-    defaults?.synchronize()
+    return persistCourseWidgetValue(storeJson, forKey: courseWidgetStoreKey)
+  }
+
+  private func persistCourseWidgetValue(_ value: String, forKey key: String) -> Bool {
+    guard
+      let appGroupId = resolveCourseWidgetAppGroupId(),
+      let defaults = UserDefaults(suiteName: appGroupId)
+    else {
+      NSLog(
+        "SuperHUT widget sync failed: no usable App Group. Check signed entitlements and provisioning profiles."
+      )
+      return false
+    }
+
+    defaults.set(value, forKey: key)
+    let persisted = defaults.string(forKey: key) == value
+    if !persisted {
+      NSLog("SuperHUT widget sync failed: could not persist value for key %@.", key)
+    }
+    defaults.synchronize()
+    return persisted
+  }
+
+  private func resolveCourseWidgetAppGroupId() -> String? {
+    let candidates = candidateCourseWidgetAppGroupIds()
+    for appGroupId in candidates {
+      if FileManager.default.containerURL(
+        forSecurityApplicationGroupIdentifier: appGroupId
+      ) != nil {
+        return appGroupId
+      }
+    }
+
+    NSLog(
+      "SuperHUT widget sync failed: no candidate App Group is accessible. candidates=%@",
+      candidates.joined(separator: ", ")
+    )
+    return nil
+  }
+
+  private func candidateCourseWidgetAppGroupIds() -> [String] {
+    var candidates = infoPlistCourseWidgetAppGroups()
+    candidates.append(contentsOf: signedCourseWidgetAppGroups())
+    candidates.append(contentsOf: courseWidgetDefaultAppGroupIds)
+    return uniqueNonEmptyAppGroupIds(candidates)
+  }
+
+  private func infoPlistCourseWidgetAppGroups() -> [String] {
+    if let groups = Bundle.main.object(forInfoDictionaryKey: courseWidgetInfoAppGroupsKey) as? [String] {
+      return groups
+    }
+    if let group = Bundle.main.object(forInfoDictionaryKey: courseWidgetInfoAppGroupsKey) as? String {
+      return [group]
+    }
+    return []
+  }
+
+  private func signedCourseWidgetAppGroups() -> [String] {
+    var error: Unmanaged<CFError>?
+    guard
+      let task = superhutSecTaskCreateFromSelf(nil),
+      let value = superhutSecTaskCopyValueForEntitlement(
+        task,
+        "com.apple.security.application-groups" as CFString,
+        &error
+      )
+    else {
+      return []
+    }
+
+    if let groups = value as? [String] {
+      return groups
+    }
+    if let group = value as? String {
+      return [group]
+    }
+    return []
+  }
+
+  private func uniqueNonEmptyAppGroupIds(_ values: [String]) -> [String] {
+    var seen = Set<String>()
+    var result = [String]()
+    for value in values {
+      let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.isEmpty || seen.contains(trimmed) {
+        continue
+      }
+      seen.insert(trimmed)
+      result.append(trimmed)
+    }
+    return result
   }
 
   private func reloadCourseWidgetTimelines() {

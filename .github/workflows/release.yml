@@ -54,6 +54,17 @@ jobs:
       - name: Build iOS unsigned IPA
         run: bash scripts/build_ios_quick.sh
 
+      - name: Install ldid
+        run: |
+          if ! command -v ldid >/dev/null 2>&1; then
+            brew install ldid
+          fi
+
+      - name: Build iOS TrollStore IPA
+        run: |
+          UNSIGNED_IPA="$(ls -t releases/superhut-*-unsigned-*.ipa | head -n 1)"
+          bash scripts/build_ios_trollstore.sh "$UNSIGNED_IPA"
+
       - name: Generate release notes
         run: |
           python3 scripts/generate_release_notes.py \
@@ -72,3 +83,4 @@ jobs:
           fi
           gh release upload "$RELEASE_TAG" releases/superhut-*-arm64-v8a-*.apk --clobber
           gh release upload "$RELEASE_TAG" releases/superhut-*-unsigned-*.ipa --clobber
+          gh release upload "$RELEASE_TAG" releases/superhut-*-trollstore-*.ipa --clobber
