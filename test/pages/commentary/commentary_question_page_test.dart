@@ -8,6 +8,70 @@ import 'package:superhut/pages/Commentary/commentary_question_page.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('auto submit uses the shared selection rule', (tester) async {
+    final submittedItems = <List<CommentarySubmissionItem>>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CommentaryQuestionPage(
+          batchId: 'batch-1',
+          courseId: 'course-1',
+          evaluationCategoriesId: 'category-1',
+          teacherId: 'teacher-1',
+          noticeId: 'notice-1',
+          loadQuestions: (
+            batchId,
+            evaluationCategoriesId,
+            courseId,
+            teacherId,
+            noticeId,
+          ) async {
+            return [
+              {
+                'targetName': '教学态度',
+                'targetId': 'target-1',
+                'optionList': const [
+                  QuestionOption('target-1', '非常满意', 'option-1', '5.0'),
+                  QuestionOption('target-1', '满意', 'option-2', '4.0'),
+                ],
+              },
+              {
+                'targetName': '教学方法',
+                'targetId': 'target-2',
+                'optionList': const [
+                  QuestionOption('target-2', '非常满意', 'option-3', '5.0'),
+                  QuestionOption('target-2', '满意', 'option-4', '4.0'),
+                ],
+              },
+            ];
+          },
+          submitSelections: (
+            batchId,
+            courseId,
+            evaluationCategoriesId,
+            teacherId,
+            noticeId,
+            questionList,
+          ) async {
+            submittedItems.add(
+              List<CommentarySubmissionItem>.from(questionList),
+            );
+            return '提交失败';
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('一键完成'));
+    await tester.pump();
+
+    expect(submittedItems.single, [
+      {'targetid': 'target-1', 'targetval': 'option-2'},
+      {'targetid': 'target-2', 'targetval': 'option-3'},
+    ]);
+  });
+
   testWidgets('ignores duplicate manual submits while request is in flight', (
     tester,
   ) async {

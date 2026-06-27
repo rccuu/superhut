@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import 'commentary_api.dart';
+import 'commentary_auto_selection.dart';
 
 typedef CommentaryQuestionLoader =
     Future<List<CommentaryPayload>> Function(
@@ -206,35 +207,11 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
   }
 
   List<CommentarySubmissionItem> _buildAutoSelections() {
-    final selections = <CommentarySubmissionItem>[];
     if (_questionOptions.length != _savedQuestionList.length) {
-      return selections;
+      return <CommentarySubmissionItem>[];
     }
 
-    for (var i = 0; i < _savedQuestionList.length; i++) {
-      final question = _savedQuestionList[i];
-      final options = _questionOptions[i];
-
-      for (int j = 0; j < options.length; j++) {
-        final optionScore = double.tryParse(options[j].optionScoreValue);
-        if (optionScore == null) {
-          continue;
-        }
-
-        final shouldSelect = i == 0 ? optionScore < 4.75 : optionScore >= 4.75;
-        if (!shouldSelect) {
-          continue;
-        }
-
-        selections.add({
-          'targetid': question['targetId'].toString(),
-          'targetval': options[j].optionId,
-        });
-        break;
-      }
-    }
-
-    return selections;
+    return buildAutoCommentarySelections(_savedQuestionList);
   }
 
   void _setSubmitting(bool isSubmitting) {
