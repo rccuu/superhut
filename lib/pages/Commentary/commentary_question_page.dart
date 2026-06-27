@@ -1,8 +1,11 @@
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/material.dart';
+import 'package:ionicons/ionicons.dart';
 
 import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
+import '../../core/ui/apple_glass.dart';
+import '../../core/ui/color_scheme_ext.dart';
 import 'commentary_api.dart';
 import 'commentary_auto_selection.dart';
 
@@ -299,142 +302,310 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        elevation: 0,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final topInset = MediaQuery.paddingOf(context).top;
+    const accent = Color(0xFFB6569C);
+
+    return AppGlassPerformanceScope(
+      isLite: true,
+      child: Scaffold(
         backgroundColor: Colors.transparent,
-        actions: [
-          ValueListenableBuilder<bool>(
-            valueListenable: _isSubmitting,
-            child: const Text('一键完成'),
-            builder: (context, isSubmitting, child) {
-              return TextButton(
-                onPressed: isSubmitting ? null : _handleAutoSubmit,
-                child: child!,
-              );
-            },
-          ),
-        ],
-      ),
-      body: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 10),
-        child: EnhancedFutureBuilder(
-          future: _optionListFuture,
-          rememberFutureResult: true,
-          whenDone: (List<CommentaryPayload> optionList) {
-            final questionSelectionNotifiers = _questionSelectionNotifiers;
-            final questionOptions = _questionOptions;
-            if (questionSelectionNotifiers == null ||
-                questionSelectionNotifiers.length != optionList.length ||
-                questionOptions.length != optionList.length) {
-              return Center(
-                child: AppLoadingIndicator(
-                  color: Theme.of(context).primaryColor,
-                  size: 40,
-                ),
-              );
-            }
+        body: AppGlassBackground(
+          style: AppGlassBackgroundStyle.soft,
+          lightBottomColor: const Color(0xFFFFF3FA),
+          darkBottomColor: const Color(0xFF1D1320),
+          child: Stack(
+            children: [
+              EnhancedFutureBuilder(
+                future: _optionListFuture,
+                rememberFutureResult: true,
+                whenDone: (List<CommentaryPayload> optionList) {
+                  final questionSelectionNotifiers =
+                      _questionSelectionNotifiers;
+                  final questionOptions = _questionOptions;
+                  if (questionSelectionNotifiers == null ||
+                      questionSelectionNotifiers.length != optionList.length ||
+                      questionOptions.length != optionList.length) {
+                    return Center(
+                      child: AppLoadingIndicator(
+                        color: colorScheme.primary,
+                        size: 40,
+                      ),
+                    );
+                  }
 
-            return ListView.builder(
-              addAutomaticKeepAlives: false,
-              itemCount: optionList.length + 1,
-              itemBuilder: (BuildContext context, int index) {
-                if (index == optionList.length) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: ValueListenableBuilder<bool>(
-                      valueListenable: _isSubmitting,
-                      child: const Text('提交'),
-                      builder: (context, isSubmitting, child) {
-                        return ElevatedButton(
-                          onPressed:
-                              isSubmitting
-                                  ? null
-                                  : () async {
-                                    await _handleManualSubmit(
-                                      optionList.length,
-                                    );
-                                  },
-                          child: child!,
-                        );
-                      },
-                    ),
-                  );
-                }
+                  return CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(16, topInset + 72, 16, 0),
+                        sliver: SliverToBoxAdapter(
+                          child: GlassPanel(
+                            style: GlassPanelStyle.hero,
+                            borderRadius: BorderRadius.circular(28),
+                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Colors.white.withValues(
+                                  alpha: colorScheme.isDarkMode ? 0.16 : 0.84,
+                                ),
+                                accent.withValues(
+                                  alpha: colorScheme.isDarkMode ? 0.12 : 0.08,
+                                ),
+                              ],
+                            ),
+                            borderColor: accent.withValues(
+                              alpha: colorScheme.isDarkMode ? 0.18 : 0.14,
+                            ),
+                            child: Row(
+                              children: [
+                                const GlassIconBadge(
+                                  icon: Icons.checklist_rounded,
+                                  tint: accent,
+                                  size: 46,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '本课程评教',
+                                        style: theme.textTheme.titleLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                              color: colorScheme.onSurface,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '共 ${optionList.length} 道题',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final question = optionList[index];
+                            final options = questionOptions[index];
+                            final selectionNotifier =
+                                questionSelectionNotifiers[index];
 
-                final question = optionList[index];
-                final options = questionOptions[index];
-                final selectionNotifier = questionSelectionNotifiers[index];
-
-                return Card.filled(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Flex(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      direction: Axis.horizontal,
-                      children: [
-                        Expanded(
-                          flex: 10,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                question['targetName'].toString(),
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color:
-                                      Theme.of(context).colorScheme.onSurface,
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: GlassPanel(
+                                style: GlassPanelStyle.list,
+                                borderRadius: BorderRadius.circular(24),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  16,
+                                  16,
+                                  12,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      question['targetName'].toString(),
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                            color: colorScheme.onSurface,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    ValueListenableBuilder<int>(
+                                      valueListenable: selectionNotifier,
+                                      builder: (
+                                        context,
+                                        selectedOptionIndex,
+                                        child,
+                                      ) {
+                                        return Column(
+                                          children: [
+                                            for (
+                                              var optionIndex = 0;
+                                              optionIndex < options.length;
+                                              optionIndex++
+                                            )
+                                              CheckboxListTile(
+                                                value:
+                                                    selectedOptionIndex ==
+                                                    optionIndex,
+                                                onChanged: (value) {
+                                                  _selectOption(
+                                                    index,
+                                                    optionIndex,
+                                                    value,
+                                                  );
+                                                },
+                                                title: Text(
+                                                  options[optionIndex].answer,
+                                                ),
+                                                controlAffinity:
+                                                    ListTileControlAffinity
+                                                        .leading,
+                                                activeColor: accent,
+                                                checkColor: Colors.white,
+                                                contentPadding: EdgeInsets.zero,
+                                              ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 8),
-                              ValueListenableBuilder<int>(
-                                valueListenable: selectionNotifier,
-                                builder: (context, selectedOptionIndex, child) {
-                                  return Column(
-                                    children: [
-                                      for (
-                                        var optionIndex = 0;
-                                        optionIndex < options.length;
-                                        optionIndex++
-                                      )
-                                        CheckboxListTile(
-                                          value:
-                                              selectedOptionIndex ==
-                                              optionIndex,
-                                          onChanged: (value) {
-                                            _selectOption(
-                                              index,
-                                              optionIndex,
-                                              value,
-                                            );
-                                          },
-                                          title: Text(
-                                            options[optionIndex].answer,
-                                          ),
+                            );
+                          }, childCount: optionList.length),
+                        ),
+                      ),
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+                        sliver: SliverToBoxAdapter(
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _isSubmitting,
+                            child: const Text('提交'),
+                            builder: (context, isSubmitting, child) {
+                              return FilledButton(
+                                onPressed:
+                                    isSubmitting
+                                        ? null
+                                        : () => _handleManualSubmit(
+                                          optionList.length,
                                         ),
-                                    ],
-                                  );
-                                },
-                              ),
-                            ],
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: accent,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                whenNotDone: Center(
+                  child: GlassPanel(
+                    style: GlassPanelStyle.hero,
+                    borderRadius: BorderRadius.circular(28),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 24,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppLoadingIndicator(
+                          color: colorScheme.primary,
+                          size: 42,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '正在加载评教题目',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: colorScheme.onSurface,
                           ),
                         ),
                       ],
                     ),
                   ),
-                );
-              },
-            );
-          },
-          whenNotDone: Center(
-            child: AppLoadingIndicator(
-              color: Theme.of(context).primaryColor,
-              size: 40,
-            ),
+                ),
+              ),
+              Positioned(
+                top: topInset + 12,
+                left: 16,
+                child: _CommentaryBackButton(
+                  onTap: () => Navigator.of(context).maybePop(),
+                ),
+              ),
+              Positioned(
+                top: topInset + 12,
+                right: 16,
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _isSubmitting,
+                  builder: (context, isSubmitting, child) {
+                    return Opacity(
+                      opacity: isSubmitting ? 0.45 : 1,
+                      child: GlassPanel(
+                        style: GlassPanelStyle.floating,
+                        blur: 16,
+                        borderRadius: BorderRadius.circular(20),
+                        padding: EdgeInsets.zero,
+                        onTap: isSubmitting ? null : _handleAutoSubmit,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            '一键完成',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CommentaryBackButton extends StatelessWidget {
+  const _CommentaryBackButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      style: GlassPanelStyle.floating,
+      blur: 16,
+      borderRadius: BorderRadius.circular(20),
+      padding: EdgeInsets.zero,
+      onTap: onTap,
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: Icon(
+          Ionicons.chevron_back,
+          color: Theme.of(context).colorScheme.onSurface,
+          size: 22,
         ),
       ),
     );

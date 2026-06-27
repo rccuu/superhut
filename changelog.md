@@ -8,9 +8,21 @@
 
 统计范围
 - 起点提交（含）：`a123ed99fda436af7eef7f1ce7ca8f55750b60c5`
-- 终点提交（首次整理基线）：`01cb342d499b61c45498159fe9d3143b4e94b584`
-- 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..01cb342d499b61c45498159fe9d3143b4e94b584` 的主线历史整理，共 14 次主线提交。
+- 终点提交（首次整理基线）：`347de3918e66fecd12b58dea6ca3baf0e0d23ddc`
+- 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..347de3918e66fecd12b58dea6ca3baf0e0d23ddc` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
+
+## v1.6.2
+
+## 2026-06-27 · `待提交` · feat(commentary): unify commentary flow and add category batch evaluation
+- 版本号提升到 `1.6.2+15`，用于发布本轮学生评教体验统一与分类级一键评教能力。
+- 学生评教批次首页重做成和主站一致的玻璃态卡片界面，顶部概览会显示当前开放分类数和未评课程总数。
+- 实验课、理论课这类评教分类卡片现在支持 `一键评完`，点击后会直接串行提交该分类下所有未评课程，过程带进度反馈、重复点击防抖和成功/部分成功/全部失败结果汇总。
+- 分类课程列表页同步改成统一主题，新增顶部汇总卡片和 `一键评完本分类` 入口；课程仍然可以逐门进入题目页，已评课程继续禁止重复提交。
+- 单门评教题目页也切到统一玻璃壳，保留手动提交和 `一键完成`，并继续复用原有自动选项规则：首题选低分档，其余题选高分档。
+- 评教相关测试同步补齐，新增批量结果分支、列表级一键评教、题目页新壳子回归覆盖，确保 UI 重构没有带出行为回退。
+- 关键文件：`pubspec.yaml`、`changelog.md`、`lib/pages/Commentary/commentary_batch_page.dart`、`lib/pages/Commentary/commentary_course_list_page.dart`、`lib/pages/Commentary/commentary_question_page.dart`、`test/pages/commentary/commentary_batch_page_test.dart`、`test/pages/commentary/commentary_course_list_page_test.dart`、`test/pages/commentary/commentary_question_page_test.dart`
+- 代码统计（待提交时回填）：版本号提升 + 学生评教三页 UI 统一 + 分类级批量评教入口与回归测试补齐
 
 ## v1.6.1
 
@@ -44,11 +56,11 @@
 
 ## v1.5.5
 
-## 2026-05-19 · `3a7a828` · ci(release): 添加自动发布流水线，支持 Android arm64-v8a 与 iOS 未签名 IPA 构建发布
+## 2026-05-19 · `10f39d0` · ci(release): 添加自动发布流水线，支持 Android arm64-v8a 与 iOS 未签名 IPA 构建发布
 - 更新可以设置为不再提醒
 - 代码统计：5 files changed, 462 insertions(+), 14 deletions(-)
 
-## 2026-05-19 · `b61a035` · feat(hut): 重构智慧工大门户认证与会话管理，修复服务加载失败
+## 2026-05-19 · `96fa2ae` · feat(hut): 重构智慧工大门户认证与会话管理，修复服务加载失败
 - 这次提交把智慧工大门户的整套认证与 WebView 会话管理推倒重做了一遍。用户之前频繁遇到"功能页点了没反应""HUT 服务加载失败""切到后台回来又要重新登录"这类问题，根因基本上都落在旧认证链的临时 token 存不下、WebView 注入时机不稳定、以及在多步 CAS 重定向场景里 cookie 跟 token 不同步这几个老地方。
 - 认证链路的核心变化在 `lib/utils/hut_user_api/hut_user_api_auth.dart` 和 `lib/login/hut_cas_login_page.dart`：不再只依赖单次 CAS 回调取到的 token，而是把整个登录流程拆成 CAS 重定向 → 门户票据 → 设备绑定 → 令牌刷新的完整闭环，每一步的状态都有明确落盘（`AppAuthStorage` 里的 `hutToken` / `hutRefreshToken` / `deviceId`）。这样一来，进程被杀或后台切回后，认证状态可以从存储直接恢复，而不是每次都重新走一遍 WebView 登录。
 - WebView 服务加载侧也做了比较彻底的重写。`lib/pages/hutpages/type1webview.dart` 和 `type2webview.dart` 现在共享同一套会话接管逻辑，`lib/pages/hutpages/hut_service_auth.dart` 负责在 WebView 每个关键生命周期节点（`onPageStarted`、`onPageFinished`、`onLoadError`）注入 token / cookie 和校验回跳状态。服务类型 "2"、"4"、"5" 之前各自的认证差异现在收敛到了统一的注入策略里，不再需要每个类型写一套特殊处理。
@@ -81,10 +93,10 @@
 
 ## v1.4.7
 
-## 2026-03-24 · `17c95a7` · chore(release): prepare v1.4.7
+## 2026-03-24 · `1b1c155` · chore(release): prepare v1.4.7
 - 作者：rccuu
 - 这次发版是在 `v1.4.5` 这个最后一个可验证正式 tag 之后，继续把已经进入主线但尚未对外打 tag 的 `v1.4.6` 收口，以及刚完成的课表连续分页优化，一起整理成新的 `1.4.7` 发布包。也就是说，这次对外公告的口径不是只看当前工作区，而是明确覆盖 `v1.4.5..当前版本` 这一段真实进入版本的变化。
-- 延续 `831bd0a` 那轮 UI 减重与玻璃层级收口，本次版本继续保留更轻的全局视觉基底：课表、空教室、成绩页、首页、功能页、我的页和统一登录页都已经收敛到更克制的 `soft` 背景和更明确的面板层级，这部分虽然已经在主线里，但直到这次才和新的交互优化一起进入新的正式版本口径。
+- 延续 `b1db2f7` 那轮 UI 减重与玻璃层级收口，本次版本继续保留更轻的全局视觉基底：课表、空教室、成绩页、首页、功能页、我的页和统一登录页都已经收敛到更克制的 `soft` 背景和更明确的面板层级，这部分虽然已经在主线里，但直到这次才和新的交互优化一起进入新的正式版本口径。
 - 本轮真正新增、也是用户直接推动的改动，集中在 `lib/home/coursetable/view.dart` 的课表切周体验。原先实现是“三页循环 + 中页重置”，用户慢慢拖动跨过半页时会被程序直接 `jumpToPage(1)` 抢走控制权，看起来像页面突然脱手。现在改成按周连续分页：`PageView.builder` 直接渲染完整周序列，慢拖时相邻周内容会像纸张一样持续随手势进入视口，快速甩动时则保留系统原生分页物理，自然落到上一周或下一周。
 - 课表页这次不只是把分页容器换掉，还顺手统一了周状态同步模型。初始化、切换课表、回到本周和手势切周现在都共用同一套目标周同步逻辑，避免页码、周标题和顶部日期范围出现不同步。对应地，`test/home/coursetable/course_table_swipe_test.dart` 也补了新的慢拖回归测试，专门验证“手指还按着时 pager 仍停留在分数页位置，不会被程序强行吸回整页”。
 - 工程维护侧补了一个很小但实际有用的收尾：`.gitignore` 新增 `.serena`，避免本地语义分析缓存继续污染工作区。这个改动不会影响用户功能，但能减少后续发版和 review 时的噪音。
@@ -94,7 +106,7 @@
 
 ## v1.4.6
 
-## 2026-03-24 · `831bd0a` · chore(release): prepare v1.4.6
+## 2026-03-24 · `b1db2f7` · chore(release): prepare v1.4.6
 - 作者：rccuu
 - 这次发版整理不是继续扩需求，而是把当前工作区里已经确认保留的一轮 UI 减重与交互收口正式整理成 `1.4.6`。总体方向很明确：尽量保留现有玻璃主题的质感，但降低 blur、阴影和过度透明带来的性能与廉价感问题，重点覆盖空教室、课表、成绩页和几个高频入口页。
 - `lib/core/ui/apple_glass.dart` 新增 `AppGlassBackgroundStyle` / `GlassPanelStyle` 两套分层枚举，把背景拆成 `rich / soft / flat`，把面板拆成 `hero / floating / card / list / solid`。这样一来，不同页面和不同密度的组件都可以按场景选更轻的材质，而不是继续让整页所有卡片都走同一种重玻璃参数。
@@ -106,16 +118,16 @@
 
 ## v1.4.5
 
-## 2026-03-23 · `38bf9ef` · chore(release): prepare v1.4.5
+## 2026-03-23 · `631609a` · chore(release): prepare v1.4.5
 - 作者：rccuu
 - 这次发版准备把应用版本从 `1.4.2+1` 提升到 `1.4.5+1`，并把 `v1.4.2` 之后已经进入主线的 UI 与 Android 高刷改动整理成一份可直接用于发布说明的摘要。
-- 需要特别说明的是：仓库里当前没有可验证的 `v1.4.3` Git tag，本次发布摘要因此按最后一个可验证正式基线 `v1.4.2` 到当前主线 `b6c9f2b` 的实际提交来整理，不把不存在的 tag 当作差异基线。
-- 从代码层面看，`357f96d` 先补了一轮全局深色模式细节修正，覆盖登录、评教、考试安排、慧生活 798、宿舍热水和 HUT WebView 等页面；`b7dd274` 继续重做成绩查询、空教室查询和宿舍热水三条高频路径，重点是压缩留白、提高信息密度、统一玻璃材质与深浅色表现；`b6c9f2b` 则把 Android 高刷新率适配落到了原生入口，策略是优先 120Hz，没有 120Hz 就回退到设备支持的最高高刷档。
+- 需要特别说明的是：仓库里当前没有可验证的 `v1.4.3` Git tag，本次发布摘要因此按最后一个可验证正式基线 `v1.4.2` 到当前主线 `0ccf0ab` 的实际提交来整理，不把不存在的 tag 当作差异基线。
+- 从代码层面看，`275c4cd` 先补了一轮全局深色模式细节修正，覆盖登录、评教、考试安排、慧生活 798、宿舍热水和 HUT WebView 等页面；`35c8ace` 继续重做成绩查询、空教室查询和宿舍热水三条高频路径，重点是压缩留白、提高信息密度、统一玻璃材质与深浅色表现；`0ccf0ab` 则把 Android 高刷新率适配落到了原生入口，策略是优先 120Hz，没有 120Hz 就回退到设备支持的最高高刷档。
 - 这次提交本身只负责发版元数据和说明整理，不引入新的功能逻辑；真正进入安装包的功能改动以上述三次主线提交为准。
 - 关键文件：`pubspec.yaml`、`changelog.md`
 - 代码统计：2 files changed, version bump + release notes update
 
-## 2026-03-23 · `b6c9f2b` · feat(android): prefer high refresh rate on supported devices
+## 2026-03-23 · `0ccf0ab` · feat(android): prefer high refresh rate on supported devices
 - 作者：rccuu
 - 这次提交只做一件事：把 Android 端的高刷新率请求补到原生入口里，目标不是激进追 144/165Hz，而是按照前面确认的策略，优先请求 120Hz；如果设备没有 120Hz，再回退到设备支持的最高高刷档。这样既贴近用户实际感知，也避免为了少数面板规格把逻辑写得过于激进。
 - `android/app/src/main/kotlin/com/tune/superhut/MainActivity.kt` 不再是空的 `FlutterActivity()` 壳，而是开始在 `onCreate` 和 `onResume` 两个时机都执行高刷偏好设置。这样做的原因是 Android 上窗口属性在前后台切换、系统回收恢复、厂商 ROM 介入时都有可能被重置，只在创建时设一次不够稳。
@@ -127,7 +139,7 @@
 - 关键文件：`android/app/src/main/kotlin/com/tune/superhut/MainActivity.kt`
 - 代码统计（不含 `changelog.md`）：1 file changed, 108 insertions(+), 1 deletion(-)
 
-## 2026-03-22 · `b7dd274` · feat(ui): refine score, free room and hot water experience
+## 2026-03-22 · `35c8ace` · feat(ui): refine score, free room and hot water experience
 - 作者：rccuu
 - 这次提交是一轮覆盖“空教室查询”“成绩查询”“宿舍热水”三条高频路径的集中 UI 收口，不是简单换色，而是把前面多轮反复确认过的布局压缩、深浅色修正、交互取舍和视觉统一一次性落进仓库。整体方向很明确：减少无效留白、提高信息获取效率、让新旧页面的主题语言真正统一。
 - 空教室部分重点改的是“空间浪费”和“列表节奏”。`lib/pages/freeroom/building.dart` 重新整理了校区与教学楼之间的距离、顶部标题区与分组区的关系、教学楼名和状态胶囊的字号与对齐标准，最终收成“最长教学楼名称也能稳定一行”的统一字号，并把 `xx间`、`空闲xx间` 做成更圆润的小胶囊，避免信息既散又丑。`lib/pages/freeroom/room.dart` 则继续压缩楼内页顶部和列表空白，把卡片收得更紧，尽量在一屏展示更多教室，同时顺手修掉多处 `BOTTOM OVERFLOWED BY 6.0 PIXELS`。
@@ -142,7 +154,7 @@
 
 ## v1.4.2
 
-## 2026-03-22 · `919f042` · chore(release): prepare v1.4.2
+## 2026-03-22 · `4cd0e6d` · chore(release): prepare v1.4.2
 - 作者：rccuu
 - 这是 `v1.4.2` 的发布准备提交，内容不是再去扩首页主结构，而是把这两天一直在反复打磨的底栏体验真正收口：一方面把版本号从 `1.4.0+1` 提升到 `1.4.2+1`，另一方面把底栏的点击热区、外圈阴影和视觉层次按最终确认的方向稳定下来。
 - 这次收尾的核心不是“再加一层更重的卡片效果”，而是明确把阴影限制在底栏边框外面。普通 `boxShadow` 对半透明玻璃胶囊会把中间也一起压暗，看起来像阴影跑进了选项框内部；为了解决这个问题，`lib/home/homeview/view.dart` 新增了 `_OuterOnlyShadowPainter` 和 `_OuterShadowLayer`，改成先画黑色模糊阴影，再把胶囊本体区域挖空，最后只留下外圈那一层更像真实投影的 halo。
@@ -152,7 +164,7 @@
 - 关键文件：`pubspec.yaml`、`lib/core/ui/apple_glass.dart`、`lib/home/homeview/view.dart`、`test/widget_test.dart`
 - 代码统计（当前工作区，含版本与测试更新，不含本次提交哈希回填）：5 files changed, 235 insertions(+), 50 deletions(-)
 
-## 2026-03-22 · `a82bed5` · refactor(ui): polish floating tab bar and transparent bottom safe area
+## 2026-03-22 · `befc086` · refactor(ui): polish floating tab bar and transparent bottom safe area
 - 作者：rccuu
 - 这次提交继续收尾首页底栏体验，重点不是再加一层“尾巴”，而是把底栏下方的安全区透明区真正打通，同时把底栏样式换成更简洁、更稳的胶囊导航实现。
 - `lib/home/homeview/view.dart` 里原先自绘的 `Ionicons` 底栏被替换成 `_ClassicTabBar + GNav/GButton`。底栏仍然保留悬浮胶囊形态，但交互改成更窄、更扁的主题色图标和文字切换；同时 `Scaffold.bottomNavigationBar` 改成 `Stack + Positioned(bottom: dockBottom)` 精确贴底布局，修正之前容易漂到中间、点按区域异常的布局问题。
@@ -162,8 +174,8 @@
 - 关键文件：`lib/home/homeview/view.dart`、`lib/core/ui/apple_glass.dart`、`lib/home/Functionpage/view.dart`、`lib/home/userpage/view.dart`、`lib/home/coursetable/view.dart`
 - 代码统计（不含 `changelog.md`）：6 files changed, 187 insertions(+), 157 deletions(-)
 
-## 2026-03-19 · `0f4e776` · 初次
-- 作者：Tune
+## 2026-03-19 · `9f58670` · 初次
+- 作者：rccuu
 - 这是一次大体量基础重构，覆盖登录、课表、喝水/洗澡、评教、电费、空教室、成绩、网络层和测试体系，基本相当于做了一轮全仓整理。
 - 新增 `lib/core/services/app_auth_storage.dart` 和 `lib/core/services/app_logger.dart`，把 JWXT/HUT 的会话、账号和密码读写集中管理，并把密码迁移到 `flutter_secure_storage`，保留 SharedPreferences 回退逻辑。
 - 把多个历史 CamelCase 文件迁移到 snake_case 命名，旧文件被删除或重命名，例如 `getCoursePage.dart` → `get_course_page.dart`、`getCourse.dart` → `get_course.dart`，评教、电费、空教室、HUT 页面、成绩跳转等模块也一起规范命名。
@@ -177,8 +189,8 @@
 - 关键文件：`lib/core/services/app_auth_storage.dart`、`lib/home/coursetable/view.dart`、`lib/utils/hut_user_api.dart`、`lib/utils/course/get_course.dart`、`test/core/services/app_auth_storage_test.dart`
 - 统计：88 files changed, 7841 insertions(+), 5731 deletions(-)
 
-## 2026-03-19 · `68c9f89` · 修复一些问题
-- 作者：Tune
+## 2026-03-19 · `d07df07` · 修复一些问题
+- 作者：rccuu
 - 这次提交集中做稳定性修复，重点是教务自动登录、空教室/成绩/考试安排的数据容错和 HTTP 错误处理。
 - `webview_login_screen.dart` 改成只处理一次登录结果，新增自动登录超时后的手动登录兜底文案，同时把原来只拦截 XHR 的逻辑扩展到 `fetch`，避免教务前端换实现后拿不到 token。
 - 统一登录 WebView 增加顶部状态卡片和关闭按钮，自动登录超时后不再直接失败退出，而是提示用户在页面上手动完成登录。
@@ -191,8 +203,8 @@
 - 关键文件：`lib/login/webview_login_screen.dart`、`lib/pages/Electricitybill/electricity_page.dart`、`lib/pages/ExamSchedule/exam_schedule_page.dart`、`lib/utils/roomapi.dart`、`lib/utils/withhttp.dart`
 - 统计：18 files changed, 1531 insertions(+), 828 deletions(-)
 
-## 2026-03-20 · `c18951c` · refactor: 精简首页/功能页/个人页，重做课表页并调整启动流程
-- 作者：Tune
+## 2026-03-20 · `2bddacc` · refactor: 精简首页/功能页/个人页，重做课表页并调整启动流程
+- 作者：rccuu
 - 这次提交把首页主流程从“首次打开走欢迎页”改成“有会话直接进首页，无会话进统一登录页”，应用真正进入基于登录态判断的启动方式。
 - `main.dart` 放弃 `FlexColorScheme`，改成手写的 Material 3 主题：品牌色、卡片、输入框、按钮、对话框、BottomSheet、文本层级全部重新定义，后续 UI 重构都建立在这套主题上。
 - 功能页从一长串卡片改成双列功能网格，功能项被抽象成 `_FunctionFeature`，加载中的交互也统一成卡片内部的状态切换。
@@ -204,8 +216,8 @@
 - 关键文件：`lib/main.dart`、`lib/home/Functionpage/view.dart`、`lib/home/userpage/view.dart`、`lib/home/coursetable/view.dart`、`lib/utils/course/coursemain.dart`
 - 统计：11 files changed, 1364 insertions(+), 955 deletions(-)
 
-## 2026-03-20 · `6302b14` · refactor(app): 重做课表页并统一 Glass UI，切换包名为 com.tune.superhut
-- 作者：Tune
+## 2026-03-20 · `3e5b8d5` · refactor(app): 重做课表页并统一 Glass UI，切换包名为 com.tune.superhut
+- 作者：rccuu
 - 这次提交一边做包名切换，一边正式引入整套 Glass UI 视觉层，属于品牌和界面体系双重重构。
 - Android `namespace` / `applicationId` 以及 iOS `PRODUCT_BUNDLE_IDENTIFIER` 全部改成 `com.tune.superhut`，Java/Kotlin 的桌面小组件 Provider/Service 类也一起迁移到新包路径。
 - 新增 `lib/core/ui/apple_glass.dart`，提供 `AppGlassBackground`、`GlassPanel`、`GlassIconBadge`、`GlassHairlineDivider` 等基础组件，后续多个页面都开始复用它们。
@@ -215,8 +227,8 @@
 - 关键文件：`android/app/build.gradle.kts`、`android/app/src/main/AndroidManifest.xml`、`ios/Runner.xcodeproj/project.pbxproj`、`lib/core/ui/apple_glass.dart`、`lib/home/coursetable/view.dart`
 - 统计：15 files changed, 2382 insertions(+), 987 deletions(-)
 
-## 2026-03-20 · `df2ef44` · feat: rebrand app to 工大盒子
-- 作者：Tune
+## 2026-03-20 · `bf290ca` · feat: rebrand app to 工大盒子
+- 作者：rccuu
 - 这是一次正式的品牌切换提交，把应用对外名称从旧品牌统一切到“工大盒子”。
 - Android `app_name`、iOS `CFBundleDisplayName`、Web `manifest.json`、README、应用图标、启动图标、资源图全部换成“工大盒子”品牌内容。
 - 新增 `lib/core/services/app_update_service.dart`，通过 GitHub Releases Atom feed 拉取版本信息，并用 `pub_semver` 解析版本号，给应用内检查更新打基础。
@@ -229,8 +241,8 @@
 
 ## v1.3.0
 
-## 2026-03-20 · `a21e025` · feat: improve score and free room browsing
-- 作者：Tune
+## 2026-03-20 · `fe45ef2` · feat: improve score and free room browsing
+- 作者：rccuu
 - 这次提交主要优化“成绩查询”和“空教室查询”两条用户路径，同时顺手精简了 README。
 - README 里补充说明：仓库名和 Dart 包名仍然保留 `superhut`，但对外显示名称已经是“工大盒子”；同时新增 GitHub Releases 相关说明。
 - 教学楼页按 `河西校区`、`河东校区`、`其他` 分组展示，并对建筑名称做压缩处理，避免重复出现“河西校区公共教学楼”这类过长前缀。
@@ -239,7 +251,7 @@
 - 关键文件：`lib/pages/freeroom/building.dart`、`lib/pages/freeroom/room.dart`、`lib/pages/score/scorepage.dart`、`README.md`
 - 统计：4 files changed, 381 insertions(+), 333 deletions(-)
 
-## 2026-03-20 · `76fb510` · fix: improve dark mode and restore iOS course sync
+## 2026-03-20 · `e4e02cf` · fix: improve dark mode and restore iOS course sync
 - 作者：rccuu
 - 这次提交同时修两类问题：一类是深色模式下的硬编码颜色，另一类是 iOS/macOS 课表本地持久化导致的同步失效。
 - `pubspec.yaml` 增加 `dependency_overrides`，把 `path_provider_foundation` 固定到 `2.5.1`，注释里明确说明是为了绕过新版直接 FFI native assets 在当前模拟器工具链上造成的课表持久化异常；对应 lockfile 和插件注册文件也一起更新。
@@ -250,7 +262,7 @@
 - 关键文件：`pubspec.yaml`、`lib/pages/score/scorepage.dart`、`lib/pages/Electricitybill/electricity_page.dart`、`lib/pages/drink/view/widgets/drink_page_widgets.dart`
 - 统计：12 files changed, 152 insertions(+), 242 deletions(-)
 
-## 2026-03-21 · `8c83a1c` · feat: refine hui798 drink experience
+## 2026-03-21 · `889d845` · feat: refine hui798 drink experience
 - 作者：rccuu
 - 这次提交集中重做“慧生活798”体验，重点是扫码能力、登录流程和喝水设备页状态管理。
 - iOS 侧显式把最低系统版本设到 13.0，在 Podfile 的 `post_install` 里打开 `PERMISSION_CAMERA=1`，并在 `Info.plist` 增加 `NSCameraUsageDescription`，为扫码绑定饮水设备做权限准备。
@@ -261,14 +273,14 @@
 - 关键文件：`ios/Podfile`、`ios/Runner/Info.plist`、`lib/pages/drink/login/view.dart`、`lib/pages/drink/login/loginpart2.dart`、`lib/pages/drink/view/logic.dart`
 - 统计：13 files changed, 1780 insertions(+), 855 deletions(-)
 
-## 2026-03-21 · `a6d1157` · chore: ignore local editor settings
+## 2026-03-21 · `b74514f` · chore: ignore local editor settings
 - 作者：rccuu
 - 这是一次仓库清洁提交，把用户本地 IDE 配置从版本控制中移走。
 - `.gitignore` 调整为忽略本地编辑器配置，同时删除已被跟踪的 `.vscode/settings.json`，避免每个人的本地设置继续污染提交记录。
 - 影响文件：`.gitignore`、`.vscode/settings.json`
 - 统计：2 files changed, 1 insertion(+), 4 deletions(-)
 
-## 2026-03-21 · `6b9975f` · feat: add guest mode and manual course sync
+## 2026-03-21 · `1ea4e94` · feat: add guest mode and manual course sync
 - 作者：rccuu
 - 这次提交引入了“游客模式”，把应用从“强制先登录才能进”改成“可以先逛、需要校园能力时再登录”。
 - `AppAuthStorage` 新增 `hasAnyCampusSession()` 和 `hasLinkedCampusAccount()`，把“有 token 会话”和“账号是否已经绑定过”区分开，供启动页、个人页、课表页分别判断。
@@ -280,7 +292,7 @@
 - 关键文件：`lib/core/services/app_auth_storage.dart`、`lib/login/unified_login_page.dart`、`lib/home/userpage/view.dart`、`lib/home/coursetable/view.dart`、`lib/main.dart`
 - 统计：14 files changed, 539 insertions(+), 153 deletions(-)
 
-## 2026-03-21 · `22519c4` · feat: add timetable sharing and library flow
+## 2026-03-21 · `046e080` · feat: add timetable sharing and library flow
 - 作者：rccuu
 - 这次提交新增的是“课表库”流程，不是普通单份课表缓存；用户可以开始管理自己的历史课表和别人分享过来的课表。
 - `lib/utils/course/coursemain.dart` 引入课表归档模型：支持多份 `SavedCourseSchedule`、当前激活课表、重命名、删除、切换、来源标记、只读快照，以及从旧版 `course_data.json` 自动迁移到新档案结构。
@@ -295,7 +307,7 @@
 
 ## v1.4.0
 
-## 2026-03-21 · `f719a4e` · chore: prepare v1.4.0 release
+## 2026-03-21 · `9d16a35` · chore: prepare v1.4.0 release
 - 作者：rccuu
 - 这是 `v1.4.0` 的发布准备提交，既做版本号提升，也把前一版课表库/扫码导入所需的最后一批收尾补齐。
 - `pubspec.yaml` 版本号从 `1.3.0+1` 提升到 `1.4.0+1`。
@@ -307,7 +319,7 @@
 - 关键文件：`android/app/src/main/AndroidManifest.xml`、`lib/home/coursetable/view.dart`、`test/android_manifest_test.dart`、`test/home/coursetable/course_detail_sheet_test.dart`
 - 统计：8 files changed, 583 insertions(+), 551 deletions(-)
 
-## 2026-03-21 · `01cb342` · perf: smooth android flows and polish sharing ui
+## 2026-03-21 · `347de39` · perf: smooth android flows and polish sharing ui
 - 作者：rccuu
 - 这次提交是一轮针对 Android 真机体验的集中调优，核心目标不是“去掉动画”，而是把掉帧最明显的页面切换、弹层打开和深色模式可读性问题拆开处理，尽量做到既流畅又保留一点灵动感。
 - 首页主切换链路被重做：`lib/home/homeview/view.dart` 不再用 `PageView.animateToPage` 驱动三大主 tab，而是改成 `IndexedStack + lazy load + RepaintBoundary`，首次只构建当前页，其他页按需挂载；同时给当前激活页保留一个很轻的淡入/微位移动画，底部导航项也补了更轻的缩放和文字切换动画。

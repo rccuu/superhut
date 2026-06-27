@@ -23,6 +23,13 @@ typedef CommentaryBatchSubmitter =
 typedef CommentaryBatchProgressCallback =
     void Function(CommentaryBatchProgress progress);
 
+typedef CommentaryBatchEvaluationRunner =
+    Future<CommentaryBatchExecutionResult> Function({
+      required String batchId,
+      required List<CommentaryPayload> commentaryItems,
+      CommentaryBatchProgressCallback? onProgress,
+    });
+
 class CommentaryBatchProgress {
   const CommentaryBatchProgress({
     required this.completedCount,

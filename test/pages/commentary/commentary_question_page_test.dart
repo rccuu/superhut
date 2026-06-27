@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:superhut/core/ui/apple_glass.dart';
 import 'package:superhut/pages/Commentary/commentary_api.dart';
 import 'package:superhut/pages/Commentary/commentary_question_page.dart';
 
@@ -131,7 +132,7 @@ void main() {
     await tester.tap(find.text('满意'));
     await tester.pump();
 
-    final submitButton = find.widgetWithText(ElevatedButton, '提交');
+    final submitButton = find.widgetWithText(FilledButton, '提交');
     await tester.ensureVisible(submitButton);
     await tester.tap(submitButton);
     await tester.tap(submitButton);
@@ -213,7 +214,7 @@ void main() {
     expect(firstOption.value, isFalse);
     expect(secondOption.value, isTrue);
 
-    final submitButton = find.widgetWithText(ElevatedButton, '提交');
+    final submitButton = find.widgetWithText(FilledButton, '提交');
     await tester.ensureVisible(submitButton);
     await tester.tap(submitButton);
     await tester.pump();
@@ -270,7 +271,7 @@ void main() {
     await tester.tap(find.text('满意'));
     await tester.pump();
 
-    final submitButton = find.widgetWithText(ElevatedButton, '提交');
+    final submitButton = find.widgetWithText(FilledButton, '提交');
     await tester.ensureVisible(submitButton);
     await tester.tap(submitButton);
     await tester.pump();
@@ -334,7 +335,7 @@ void main() {
     await tester.tap(find.text('满意'));
     await tester.pump();
 
-    final submitButton = find.widgetWithText(ElevatedButton, '提交');
+    final submitButton = find.widgetWithText(FilledButton, '提交');
     await tester.ensureVisible(submitButton);
     await tester.tap(submitButton);
     await tester.pump();
@@ -342,4 +343,53 @@ void main() {
     expect(find.text(commentarySubmitFailureMessage), findsOneWidget);
     expect(find.text(rawBackendError), findsNothing);
   });
+
+  testWidgets(
+    'question page renders a glass shell around the loaded questionnaire',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CommentaryQuestionPage(
+            batchId: 'batch-1',
+            courseId: 'course-1',
+            evaluationCategoriesId: 'category-1',
+            teacherId: 'teacher-1',
+            noticeId: 'notice-1',
+            loadQuestions: (
+              batchId,
+              evaluationCategoriesId,
+              courseId,
+              teacherId,
+              noticeId,
+            ) async {
+              return [
+                {
+                  'targetName': '教学态度',
+                  'targetId': 'target-1',
+                  'optionList': const [
+                    QuestionOption('target-1', '满意', 'option-1', '5.0'),
+                  ],
+                },
+              ];
+            },
+            submitSelections: (
+              batchId,
+              courseId,
+              evaluationCategoriesId,
+              teacherId,
+              noticeId,
+              questionList,
+            ) async {
+              return '提交失败';
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppGlassBackground), findsOneWidget);
+      expect(find.byType(GlassPanel), findsAtLeastNWidgets(2));
+      expect(find.text('共 1 道题'), findsOneWidget);
+    },
+  );
 }
