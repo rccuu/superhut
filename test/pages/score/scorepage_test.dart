@@ -7,6 +7,15 @@ import 'package:superhut/pages/score/logic.dart';
 import 'package:superhut/pages/score/scorepage.dart';
 
 void main() {
+  test('regular term semester filter keeps only upper/lower terms', () {
+    expect(debugIsRegularTermSemester('2024-2025-1'), isTrue);
+    expect(debugIsRegularTermSemester('2024-2025-2'), isTrue);
+    expect(debugIsRegularTermSemester('2024-2025-3'), isFalse);
+    expect(debugIsRegularTermSemester('2024-2025'), isFalse);
+    expect(debugIsRegularTermSemester('abc'), isFalse);
+    expect(debugIsRegularTermSemester(''), isFalse);
+  });
+
   testWidgets('background semester probing does not persist score summaries', (
     tester,
   ) async {

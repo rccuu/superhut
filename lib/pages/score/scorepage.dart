@@ -28,6 +28,41 @@ typedef ScoreBottomSheetPresenter =
       BoxShadow? shadow,
     });
 
+({String startYear, String endYear, String term})?
+_parseSemesterLabelPartsStatic(String value) {
+  var firstDash = -1;
+  var secondDash = -1;
+  for (var index = 0; index < value.length; index++) {
+    if (value.codeUnitAt(index) != 0x2D) {
+      continue;
+    }
+    if (firstDash == -1) {
+      firstDash = index;
+    } else if (secondDash == -1) {
+      secondDash = index;
+    } else {
+      return null;
+    }
+  }
+
+  if (firstDash == -1 || secondDash == -1) {
+    return null;
+  }
+
+  return (
+    startYear: value.substring(0, firstDash),
+    endYear: value.substring(firstDash + 1, secondDash),
+    term: value.substring(secondDash + 1),
+  );
+}
+
+@visibleForTesting
+bool debugIsRegularTermSemester(String id) {
+  final parts = _parseSemesterLabelPartsStatic(id);
+  if (parts == null) return false;
+  return parts.term == '1' || parts.term == '2';
+}
+
 class ScorePage extends StatefulWidget {
   const ScorePage({
     super.key,
@@ -399,32 +434,7 @@ class _ScorePageState extends State<ScorePage> {
 
   ({String startYear, String endYear, String term})? _parseSemesterLabelParts(
     String value,
-  ) {
-    var firstDash = -1;
-    var secondDash = -1;
-    for (var index = 0; index < value.length; index++) {
-      if (value.codeUnitAt(index) != 0x2D) {
-        continue;
-      }
-      if (firstDash == -1) {
-        firstDash = index;
-      } else if (secondDash == -1) {
-        secondDash = index;
-      } else {
-        return null;
-      }
-    }
-
-    if (firstDash == -1 || secondDash == -1) {
-      return null;
-    }
-
-    return (
-      startYear: value.substring(0, firstDash),
-      endYear: value.substring(firstDash + 1, secondDash),
-      term: value.substring(secondDash + 1),
-    );
-  }
+  ) => _parseSemesterLabelPartsStatic(value);
 
   double? _numericFraction(String text) {
     StringBuffer? normalizedBuffer;
