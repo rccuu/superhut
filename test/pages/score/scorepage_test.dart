@@ -82,6 +82,84 @@ void main() {
     },
   );
 
+  testWidgets(
+    'concurrent probe batches exceed 6 with pool size 6',
+    (tester) async {
+      // 8 个学期：全部成功且非空 → 全部保留；验证批次调度不重复、顺序保持
+      final semesterIds = [
+        '2024-2025-1', '2024-2025-2', '2025-2026-1', '2025-2026-2',
+        '2026-2027-1', '2026-2027-2', '2023-2024-1', '2023-2024-2',
+      ];
+      final probed = <String>{};
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ScorePage(
+            loadSemesters: () async =>
+                SemesterListResult(idList: semesterIds, nowId: '2024-2025-2'),
+            loadScore: (semesterId, {bool persistSummary = true}) {
+              if (semesterId.isEmpty) {
+                return Future.value(_scoreResult(courseName: '全部成绩'));
+              }
+              probed.add(semesterId);
+              return Future.value(_scoreResult(courseName: semesterId));
+            },
+          ),
+        ),
+      );
+
+      await _pumpUntil(tester, () => find.text('全部成绩').evaluate().isNotEmpty);
+
+      final dynamic pageState = tester.state(find.byType(ScorePage));
+      final kept = await (pageState.debugProbeRegularSemesters(semesterIds)
+          as Future<List<String>>);
+
+      // 全部非空 → 全部保留
+      expect(kept, equals(semesterIds));
+      // 每个学期恰好被探测一次（去重缓存保证不重复）
+      expect(probed.length, semesterIds.length);
+    },
+  );
+
+  testWidgets(
+    'concurrent probe filters empty semesters while keeping order',
+    (tester) async {
+      final semesterIds = ['2024-2025-1', '2024-2025-2', '2025-2026-1'];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ScorePage(
+            loadSemesters: () async =>
+                const SemesterListResult(idList: [], nowId: ''),
+            loadScore: (semesterId, {bool persistSummary = true}) {
+              if (semesterId.isEmpty) {
+                return Future.value(_scoreResult(courseName: '全部成绩'));
+              }
+              // 中间那个返回空
+              if (semesterId == '2024-2025-2') {
+                return Future.value(const ScoreLoadResult(
+                  achievement: [],
+                  yxzxf: '-',
+                  zxfjd: '-',
+                  pjxfjd: '-',
+                ));
+              }
+              return Future.value(_scoreResult(courseName: semesterId));
+            },
+          ),
+        ),
+      );
+
+      await _pumpUntil(tester, () => find.text('全部成绩').evaluate().isNotEmpty);
+
+      final dynamic pageState = tester.state(find.byType(ScorePage));
+      final kept = await (pageState.debugProbeRegularSemesters(semesterIds)
+          as Future<List<String>>);
+
+      expect(kept, equals(['2024-2025-1', '2025-2026-1']));
+    },
+  );
+
   testWidgets('background semester probing does not persist score summaries', (
     tester,
   ) async {

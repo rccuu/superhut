@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show min;
 
 import 'package:enhanced_future_builder/enhanced_future_builder.dart';
 import 'package:flutter/foundation.dart';
@@ -289,6 +290,34 @@ class _ScorePageState extends State<ScorePage> {
     return true;
   }
 
+  Future<List<String>> _probeRegularSemesters(List<String> ids) async {
+    if (ids.isEmpty) return const <String>[];
+    const int fullConcurrencyThreshold = 6;
+    const int poolSize = 6;
+
+    if (ids.length <= fullConcurrencyThreshold) {
+      return _probeKeepAll(ids);
+    }
+
+    final kept = <String>[];
+    for (var i = 0; i < ids.length; i += poolSize) {
+      if (!mounted) return kept;
+      final batch = ids.sublist(i, min(i + poolSize, ids.length));
+      kept.addAll(await _probeKeepAll(batch));
+    }
+    return kept;
+  }
+
+  Future<List<String>> _probeKeepAll(List<String> ids) async {
+    final results = await Future.wait(
+      ids.map((id) => _probeSemesterKeep(id)),
+    );
+    return [
+      for (var i = 0; i < ids.length; i++)
+        if (results[i]) ids[i],
+    ];
+  }
+
   @visibleForTesting
   Future<ScoreLoadResult> debugLoadScoreForSemester(
     String semesterId, {
@@ -305,6 +334,11 @@ class _ScorePageState extends State<ScorePage> {
   @visibleForTesting
   Future<bool> debugProbeSemesterKeep(String id, {int maxRetries = 2}) {
     return _probeSemesterKeep(id, maxRetries: maxRetries);
+  }
+
+  @visibleForTesting
+  Future<List<String>> debugProbeRegularSemesters(List<String> ids) {
+    return _probeRegularSemesters(ids);
   }
 
   Future<List<String>> _filterSemestersWithScores(
