@@ -2823,8 +2823,8 @@ void main() {
     final cacheMethod = RegExp(
       r'Future<ScoreLoadResult> _loadAndCacheScoreForSemester[\s\S]*?\n  @visibleForTesting',
     ).firstMatch(scorePage)?.group(0);
-    final filterMethod = RegExp(
-      r'Future<List<String>> _filterSemestersWithScores[\s\S]*?\n  Future<void> _probeAvailableSemesters',
+    final probeKeepMethod = RegExp(
+      r'Future<bool> _probeSemesterKeep\(String id, \{int maxRetries = 2\}\) async \{[\s\S]*?\n  bool _isRegularTermSemesterStatic',
     ).firstMatch(scorePage)?.group(0);
     final probeMethod = RegExp(
       r'Future<void> _probeAvailableSemesters\(List<String> semesterIds\) async \{[\s\S]*?\n  Future<void> getTimeList',
@@ -2850,33 +2850,41 @@ void main() {
     );
     expect(cacheMethod, contains('_scoreCache[semesterId] = scoreData;'));
 
-    expect(filterMethod, isNotNull);
+    // 旧的串行整体回退（_filterSemestersWithScores + return semesterIds）已删除，
+    // 改为并发 _probeSemesterKeep 叶子节点：每次探测用 persistSummary: false，
+    // 单学期异常重试到 maxRetries 后保留（return true），不冒泡、不清空列表。
     expect(
-      filterMethod,
+      scorePage,
+      isNot(contains('_filterSemestersWithScores')),
+      reason: '旧串行探测方法应已被并发管线替换。',
+    );
+    expect(probeKeepMethod, isNotNull);
+    expect(
+      probeKeepMethod,
       contains('persistSummary: false'),
       reason: '后台探测各学期是否有成绩时不应覆盖“我的”页使用的绩点/学分摘要缓存。',
     );
     expect(
-      filterMethod,
+      probeKeepMethod,
       contains('try {'),
       reason: '后台学期探测由 unawaited 触发，单个学期加载异常不应冒泡成未处理异步错误。',
     );
-    expect(filterMethod, contains('catch (error, stackTrace)'));
+    expect(probeKeepMethod, contains('catch (error, stackTrace)'));
     expect(
-      filterMethod,
+      probeKeepMethod,
       contains(
-        "AppLogger.error(\n          'Failed to probe score data for semester \$semester'",
+        "AppLogger.error(\n          'Failed to probe score data for semester \$id (attempt \$attempt)'",
       ),
     );
     expect(
-      filterMethod,
-      contains('return semesterIds;'),
-      reason: '后台探测失败时应保留完整学期列表，避免异常导致学期入口被清空。',
+      probeKeepMethod,
+      contains('if (attempt == maxRetries) return true;'),
+      reason: '重试耗尽时应保留该学期，避免异常导致学期入口被清空。',
     );
     expect(
-      filterMethod,
-      contains('if (!mounted)'),
-      reason: '后台学期探测在页面关闭后应停止继续拉取后续学期。',
+      probeKeepMethod,
+      contains('if (!mounted) return true;'),
+      reason: '后台学期探测在页面关闭后应停止继续重试。',
     );
 
     expect(probeMethod, isNotNull);

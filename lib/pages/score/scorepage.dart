@@ -290,6 +290,8 @@ class _ScorePageState extends State<ScorePage> {
     return true;
   }
 
+  bool _isRegularTermSemesterStatic(String id) => debugIsRegularTermSemester(id);
+
   Future<List<String>> _probeRegularSemesters(List<String> ids) async {
     if (ids.isEmpty) return const <String>[];
     const int fullConcurrencyThreshold = 6;
@@ -341,44 +343,14 @@ class _ScorePageState extends State<ScorePage> {
     return _probeRegularSemesters(ids);
   }
 
-  Future<List<String>> _filterSemestersWithScores(
-    List<String> semesterIds,
-  ) async {
-    final availableSemesterIds = <String>[];
-
-    for (final semester in semesterIds) {
-      if (!mounted) {
-        return availableSemesterIds;
-      }
-      final ScoreLoadResult scoreData;
-      try {
-        scoreData = await _loadScoreForSemester(
-          semester,
-          persistSummary: false,
-        );
-      } catch (error, stackTrace) {
-        AppLogger.error(
-          'Failed to probe score data for semester $semester',
-          error: error,
-          stackTrace: stackTrace,
-        );
-        return semesterIds;
-      }
-      if (!mounted) {
-        return availableSemesterIds;
-      }
-      if (scoreData.errorMessage != null) {
-        AppLogger.debug(
-          'Failed to probe score data for semester $semester, keeping full semester list.',
-        );
-        return semesterIds;
-      }
-      if (scoreData.achievement.isNotEmpty) {
-        availableSemesterIds.add(semester);
-      }
-    }
-
-    return availableSemesterIds;
+  @visibleForTesting
+  Future<List<String>> debugProbeAvailableSemesters(List<String> ids) async {
+    // 复用与 _probeAvailableSemesters 相同的纯过滤+探测管线，
+    // 但不写回 semesterId / 不触发 UI 同步，不持有 _isSemesterProbeStarted 锁，
+    // 便于测试直接断言探测结果。
+    if (ids.isEmpty) return const <String>[];
+    final regularIds = ids.where(_isRegularTermSemesterStatic).toList();
+    return _probeRegularSemesters(regularIds);
   }
 
   Future<void> _probeAvailableSemesters(List<String> semesterIds) async {
@@ -387,10 +359,14 @@ class _ScorePageState extends State<ScorePage> {
     }
     _isSemesterProbeStarted = true;
 
-    final filteredSemesterIds = await _filterSemestersWithScores(semesterIds);
+    final regularIds =
+        semesterIds.where(_isRegularTermSemesterStatic).toList();
+    final keptIds = await _probeRegularSemesters(regularIds);
     if (!mounted) {
       return;
     }
+
+    final filteredSemesterIds = keptIds;
 
     final shouldResetSelection =
         selectedId != 'all' && !filteredSemesterIds.contains(selectedId);
@@ -411,8 +387,6 @@ class _ScorePageState extends State<ScorePage> {
     if (shouldResetSelection) {
       selectedId = 'all';
       _syncScoreContentState();
-    }
-    if (shouldResetSelection) {
       _syncSelectionState();
     }
 
