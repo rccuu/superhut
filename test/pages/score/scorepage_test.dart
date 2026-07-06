@@ -16,6 +16,72 @@ void main() {
     expect(debugIsRegularTermSemester(''), isFalse);
   });
 
+  testWidgets(
+    'probe keeps semester with data, drops empty, retains on retry-exhausted error',
+    (tester) async {
+      var failCount = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ScorePage(
+            loadSemesters: () async =>
+                const SemesterListResult(idList: [], nowId: ''),
+            loadScore: (semesterId, {bool persistSummary = true}) {
+              if (semesterId == '2024-2025-1') {
+                // 始终抛异常：重试 2 次后仍失败 → 应保留
+                failCount++;
+                throw Exception('always fails');
+              }
+              if (semesterId == '2024-2025-2') {
+                // 业务失败 (errorMessage)：应保留
+                return Future.value(const ScoreLoadResult(
+                  achievement: [],
+                  yxzxf: '-',
+                  zxfjd: '-',
+                  pjxfjd: '-',
+                  errorMessage: 'business error',
+                ));
+              }
+              if (semesterId == '2024-2025-3') {
+                // 成功但空：应剔除
+                return Future.value(const ScoreLoadResult(
+                  achievement: [],
+                  yxzxf: '-',
+                  zxfjd: '-',
+                  pjxfjd: '-',
+                ));
+              }
+              return Future.value(_scoreResult(courseName: '全部成绩'));
+            },
+          ),
+        ),
+      );
+
+      await _pumpUntil(tester, () => find.text('全部成绩').evaluate().isNotEmpty);
+
+      final dynamic pageState = tester.state(find.byType(ScorePage));
+      // 2024-2025-1 抛异常，maxRetries=2 → 总共调用 3 次（1 初试 + 2 重试），最终保留
+      final keepThrower =
+          await (pageState.debugProbeSemesterKeep('2024-2025-1', maxRetries: 2)
+              as Future<bool>);
+      expect(keepThrower, isTrue);
+      expect(failCount, 3);
+
+      // 2024-2025-2 业务 errorMessage → 保留
+      final keepBizError =
+          await (pageState.debugProbeSemesterKeep('2024-2025-2', maxRetries: 0)
+              as Future<bool>);
+      expect(keepBizError, isTrue);
+
+      // 2024-2025-3 成功但空 → 剔除
+      final keepEmpty =
+          await (pageState.debugProbeSemesterKeep('2024-2025-3', maxRetries: 0)
+              as Future<bool>);
+      expect(keepEmpty, isFalse);
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('background semester probing does not persist score summaries', (
     tester,
   ) async {

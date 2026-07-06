@@ -266,6 +266,29 @@ class _ScorePageState extends State<ScorePage> {
     return scoreData;
   }
 
+  Future<bool> _probeSemesterKeep(String id, {int maxRetries = 2}) async {
+    for (var attempt = 0; attempt <= maxRetries; attempt++) {
+      if (!mounted) return true;
+      ScoreLoadResult? result;
+      try {
+        result = await _loadScoreForSemester(id, persistSummary: false);
+      } catch (error, stackTrace) {
+        AppLogger.error(
+          'Failed to probe score data for semester $id (attempt $attempt)',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        if (attempt == maxRetries) return true; // 重试耗尽 → 保留
+        continue; // 否则重试
+      }
+      if (!mounted) return true;
+      if (result.errorMessage != null) return true; // 业务失败 → 保留
+      return result.achievement.isNotEmpty; // 成功：非空保留，空剔除
+    }
+    // 不可达：循环必在任一分支返回
+    return true;
+  }
+
   @visibleForTesting
   Future<ScoreLoadResult> debugLoadScoreForSemester(
     String semesterId, {
@@ -277,6 +300,11 @@ class _ScorePageState extends State<ScorePage> {
   @visibleForTesting
   Future<void> debugRefreshScoresForSelection(String semesterId) {
     return _refreshScoresForSelection(semesterId);
+  }
+
+  @visibleForTesting
+  Future<bool> debugProbeSemesterKeep(String id, {int maxRetries = 2}) {
+    return _probeSemesterKeep(id, maxRetries: maxRetries);
   }
 
   Future<List<String>> _filterSemestersWithScores(
