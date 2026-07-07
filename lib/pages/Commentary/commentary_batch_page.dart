@@ -45,7 +45,10 @@ class CommentaryBatchPage extends StatefulWidget {
 }
 
 class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
-  late Future<_CommentaryBatchViewData> _batchesFuture;
+  late Future<List<CommentaryPayload>> _batchesFuture;
+  List<_CommentaryBatchCardData> _batchCards =
+      const <_CommentaryBatchCardData>[];
+  String? _batchLoadErrorMessage;
   bool _isOpeningBatch = false;
   String? _runningBatchId;
   CommentaryBatchProgress? _batchProgress;
@@ -56,7 +59,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
     _batchesFuture = _getBatches();
   }
 
-  Future<_CommentaryBatchViewData> _getBatches() async {
+  Future<List<CommentaryPayload>> _getBatches() async {
     try {
       final batches = await (widget.loadBatches ?? getCommentaryBatches)();
       final itemsLoader = widget.loadCommentaryItems ?? getCommentaryList;
@@ -74,24 +77,25 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
         }),
       );
 
-      return _CommentaryBatchViewData(
-        cards: List<_CommentaryBatchCardData>.unmodifiable(cards),
-      );
+      _batchCards = List<_CommentaryBatchCardData>.unmodifiable(cards);
+      _batchLoadErrorMessage = null;
+      return batches;
     } catch (error, stackTrace) {
       AppLogger.error(
         'Failed to load commentary batches',
         error: error,
         stackTrace: stackTrace,
       );
-      return const _CommentaryBatchViewData(
-        cards: <_CommentaryBatchCardData>[],
-        errorMessage: '请稍后重试',
-      );
+      _batchCards = const <_CommentaryBatchCardData>[];
+      _batchLoadErrorMessage = '请稍后重试';
+      return const <CommentaryPayload>[];
     }
   }
 
   void _reloadBatches() {
     setState(() {
+      _batchCards = const <_CommentaryBatchCardData>[];
+      _batchLoadErrorMessage = null;
       _batchesFuture = _getBatches();
     });
   }
@@ -238,6 +242,29 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
     return Navigator.of(context).push<T>(route);
   }
 
+  _CommentaryBatchCardData _cardForBatch(
+    List<_CommentaryBatchCardData> cards,
+    CommentaryPayload batch,
+    int index,
+  ) {
+    if (index < cards.length && identical(cards[index].batch, batch)) {
+      return cards[index];
+    }
+
+    return _CommentaryBatchCardData(
+      batch: batch,
+      commentaryItems: const <CommentaryPayload>[],
+    );
+  }
+
+  int _totalPendingCount(List<_CommentaryBatchCardData> cards) {
+    var count = 0;
+    for (final card in cards) {
+      count += card.pendingCount;
+    }
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
@@ -258,31 +285,33 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
               EnhancedFutureBuilder(
                 future: _batchesFuture,
                 rememberFutureResult: false,
-                whenDone: (_CommentaryBatchViewData data) {
+                whenDone: (List<CommentaryPayload> batchesList) {
+                  final cards = _batchCards;
+                  final errorMessage = _batchLoadErrorMessage;
                   return CustomScrollView(
                     slivers: [
                       SliverPadding(
                         padding: EdgeInsets.fromLTRB(16, topInset + 24, 16, 0),
                         sliver: SliverToBoxAdapter(
                           child: _CommentaryPageHeader(
-                            categoryCount: data.cards.length,
-                            pendingCount: data.totalPendingCount,
+                            categoryCount: batchesList.length,
+                            pendingCount: _totalPendingCount(cards),
                             accent: accent,
                           ),
                         ),
                       ),
-                      if (data.errorMessage != null)
+                      if (errorMessage != null)
                         SliverPadding(
                           padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
                           sliver: SliverToBoxAdapter(
                             child: _CommentaryEmptyState(
                               title: '评教批次加载失败',
-                              subtitle: data.errorMessage!,
+                              subtitle: errorMessage,
                               accent: accent,
                             ),
                           ),
                         )
-                      else if (data.cards.isEmpty)
+                      else if (batchesList.isEmpty)
                         const SliverPadding(
                           padding: EdgeInsets.fromLTRB(16, 18, 16, 24),
                           sliver: SliverToBoxAdapter(
@@ -299,18 +328,18 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
                           sliver: SliverToBoxAdapter(
                             child: _CommentarySectionHeader(
                               title: '评教分类',
-                              subtitle: '${data.cards.length} 个分类',
+                              subtitle: '${batchesList.length} 个分类',
                             ),
                           ),
                         ),
                         SliverPadding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-                          sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              final card = data.cards[index];
+                          sliver: SliverList.builder(
+                            itemCount: batchesList.length,
+                            addRepaintBoundaries: false,
+                            itemBuilder: (context, index) {
+                              final batch = batchesList[index];
+                              final card = _cardForBatch(cards, batch, index);
                               final isRunning = _runningBatchId == card.batchId;
                               final progress = _batchProgress;
                               return Padding(
@@ -333,7 +362,7 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
                                           : () => _handleBatchEvaluation(card),
                                 ),
                               );
-                            }, childCount: data.cards.length),
+                            },
                           ),
                         ),
                       ],
@@ -375,16 +404,6 @@ class _CommentaryBatchPageState extends State<CommentaryBatchPage> {
       ),
     );
   }
-}
-
-class _CommentaryBatchViewData {
-  const _CommentaryBatchViewData({required this.cards, this.errorMessage});
-
-  final List<_CommentaryBatchCardData> cards;
-  final String? errorMessage;
-
-  int get totalPendingCount =>
-      cards.fold(0, (sum, card) => sum + card.pendingCount);
 }
 
 class _CommentaryBatchCardData {

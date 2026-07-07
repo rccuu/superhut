@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:superhut/pages/freeroom/building.dart';
+import 'package:superhut/pages/freeroom/building_bridge.dart';
 import 'package:superhut/utils/roomapi.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(resetFreeRoomBridgeCacheForTest);
+  tearDown(resetFreeRoomBridgeCacheForTest);
 
   testWidgets('duplicate building taps open a single room route', (
     tester,

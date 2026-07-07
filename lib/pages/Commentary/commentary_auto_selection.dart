@@ -5,41 +5,44 @@ List<CommentarySubmissionItem> buildAutoCommentarySelections(
 ) {
   final selections = <CommentarySubmissionItem>[];
 
-  for (var questionIndex = 0; questionIndex < questions.length; questionIndex++) {
+  for (
+    var questionIndex = 0;
+    questionIndex < questions.length;
+    questionIndex++
+  ) {
     final question = questions[questionIndex];
     final optionList = question['optionList'];
     if (optionList is! List) {
       continue;
     }
 
-    QuestionOption? matchedOption;
     for (final option in optionList) {
       if (option is! QuestionOption) {
         continue;
       }
 
-      final optionScore = double.tryParse(option.optionScoreValue);
-      if (optionScore == null) {
-        continue;
-      }
-
-      final shouldSelect =
-          questionIndex == 0 ? optionScore < 4.75 : optionScore >= 4.75;
-      if (shouldSelect) {
-        matchedOption = option;
+      if (_matchesAutoCommentaryRule(option, questionIndex)) {
+        selections.add({
+          'targetid': question['targetId'].toString(),
+          'targetval': option.optionId,
+        });
         break;
       }
     }
-
-    if (matchedOption == null) {
-      continue;
-    }
-
-    selections.add({
-      'targetid': question['targetId'].toString(),
-      'targetval': matchedOption.optionId,
-    });
   }
 
   return List<CommentarySubmissionItem>.unmodifiable(selections);
+}
+
+bool matchesAutoCommentaryRule(QuestionOption option, int questionIndex) {
+  return _matchesAutoCommentaryRule(option, questionIndex);
+}
+
+bool _matchesAutoCommentaryRule(QuestionOption option, int questionIndex) {
+  final optionScore = double.tryParse(option.optionScoreValue);
+  if (optionScore == null) {
+    return false;
+  }
+
+  return questionIndex == 0 ? optionScore < 4.75 : optionScore >= 4.75;
 }

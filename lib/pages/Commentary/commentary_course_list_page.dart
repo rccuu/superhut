@@ -332,11 +332,10 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                               ),
-                              sliver: SliverList(
-                                delegate: SliverChildBuilderDelegate((
-                                  context,
-                                  index,
-                                ) {
+                              sliver: SliverList.builder(
+                                itemCount: commentaryList.length,
+                                addRepaintBoundaries: false,
+                                itemBuilder: (context, index) {
                                   final commentary = commentaryList[index];
                                   final isSubmitted =
                                       commentary['isSubmitCode']?.toString() ==
@@ -362,7 +361,7 @@ class _CommentaryCourseListPageState extends State<CommentaryCourseListPage> {
                                       },
                                     ),
                                   );
-                                }, childCount: commentaryList.length),
+                                },
                               ),
                             ),
                           const SliverToBoxAdapter(child: SizedBox(height: 28)),

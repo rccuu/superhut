@@ -210,11 +210,27 @@ class _CommentaryQuestionPageState extends State<CommentaryQuestionPage> {
   }
 
   List<CommentarySubmissionItem> _buildAutoSelections() {
+    final selections = <CommentarySubmissionItem>[];
     if (_questionOptions.length != _savedQuestionList.length) {
-      return <CommentarySubmissionItem>[];
+      return selections;
     }
 
-    return buildAutoCommentarySelections(_savedQuestionList);
+    for (var i = 0; i < _savedQuestionList.length; i++) {
+      final question = _savedQuestionList[i];
+      final options = _questionOptions[i];
+
+      for (final option in options) {
+        if (matchesAutoCommentaryRule(option, i)) {
+          selections.add({
+            'targetid': question['targetId'].toString(),
+            'targetval': option.optionId,
+          });
+          break;
+        }
+      }
+    }
+
+    return selections;
   }
 
   void _setSubmitting(bool isSubmitting) {
