@@ -12,6 +12,18 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..347de3918e66fecd12b58dea6ca3baf0e0d23ddc` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
+## v1.6.3
+
+## 2026-07-07 · `待提交` · chore(release): prepare v1.6.3
+- 版本号提升到 `1.6.3+16`，用于发布评教性能边界修复与空教室楼栋测试稳定性修复后的补丁版本。
+- 学生评教题目页的一键完成路径复用已缓存的题目选项，避免再次扫描原始选项列表，并把自动选择的分数匹配规则抽成共享函数，减少页面和自动选择逻辑之间的重复判断。
+- 学生评教批次页恢复以 `List<CommentaryPayload>` 作为 Future 完成态数据，同时把派生出的卡片展示数据缓存到页面状态中，保留预加载课程状态的界面行为，也满足现有性能边界测试。
+- 评教批次列表和课程列表关闭不必要的逐项 repaint boundary，减少静态列表上的额外层级开销。
+- 空教室楼栋页测试新增 free room bridge 全局缓存重置，避免前一个用例缓存的楼栋数据污染后续用例。
+- 本轮修复已通过全量测试和静态检查：`flutter test --reporter compact --file-reporter json:/tmp/superhut-test-after.json`、`flutter analyze`。
+- 关键文件：`pubspec.yaml`、`changelog.md`、`lib/pages/Commentary/commentary_auto_selection.dart`、`lib/pages/Commentary/commentary_batch_page.dart`、`lib/pages/Commentary/commentary_course_list_page.dart`、`lib/pages/Commentary/commentary_question_page.dart`、`test/pages/freeroom/building_page_test.dart`
+- 代码统计（待提交时回填）：版本号提升 + 发布说明追加 + 评教性能边界修复 + 空教室楼栋测试缓存隔离
+
 ## v1.6.2
 
 ## 2026-06-27 · `待提交` · feat(commentary): unify commentary flow and add category batch evaluation
