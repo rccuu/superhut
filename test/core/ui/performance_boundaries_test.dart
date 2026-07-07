@@ -2757,7 +2757,7 @@ void main() {
       r'String _compactSemesterLabel\(String value\) \{[\s\S]*?\n  \(\{String startYear, String endYear, String term\}\)\? _parseSemesterLabelParts',
     ).firstMatch(scorePage)?.group(0);
     final parseSemesterLabelPartsMethod = RegExp(
-      r'\(\{String startYear, String endYear, String term\}\)\? _parseSemesterLabelParts\([\s\S]*?\n  double\? _numericFraction',
+      r'\(\{String startYear, String endYear, String term\}\)\?\n_parseSemesterLabelPartsStatic\(String value\) \{[\s\S]*?\n@visibleForTesting',
     ).firstMatch(scorePage)?.group(0);
     final pickerClass = RegExp(
       r'class _SemesterPickerSheet extends StatelessWidget \{[\s\S]*?\nclass _SemesterOptionTile',
