@@ -178,6 +178,7 @@ class _ScorePageState extends State<ScorePage> {
       _assignScoreData(cached, semesterId: semesterId);
       _syncScoreContentState();
       _syncSelectionState();
+      unawaited(_resolveUserId().then(_writeCacheSnapshot));
       return;
     }
 
