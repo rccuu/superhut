@@ -297,7 +297,8 @@ class _ScorePageState extends State<ScorePage> {
     return true;
   }
 
-  bool _isRegularTermSemesterStatic(String id) => debugIsRegularTermSemester(id);
+  bool _isRegularTermSemesterStatic(String id) =>
+      debugIsRegularTermSemester(id);
 
   Future<List<String>> _probeRegularSemesters(List<String> ids) async {
     if (ids.isEmpty) return const <String>[];
@@ -318,9 +319,7 @@ class _ScorePageState extends State<ScorePage> {
   }
 
   Future<List<String>> _probeKeepAll(List<String> ids) async {
-    final results = await Future.wait(
-      ids.map((id) => _probeSemesterKeep(id)),
-    );
+    final results = await Future.wait(ids.map((id) => _probeSemesterKeep(id)));
     return [
       for (var i = 0; i < ids.length; i++)
         if (results[i]) ids[i],
@@ -366,8 +365,7 @@ class _ScorePageState extends State<ScorePage> {
     }
     _isSemesterProbeStarted = true;
 
-    final regularIds =
-        semesterIds.where(_isRegularTermSemesterStatic).toList();
+    final regularIds = semesterIds.where(_isRegularTermSemesterStatic).toList();
     final keptIds = await _probeRegularSemesters(regularIds);
     if (!mounted) {
       return;
@@ -418,13 +416,15 @@ class _ScorePageState extends State<ScorePage> {
     }
 
     final userId = await _resolveUserId();
-    final cached = userId.isNotEmpty
-        ? await ScoreSemesterCache.instance.read(userId)
-        : null;
+    final cached =
+        userId.isNotEmpty
+            ? await ScoreSemesterCache.instance.read(userId)
+            : null;
 
     if (cached != null) {
       semesterId = cached.semesterIds;
-      nowSemesterId = cached.nowSemesterId.isEmpty ? 'all' : cached.nowSemesterId;
+      nowSemesterId =
+          cached.nowSemesterId.isEmpty ? 'all' : cached.nowSemesterId;
       selectedId = cached.selectedId;
       zxf = cached.zxf;
       zxfjd = cached.zxfjd;
