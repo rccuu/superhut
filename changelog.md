@@ -12,9 +12,22 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..347de3918e66fecd12b58dea6ca3baf0e0d23ddc` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
+## v1.6.4
+
+## 2026-07-10 · `待提交` · feat(score): semester filter cache with instant restore
+- 版本号提升到 `1.6.4+17`，用于发布成绩查询学期筛选的本地缓存能力。
+- 新增 `ScoreSemesterCache` 服务（基于 SharedPreferences，按学号隔离），缓存上次探测后的学期列表、上一次选中的学期、当前学期标记以及总学分/绩点等摘要指标；成绩条目不落本地，每次仍从云端对应学期拉取。
+- 成绩页打开时先读缓存，立即用上次的学期列表、选中状态和摘要指标渲染顶部卡片与学期选择器，随后立即向云端拉取对应学期的成绩列表填充正文，不再出现"暂无成绩记录"的空白态。
+- 缓存恢复后后台静默跑一次完整的学期拉取与探测过滤：结果有变化才静默更新学期列表，当前选中学期被移除时自动回到"全部学期"；探测的每一条退出分支都会把最新结果写回缓存，避免命中早退路径导致缓存始终不落地。
+- 切换学期成功后（含网络加载与内存缓存命中两条路径）都会把新的选中状态和摘要持久化回缓存，解决之前内存缓存命中后不写盘导致下次打开仍回退到"全部学期"的问题。
+- 登出清理：`AppAuthStorage.clearAllAuthData()` 末尾联动调用 `ScoreSemesterCache.instance.clearAll()`，清除所有学号的卡片缓存。
+- 配套单元与 widget 测试：`ScoreSemesterCache` 覆盖 empty/隔离/单用户清除/全量清除/损坏数据判定；`ScorePage` 新增缓存恢复后即时显示摘要并触发后台刷新的回归用例。本轮已通过全量测试与静态检查：`flutter test`、`flutter analyze`。
+- 关键文件：`pubspec.yaml`、`changelog.md`、`lib/core/services/score_semester_cache.dart`、`test/core/services/score_semester_cache_test.dart`、`lib/pages/score/scorepage.dart`、`test/pages/score/scorepage_test.dart`、`lib/core/services/app_auth_storage.dart`
+- 代码统计（待提交时回填）：版本号提升 + 学期缓存服务与测试 + ScorePage 缓存集成与各退出路径写盘修复 + 切换学期内存命中写盘修复 + 登出联动清除
+
 ## v1.6.3
 
-## 2026-07-07 · `待提交` · chore(release): prepare v1.6.3
+## 2026-07-07 · `1bfc83e` · chore(release): prepare v1.6.3
 - 版本号提升到 `1.6.3+16`，用于发布评教性能边界修复与空教室楼栋测试稳定性修复后的补丁版本。
 - 学生评教题目页的一键完成路径复用已缓存的题目选项，避免再次扫描原始选项列表，并把自动选择的分数匹配规则抽成共享函数，减少页面和自动选择逻辑之间的重复判断。
 - 学生评教批次页恢复以 `List<CommentaryPayload>` 作为 Future 完成态数据，同时把派生出的卡片展示数据缓存到页面状态中，保留预加载课程状态的界面行为，也满足现有性能边界测试。
