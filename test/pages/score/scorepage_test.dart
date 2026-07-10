@@ -3,10 +3,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/pages/score/logic.dart';
 import 'package:superhut/pages/score/scorepage.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   test('regular term semester filter keeps only upper/lower terms', () {
     expect(debugIsRegularTermSemester('2024-2025-1'), isTrue);
     expect(debugIsRegularTermSemester('2024-2025-2'), isTrue);
@@ -746,6 +751,50 @@ void main() {
     await tester.pump();
 
     expect(sheetCalls, 2);
+  });
+
+  testWidgets('restores from cache and shows cached summary immediately', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'user': '2021001',
+      'score_cache_2021001_semesters': ['2024-2025-1', '2024-2025-2'],
+      'score_cache_2021001_selectedId': '2024-2025-1',
+      'score_cache_2021001_nowId': '2024-2025-2',
+      'score_cache_2021001_zxf': '40',
+      'score_cache_2021001_zxfjd': '120',
+      'score_cache_2021001_pjjd': '3.5',
+      'score_cache_2021001_courseCount': 12,
+    });
+
+    var semesterLoadCalled = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScorePage(
+          loadSemesters: () async {
+            semesterLoadCalled = true;
+            return const SemesterListResult(
+              idList: ['2024-2025-1', '2024-2025-2'],
+              nowId: '2024-2025-2',
+            );
+          },
+          loadScore: (semesterId, {bool persistSummary = true}) async {
+            return _scoreResult(courseName: '网络成绩');
+          },
+        ),
+      ),
+    );
+
+    // 缓存恢复后应立即显示摘要，无需等待网络
+    await tester.pump();
+    expect(find.text('40'), findsOneWidget); // zxf
+    expect(find.text('3.5'), findsOneWidget); // pjjd
+    expect(find.text('2024-2025 上'), findsOneWidget); // selectedId label
+
+    // 后台刷新应被触发
+    await _pumpUntil(tester, () => semesterLoadCalled);
+    expect(semesterLoadCalled, isTrue);
   });
 }
 

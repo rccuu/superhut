@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 
+import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
+import '../../core/services/score_semester_cache.dart';
 import '../../core/ui/app_bottom_sheet.dart';
 import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
@@ -107,6 +109,10 @@ class _ScorePageState extends State<ScorePage> {
   bool _isSemesterProbeStarted = false;
   int _selectionRefreshGeneration = 0;
   late final Future<void> _initialScoreFuture = getTimeList();
+
+  Future<String> _resolveUserId() async {
+    return AppAuthStorage.instance.readJwxtUsername();
+  }
 
   @override
   void dispose() {
@@ -219,6 +225,7 @@ class _ScorePageState extends State<ScorePage> {
     _assignScoreData(scoreData, semesterId: semesterId);
     _syncScoreContentState();
     _syncSelectionState();
+    unawaited(_resolveUserId().then(_writeCacheSnapshot));
   }
 
   Future<ScoreLoadResult> _loadScoreForSemester(
@@ -399,10 +406,33 @@ class _ScorePageState extends State<ScorePage> {
       return;
     }
     _setScoreData(allScoreData, semesterId: 'all');
+
+    // 探测完毕，持久化结果
+    final cacheUserId = await _resolveUserId();
+    await _writeCacheSnapshot(cacheUserId);
   }
 
   Future<void> getTimeList() async {
     if (!first) {
+      return;
+    }
+
+    final userId = await _resolveUserId();
+    final cached = userId.isNotEmpty
+        ? await ScoreSemesterCache.instance.read(userId)
+        : null;
+
+    if (cached != null) {
+      semesterId = cached.semesterIds;
+      nowSemesterId = cached.nowSemesterId.isEmpty ? 'all' : cached.nowSemesterId;
+      selectedId = cached.selectedId;
+      zxf = cached.zxf;
+      zxfjd = cached.zxfjd;
+      pjjd = cached.pjjd;
+      first = false;
+      _syncScoreContentState();
+      _syncSelectionState();
+      unawaited(_backgroundRefresh(userId));
       return;
     }
 
@@ -434,6 +464,45 @@ class _ScorePageState extends State<ScorePage> {
     _syncScoreContentState();
     _syncSelectionState();
     unawaited(_probeAvailableSemesters(timeData.idList));
+  }
+
+  Future<void> _backgroundRefresh(String userId) async {
+    try {
+      final timeData = await (widget.loadSemesters ?? semesterIdfc)();
+      if (!mounted) return;
+      if (timeData.errorMessage != null) return;
+
+      await _loadScoreForSemester('all');
+      if (!mounted) return;
+
+      await _probeAvailableSemesters(timeData.idList);
+      if (!mounted) return;
+
+      await _writeCacheSnapshot(userId);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Background score refresh failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  Future<void> _writeCacheSnapshot(String userId) async {
+    if (userId.isEmpty) return;
+
+    await ScoreSemesterCache.instance.write(
+      userId,
+      ScoreSemesterCacheData(
+        semesterIds: semesterId,
+        selectedId: selectedId,
+        nowSemesterId: nowSemesterId,
+        zxf: zxf,
+        zxfjd: zxfjd,
+        pjjd: pjjd,
+        courseCount: scoreList.length,
+      ),
+    );
   }
 
   String _formatSemesterLabel(String value) {
