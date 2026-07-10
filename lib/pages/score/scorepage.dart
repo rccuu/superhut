@@ -439,6 +439,18 @@ class _ScorePageState extends State<ScorePage> {
       first = false;
       _syncScoreContentState();
       _syncSelectionState();
+
+      // 立即拉取当前选中学期的成绩列表
+      try {
+        final scoreData = await _loadScoreForSemester(cached.selectedId);
+        if (mounted) {
+          _assignScoreData(scoreData, semesterId: cached.selectedId);
+          _syncScoreContentState();
+        }
+      } catch (_) {
+        // 加载失败不阻塞，后台刷新会再尝试
+      }
+
       unawaited(_backgroundRefresh(userId));
       return;
     }
