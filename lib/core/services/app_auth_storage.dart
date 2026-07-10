@@ -2,6 +2,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_logger.dart';
+import 'score_semester_cache.dart';
 
 class AppAuthStorage {
   AppAuthStorage._();
@@ -245,6 +246,7 @@ class AppAuthStorage {
 
     await _deleteSecurePassword(_jwxtPasswordKey, label: 'JWXT');
     await _deleteSecurePassword(_hutPasswordKey, label: 'HUT');
+    await ScoreSemesterCache.instance.clearAll();
   }
 
   Future<void> clearJwxtCredentials() async {
