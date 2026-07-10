@@ -376,6 +376,9 @@ class _ScorePageState extends State<ScorePage> {
     final shouldResetSelection =
         selectedId != 'all' && !filteredSemesterIds.contains(selectedId);
     if (!shouldResetSelection && listEquals(semesterId, filteredSemesterIds)) {
+      // 探测结果无变化，但仍需持久化缓存（首次打开时缓存尚未写入）
+      final cacheUserId = await _resolveUserId();
+      await _writeCacheSnapshot(cacheUserId);
       return;
     }
 
@@ -385,6 +388,8 @@ class _ScorePageState extends State<ScorePage> {
       _assignScoreData(cachedAllScoreData, semesterId: 'all');
       _syncScoreContentState();
       _syncSelectionState();
+      final cacheUserId = await _resolveUserId();
+      await _writeCacheSnapshot(cacheUserId);
       return;
     }
 
@@ -396,6 +401,8 @@ class _ScorePageState extends State<ScorePage> {
     }
 
     if (!shouldResetSelection) {
+      final cacheUserId = await _resolveUserId();
+      await _writeCacheSnapshot(cacheUserId);
       return;
     }
 
@@ -476,9 +483,6 @@ class _ScorePageState extends State<ScorePage> {
       if (!mounted) return;
 
       await _probeAvailableSemesters(timeData.idList);
-      if (!mounted) return;
-
-      await _writeCacheSnapshot(userId);
     } catch (error, stackTrace) {
       AppLogger.error(
         'Background score refresh failed',
