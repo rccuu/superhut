@@ -32,6 +32,12 @@ const String courseScheduleShareCodeParseFailureMessage = '分享码解析失败
 const String courseScheduleFileParseFailureMessage = '课表文件解析失败，请确认文件内容后重试';
 const Uuid _uuid = Uuid();
 
+const String _courseWidgetStatusEmpty = 'empty';
+const String _courseWidgetStatusSemesterComplete = 'semester_complete';
+const String _courseWidgetSemesterCompleteHeaderTitle = '本学期课程已上完';
+const String _courseWidgetSemesterCompleteHeaderSubtitle = '辛苦啦，下学期见';
+const String _courseWidgetSemesterCompleteEmptyText = '可同步新学期课表';
+
 const Map<int, String> _courseSectionStartTimes = <int, String>{
   1: '08:00',
   2: '08:55',
@@ -970,6 +976,49 @@ CourseWidgetPayload _buildEmptyCourseWidgetPayload({
   );
 }
 
+bool _hasHistoricalCourses(CourseWidgetStore store) {
+  for (final courses in store.dayCourses.values) {
+    if (courses.isNotEmpty) {
+      return true;
+    }
+  }
+  for (final payload in store.days.values) {
+    if (payload.status == 'today_courses' && payload.courses.isNotEmpty) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _hasHistoricalCoursesInCourseData(Map<String, List<Course>> courseData) {
+  for (final courses in courseData.values) {
+    if (courses.isNotEmpty) {
+      return true;
+    }
+  }
+  return false;
+}
+
+CourseWidgetPayload _buildSemesterCompleteCourseWidgetPayload({
+  required DateTime date,
+  required String updatedAt,
+  int weekIndex = 0,
+}) {
+  final dateKey = _dateKey(date);
+  return CourseWidgetPayload(
+    date: dateKey,
+    weekdayLabel: _weekdayLabel(date.weekday),
+    weekIndex: weekIndex,
+    status: _courseWidgetStatusSemesterComplete,
+    headerTitle: _courseWidgetSemesterCompleteHeaderTitle,
+    headerSubtitle: _courseWidgetSemesterCompleteHeaderSubtitle,
+    emptyText: _courseWidgetSemesterCompleteEmptyText,
+    isEmpty: true,
+    updatedAt: updatedAt,
+    courses: const [],
+  );
+}
+
 int _weekIndexFromStore(CourseWidgetStore store, DateTime date) {
   return store.days[_dateKey(date)]?.weekIndex ?? 0;
 }
@@ -1082,6 +1131,14 @@ CourseWidgetPayload _buildRelevantCourseWidgetPayloadFromStore({
       isEmpty: false,
       updatedAt: updatedAt,
       courses: _firstWidgetCourseEntries(nextCourses),
+    );
+  }
+
+  if (_hasHistoricalCourses(store)) {
+    return _buildSemesterCompleteCourseWidgetPayload(
+      date: today,
+      updatedAt: updatedAt,
+      weekIndex: todayWeekIndex,
     );
   }
 
@@ -1315,11 +1372,19 @@ CourseWidgetPayload _buildCourseWidgetPayloadForDate({
     );
   }
 
+  if (_hasHistoricalCoursesInCourseData(courseData)) {
+    return _buildSemesterCompleteCourseWidgetPayload(
+      date: date,
+      updatedAt: updatedAt,
+      weekIndex: weekIndex,
+    );
+  }
+
   return CourseWidgetPayload(
     date: dateKey,
     weekdayLabel: _weekdayLabel(date.weekday),
     weekIndex: weekIndex,
-    status: 'empty',
+    status: _courseWidgetStatusEmpty,
     headerTitle: '当前暂无课表',
     headerSubtitle: '同步或导入后显示课程',
     emptyText: '同步或导入后显示课程',

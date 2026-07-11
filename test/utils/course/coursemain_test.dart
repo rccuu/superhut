@@ -1046,6 +1046,196 @@ void main() {
     },
   );
 
+  test(
+    'buildCompactCourseWidgetPayloadFromStore uses semester_complete when history exists and no future courses remain',
+    () {
+      final store = buildCourseWidgetStoreFromRawData(
+        firstDay: '2026-03-16',
+        maxWeek: 4,
+        updatedAt: '2026-03-27T07:30:00.000',
+        courseData: {
+          '2026-03-20': [
+            Course(
+              name: '高数',
+              teacherName: '张老师',
+              weekDuration: '1-16',
+              location: '公教101',
+              startSection: 1,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      // After the only historical day, and with today's last course already over.
+      final payload = buildCompactCourseWidgetPayloadFromStore(
+        store,
+        now: DateTime.parse('2026-03-27T12:00:00'),
+      );
+
+      expect(payload.status, 'semester_complete');
+      expect(payload.isEmpty, isTrue);
+      expect(payload.courses, isEmpty);
+      expect(payload.headerTitle, '本学期课程已上完');
+      expect(payload.headerSubtitle, '辛苦啦，下学期见');
+      expect(payload.emptyText, '可同步新学期课表');
+      expect(payload.date, '2026-03-27');
+    },
+  );
+
+  test(
+    'buildCompactCourseWidgetPayloadFromStore keeps empty when store has no historical courses',
+    () {
+      final emptyStore = CourseWidgetStore(
+        schemaVersion: 2,
+        updatedAt: '2026-03-27T07:30:00.000',
+        days: const <String, CourseWidgetPayload>{},
+        dayCourses: const <String, List<CourseWidgetCourseEntry>>{},
+      );
+
+      final payload = buildCompactCourseWidgetPayloadFromStore(
+        emptyStore,
+        now: DateTime.parse('2026-03-27T12:00:00'),
+      );
+
+      expect(payload.status, 'empty');
+      expect(payload.headerTitle, '当前暂无课表');
+      expect(payload.headerSubtitle, '同步或导入后显示课程');
+      expect(payload.emptyText, '同步或导入后显示课程');
+    },
+  );
+
+  test(
+    'buildCompactCourseWidgetPayloadFromStore returns empty when store is null',
+    () {
+      final payload = buildCompactCourseWidgetPayloadFromStore(
+        null,
+        now: DateTime.parse('2026-03-27T12:00:00'),
+      );
+
+      expect(payload.status, 'empty');
+      expect(payload.headerTitle, '当前暂无课表');
+      expect(payload.emptyText, '同步或导入后显示课程');
+    },
+  );
+
+  test(
+    'buildCompactCourseWidgetPayloadFromStore uses semester_complete from legacy days without dayCourses',
+    () {
+      const pastCourse = CourseWidgetCourseEntry(
+        name: '08:00 高数',
+        meta: '公教101',
+        location: '公教101',
+        startSection: 1,
+        endSection: 2,
+        startTime: '08:00',
+        sectionLabel: '1-2节',
+      );
+      final store = CourseWidgetStore(
+        schemaVersion: 2,
+        updatedAt: '2026-03-27T07:30:00.000',
+        days: {
+          '2026-03-20': CourseWidgetPayload(
+            date: '2026-03-20',
+            weekdayLabel: '周五',
+            weekIndex: 1,
+            status: 'today_courses',
+            headerTitle: '今天课程',
+            headerSubtitle: '周五 · 第1周',
+            emptyText: '今日暂无课程',
+            isEmpty: false,
+            updatedAt: '2026-03-27T07:30:00.000',
+            courses: const [pastCourse],
+          ),
+        },
+        dayCourses: const <String, List<CourseWidgetCourseEntry>>{},
+      );
+
+      final payload = buildCompactCourseWidgetPayloadFromStore(
+        store,
+        now: DateTime.parse('2026-03-27T12:00:00'),
+      );
+
+      expect(payload.status, 'semester_complete');
+      expect(payload.headerTitle, '本学期课程已上完');
+      expect(payload.emptyText, '可同步新学期课表');
+    },
+  );
+
+  test(
+    'buildCompactCourseWidgetPayloadFromStore does not use semester_complete when tomorrow still has class',
+    () {
+      final store = buildCourseWidgetStoreFromRawData(
+        firstDay: '2026-03-16',
+        maxWeek: 4,
+        updatedAt: '2026-03-27T07:30:00.000',
+        courseData: {
+          '2026-03-27': [
+            Course(
+              name: '高数',
+              teacherName: '张老师',
+              weekDuration: '1-16',
+              location: '公教101',
+              startSection: 1,
+              duration: 2,
+            ),
+          ],
+          '2026-03-28': [
+            Course(
+              name: '编译原理',
+              teacherName: '周老师',
+              weekDuration: '1-16',
+              location: '信工楼201',
+              startSection: 1,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      final payload = buildCompactCourseWidgetPayloadFromStore(
+        store,
+        now: DateTime.parse('2026-03-27T12:00:00'),
+      );
+
+      expect(payload.status, 'tomorrow_courses');
+      expect(payload.headerTitle, '明天有课');
+      expect(payload.status, isNot('semester_complete'));
+    },
+  );
+
+  test(
+    'buildCourseWidgetStore precomputes semester_complete for dates after last course day',
+    () {
+      final store = buildCourseWidgetStoreFromRawData(
+        firstDay: '2026-03-16',
+        maxWeek: 2,
+        updatedAt: '2026-03-27T07:30:00.000',
+        courseData: {
+          '2026-03-16': [
+            Course(
+              name: '第一周周一课程',
+              teacherName: '张老师',
+              weekDuration: '1-16',
+              location: '公共101',
+              startSection: 1,
+              duration: 2,
+            ),
+          ],
+        },
+      );
+
+      // 2026-03-17 is after the only course day inside term range.
+      final afterLast = store.days['2026-03-17'];
+      expect(afterLast, isNotNull);
+      expect(afterLast!.status, 'semester_complete');
+      expect(afterLast.headerTitle, '本学期课程已上完');
+      expect(afterLast.headerSubtitle, '辛苦啦，下学期见');
+      expect(afterLast.emptyText, '可同步新学期课表');
+      expect(afterLast.isEmpty, isTrue);
+    },
+  );
+
   test('saveCourseDataToJson writes cache for app and widget readers', () async {
     final now = DateTime.now();
     final dateKey =
