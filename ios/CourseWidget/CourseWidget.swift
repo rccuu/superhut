@@ -198,6 +198,25 @@ private enum CourseWidgetRepository {
     )
   }
 
+  private static func semesterCompletePayload(
+    for date: Date,
+    updatedAt: String,
+    weekIndex: Int
+  ) -> CourseWidgetPayload {
+    return CourseWidgetPayload(
+      date: dateKey(from: date),
+      weekdayLabel: weekdayLabel(from: date),
+      weekIndex: weekIndex,
+      status: "semester_complete",
+      headerTitle: "本学期课程已上完",
+      headerSubtitle: "辛苦啦，下学期见",
+      emptyText: "可同步新学期课表",
+      isEmpty: true,
+      updatedAt: updatedAt,
+      courses: []
+    )
+  }
+
   static func buildTimelineEntries(from store: CourseWidgetStoreData, now: Date) -> [CourseWidgetEntry] {
     var entries = [CourseWidgetEntry(date: now, payload: relevantPayload(from: store, now: now))]
     let refreshDates = nextRefreshDates(from: store, now: now)
@@ -312,6 +331,14 @@ private enum CourseWidgetRepository {
         isEmpty: false,
         updatedAt: updatedAt,
         courses: Array(nextCourses.prefix(2))
+      )
+    }
+
+    if !actualCourseDateKeys(from: store).isEmpty {
+      return semesterCompletePayload(
+        for: today,
+        updatedAt: updatedAt,
+        weekIndex: todayWeekIndex
       )
     }
 
