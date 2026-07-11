@@ -521,6 +521,10 @@ public class CourseTableWidgetProvider extends AppWidgetProvider {
             );
         }
 
+        if (!actualCourseDateKeys(daysObject, dayCoursesObject).isEmpty()) {
+            return buildSemesterCompletePayload(todayKey, todayWeekIndex, updatedAt);
+        }
+
         return buildEmptyPayload(todayKey, updatedAt);
     }
 
@@ -558,6 +562,24 @@ public class CourseTableWidgetProvider extends AppWidgetProvider {
         payload.headerTitle = "当前暂无课表";
         payload.headerSubtitle = "同步或导入后显示课程";
         payload.emptyText = "同步或导入后显示课程";
+        payload.updatedAt = updatedAt;
+        payload.isEmpty = true;
+        return payload;
+    }
+
+    private static CompactPayload buildSemesterCompletePayload(
+            String dateKey,
+            int weekIndex,
+            String updatedAt
+    ) {
+        CompactPayload payload = CompactPayload.empty();
+        payload.date = dateKey;
+        payload.weekdayLabel = weekdayLabelFromDateKey(dateKey);
+        payload.weekIndex = weekIndex;
+        payload.status = "semester_complete";
+        payload.headerTitle = "本学期课程已上完";
+        payload.headerSubtitle = "辛苦啦，下学期见";
+        payload.emptyText = "可同步新学期课表";
         payload.updatedAt = updatedAt;
         payload.isEmpty = true;
         return payload;
