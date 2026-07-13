@@ -12,7 +12,7 @@ void main() {
       final completer = Completer<CourseSyncResult>();
       final service = CourseSyncService(
         terminalStateDuration: const Duration(minutes: 1),
-        runner: (token, {onProgress}) async {
+        runner: (token, {onProgress, semesterId}) async {
           onProgress?.call(
             const CourseSyncProgress(
               phase: CourseSyncPhase.courseWeeks,
@@ -51,7 +51,7 @@ void main() {
   test('CourseSyncService emits failure state for empty token', () async {
     final service = CourseSyncService(
       terminalStateDuration: const Duration(minutes: 1),
-      runner: (_, {onProgress}) async {
+      runner: (_, {onProgress, semesterId}) async {
         fail('runner should not be called when token is empty');
       },
     );
@@ -70,7 +70,7 @@ void main() {
     (tester) async {
       final service = CourseSyncService(
         terminalStateDuration: const Duration(seconds: 1),
-        runner: (_, {onProgress}) async {
+        runner: (_, {onProgress, semesterId}) async {
           fail('runner should not be called when token is empty');
         },
       );

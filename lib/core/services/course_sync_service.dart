@@ -64,6 +64,7 @@ typedef CourseSyncRunner =
     Future<CourseSyncResult> Function(
       String token, {
       CourseSyncProgressCallback? onProgress,
+      String? semesterId,
     });
 
 class CourseSyncService {
@@ -87,7 +88,7 @@ class CourseSyncService {
 
   CourseSyncTaskSnapshot get state => stateListenable.value;
 
-  Future<bool> startManualSync(String token) async {
+  Future<bool> startManualSync(String token, {String? semesterId}) async {
     if (state.isRunning) {
       return false;
     }
@@ -114,6 +115,7 @@ class CourseSyncService {
       final result = await _runner(
         normalizedToken,
         onProgress: _handleProgress,
+        semesterId: semesterId,
       );
       _emitTerminal(
         status:

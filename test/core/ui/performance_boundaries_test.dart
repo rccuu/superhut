@@ -2757,7 +2757,7 @@ void main() {
       r'String _compactSemesterLabel\(String value\) \{[\s\S]*?\n  \(\{String startYear, String endYear, String term\}\)\? _parseSemesterLabelParts',
     ).firstMatch(scorePage)?.group(0);
     final parseSemesterLabelPartsMethod = RegExp(
-      r'\(\{String startYear, String endYear, String term\}\)\?\n_parseSemesterLabelPartsStatic\(String value\) \{[\s\S]*?\n@visibleForTesting',
+      r'\(\{String startYear, String endYear, String term\}\)\?\n_parseSemesterLabelPartsStatic\(String value\) \{[\s\S]*?\n\nclass ScorePage',
     ).firstMatch(scorePage)?.group(0);
     final pickerClass = RegExp(
       r'class _SemesterPickerSheet extends StatelessWidget \{[\s\S]*?\nclass _SemesterOptionTile',
@@ -2824,7 +2824,7 @@ void main() {
       r'Future<ScoreLoadResult> _loadAndCacheScoreForSemester[\s\S]*?\n  @visibleForTesting',
     ).firstMatch(scorePage)?.group(0);
     final probeKeepMethod = RegExp(
-      r'Future<bool> _probeSemesterKeep\(String id, \{int maxRetries = 2\}\) async \{[\s\S]*?\n  bool _isRegularTermSemesterStatic',
+      r'Future<bool> _probeSemesterKeep\(String id, \{int maxRetries = 2\}\) async \{[\s\S]*?\n  Future<List<String>> _probeSemesters',
     ).firstMatch(scorePage)?.group(0);
     final probeMethod = RegExp(
       r'Future<void> _probeAvailableSemesters\(List<String> semesterIds\) async \{[\s\S]*?\n  Future<void> getTimeList',

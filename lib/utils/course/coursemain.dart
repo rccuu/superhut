@@ -2461,6 +2461,7 @@ Future<CourseSyncResult> saveClassToLocal(
   String token, {
   BuildContext? context,
   CourseSyncProgressCallback? onProgress,
+  String? semesterId,
 }) async {
   if (token.isEmpty) {
     return const CourseSyncResult.failure('登录信息已失效，请重新登录后再试');
@@ -2475,6 +2476,7 @@ Future<CourseSyncResult> saveClassToLocal(
       token,
       context: context,
       onProgress: onProgress,
+      semesterId: semesterId,
     );
     if (snapshot.courseData.isEmpty) {
       return const CourseSyncResult.failure('未获取到任何课表数据，请确认当前学期已有课表');
@@ -2501,11 +2503,10 @@ Future<CourseSyncResult> saveClassToLocal(
       final sameSemester =
           snapshot.semesterId.isNotEmpty &&
           schedule.semesterId == snapshot.semesterId;
-      if (sameSelfSync && (sameSemester || matchedSchedule == null)) {
+      final sameOwner = schedule.ownerAccount == ownerAccount;
+      if (sameOwner && sameSelfSync && sameSemester) {
         matchedSchedule = schedule;
-        if (sameSemester) {
-          break;
-        }
+        break;
       }
     }
 
@@ -2591,6 +2592,7 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
   String token, {
   BuildContext? context,
   CourseSyncProgressCallback? onProgress,
+  String? semesterId,
 }) async {
   final GetOrgDataWeb getOrgDataWeb = GetOrgDataWeb(token: token);
   getOrgDataWeb.initData();
@@ -2607,13 +2609,22 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
       message: '正在准备同步课表',
     ),
   );
-  await getOrgDataWeb.getCurrentSemesterId();
+  if (semesterId == null || semesterId.isEmpty) {
+    await getOrgDataWeb.getCurrentSemesterId();
+  } else {
+    getOrgDataWeb.semesterId = semesterId;
+  }
+  final selectedSemesterId = getOrgDataWeb.semesterId ?? '';
+  final scheduleModeId =
+      semesterId == null || semesterId.isEmpty
+          ? null
+          : await loadCourseScheduleModeId();
   onProgress?.call(
     CourseSyncProgress(
       phase: CourseSyncPhase.semester,
       completedUnits: 1,
       totalUnits: totalUnits,
-      message: '正在确认当前学期',
+      message: '正在确认学期信息',
     ),
   );
   if (context != null && !context.mounted) {
@@ -2659,6 +2670,9 @@ Future<CourseSyncSnapshot> loadCourseSyncSnapshotFromUrl(
                   emitAggregatedProgress(progress, isExperiment: false),
       completedUnitsOffset: 0,
       totalUnits: totalWeeks,
+      selectedSemesterId:
+          selectedSemesterId.isEmpty ? null : selectedSemesterId,
+      scheduleModeId: scheduleModeId,
     ),
     getOrgDataWeb.getAllWeekExpClass(
       context,

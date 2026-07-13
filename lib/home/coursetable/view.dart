@@ -1397,7 +1397,35 @@ class _CourseTableViewState extends State<CourseTableView> {
       if (!mounted) {
         return;
       }
-      final started = await CourseSyncService.instance.startManualSync(token);
+      final semesters = await loadCourseSemesters();
+      if (!mounted) return;
+      if (semesters.isEmpty) {
+        _showSnackBar('未获取到可选学期，请稍后重试');
+        return;
+      }
+      final selectedSemester = await _showAdaptiveBottomSheet<CourseSemester>(
+        expand: false,
+        builder:
+            (sheetContext) => SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  const ListTile(title: Text('选择学期')),
+                  for (final semester in semesters)
+                    ListTile(
+                      title: Text(semester.label),
+                      trailing: semester.isCurrent ? const Text('当前') : null,
+                      onTap: () => Navigator.of(sheetContext).pop(semester),
+                    ),
+                ],
+              ),
+            ),
+      );
+      if (!mounted || selectedSemester == null) return;
+      final started = await CourseSyncService.instance.startManualSync(
+        token,
+        semesterId: selectedSemester.id,
+      );
       if (!started && mounted && CourseSyncService.instance.state.isRunning) {
         _showSnackBar('课表正在同步，请稍候');
       }

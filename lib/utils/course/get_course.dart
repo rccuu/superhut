@@ -49,6 +49,50 @@ StateError _buildCourseRequestStateError(dynamic responseData) {
   return StateError(message ?? '教务系统登录状态已失效，请重新登录后再试');
 }
 
+class CourseSemester {
+  const CourseSemester({
+    required this.id,
+    required this.label,
+    required this.isCurrent,
+  });
+
+  final String id;
+  final String label;
+  final bool isCurrent;
+}
+
+Future<List<CourseSemester>> loadCourseSemesters() async {
+  final response = await postDioWithCookie('/njwhd/getXnxqList', {});
+  final rawItems = response.data is List ? response.data as List : const [];
+  return [
+    for (final raw in rawItems)
+      if (raw is Map)
+        () {
+          final item = Map<String, dynamic>.from(raw);
+          final id = item['xnxq01id']?.toString().trim() ?? '';
+          if (id.isEmpty) return null;
+          final label = item['xqmc']?.toString().trim();
+          return CourseSemester(
+            id: id,
+            label: label == null || label.isEmpty ? id : label,
+            isCurrent: item['isdqxq']?.toString() == '1',
+          );
+        }(),
+  ].whereType<CourseSemester>().toList();
+}
+
+Future<String> loadCourseScheduleModeId() async {
+  final response = await postDioWithCookie('/njwhd/Get_sjkbms', {});
+  final data = _asResponseMap(response.data);
+  final rawItems = data?['data'] as List? ?? const [];
+  for (final raw in rawItems) {
+    final item = _asResponseMap(raw);
+    final id = item?['kbjcmsid']?.toString().trim() ?? '';
+    if (id.isNotEmpty) return id;
+  }
+  throw StateError('未获取到默认节次模式，无法获取课表');
+}
+
 dynamic _jsonSafeValue(dynamic value) {
   if (value == null || value is String || value is num || value is bool) {
     return value;
@@ -775,6 +819,8 @@ class GetOrgDataWeb {
     CourseSyncProgressCallback? onProgress,
     required int completedUnitsOffset,
     required int totalUnits,
+    String? selectedSemesterId,
+    String? scheduleModeId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     courseData.clear();
@@ -802,9 +848,16 @@ class GetOrgDataWeb {
       completedUnitsOffset: completedUnitsOffset,
       totalUnits: totalUnits,
       fetchWeekData: (week) async {
+        final path =
+            selectedSemesterId != null &&
+                    selectedSemesterId.isNotEmpty &&
+                    scheduleModeId != null &&
+                    scheduleModeId.isNotEmpty
+                ? '/njwhd/student/curriculum?xnxq01id=$selectedSemesterId&kbjcmsid=$scheduleModeId&week=$week'
+                : '/njwhd/student/curriculum?week=$week';
         final result = await _postJsonWithRetry(
           requestDio,
-          '/njwhd/student/curriculum?week=$week',
+          path,
           requestLabel: '获取第$week周普通课表',
         );
         return _parseSingleWeekCourseData(result.data);
