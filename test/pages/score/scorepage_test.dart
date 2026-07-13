@@ -12,15 +12,6 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  test('regular term semester filter keeps only upper/lower terms', () {
-    expect(debugIsRegularTermSemester('2024-2025-1'), isTrue);
-    expect(debugIsRegularTermSemester('2024-2025-2'), isTrue);
-    expect(debugIsRegularTermSemester('2024-2025-3'), isFalse);
-    expect(debugIsRegularTermSemester('2024-2025'), isFalse);
-    expect(debugIsRegularTermSemester('abc'), isFalse);
-    expect(debugIsRegularTermSemester(''), isFalse);
-  });
-
   testWidgets(
     'probe keeps semester with data, drops empty, retains on retry-exhausted error',
     (tester) async {
@@ -128,7 +119,7 @@ void main() {
 
     final dynamic pageState = tester.state(find.byType(ScorePage));
     final kept =
-        await (pageState.debugProbeRegularSemesters(semesterIds)
+        await (pageState.debugProbeAvailableSemesters(semesterIds)
             as Future<List<String>>);
 
     // 全部非空 → 全部保留
@@ -172,59 +163,62 @@ void main() {
 
     final dynamic pageState = tester.state(find.byType(ScorePage));
     final kept =
-        await (pageState.debugProbeRegularSemesters(semesterIds)
-            as Future<List<String>>);
-
-    expect(kept, equals(['2024-2025-1', '2025-2026-1']));
-  });
-
-  testWidgets('probe pipeline filters non-regular terms and empty semesters', (
-    tester,
-  ) async {
-    // 含 1 个非标准学期 (暑期 term=3) + 1 个空学期 + 2 个有数据
-    final semesterIds = [
-      '2024-2025-3', // 非标准 → 探测前剔除
-      '2024-2025-1', // 有数据 → 保留
-      '2024-2025-2', // 空 → 剔除
-      '2025-2026-1', // 有数据 → 保留
-    ];
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ScorePage(
-          loadSemesters:
-              () async =>
-                  SemesterListResult(idList: semesterIds, nowId: '2024-2025-1'),
-          loadScore: (semesterId, {bool persistSummary = true}) {
-            if (semesterId.isEmpty) {
-              return Future.value(_scoreResult(courseName: '全部成绩'));
-            }
-            if (semesterId == '2024-2025-2') {
-              return Future.value(
-                const ScoreLoadResult(
-                  achievement: [],
-                  yxzxf: '-',
-                  zxfjd: '-',
-                  pjxfjd: '-',
-                ),
-              );
-            }
-            return Future.value(_scoreResult(courseName: semesterId));
-          },
-        ),
-      ),
-    );
-
-    await _pumpUntil(tester, () => find.text('全部成绩').evaluate().isNotEmpty);
-
-    final dynamic pageState = tester.state(find.byType(ScorePage));
-    final kept =
         await (pageState.debugProbeAvailableSemesters(semesterIds)
             as Future<List<String>>);
 
-    // 非标准剔除、空剔除，仅保留有数据的两个
     expect(kept, equals(['2024-2025-1', '2025-2026-1']));
   });
+
+  testWidgets(
+    'probe pipeline keeps non-empty summer terms and drops empty semesters',
+    (tester) async {
+      // 含 1 个有成绩的暑期 term=3、1 个空学期和 2 个有成绩的常规学期
+      final semesterIds = [
+        '2024-2025-3', // 有数据 → 保留
+        '2024-2025-1', // 有数据 → 保留
+        '2024-2025-2', // 空 → 剔除
+        '2025-2026-1', // 有数据 → 保留
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ScorePage(
+            loadSemesters:
+                () async => SemesterListResult(
+                  idList: semesterIds,
+                  nowId: '2024-2025-1',
+                ),
+            loadScore: (semesterId, {bool persistSummary = true}) {
+              if (semesterId.isEmpty) {
+                return Future.value(_scoreResult(courseName: '全部成绩'));
+              }
+              if (semesterId == '2024-2025-2') {
+                return Future.value(
+                  const ScoreLoadResult(
+                    achievement: [],
+                    yxzxf: '-',
+                    zxfjd: '-',
+                    pjxfjd: '-',
+                  ),
+                );
+              }
+              return Future.value(_scoreResult(courseName: semesterId));
+            },
+          ),
+        ),
+      );
+
+      await _pumpUntil(tester, () => find.text('全部成绩').evaluate().isNotEmpty);
+
+      final dynamic pageState = tester.state(find.byType(ScorePage));
+      final kept =
+          await (pageState.debugProbeAvailableSemesters(semesterIds)
+              as Future<List<String>>);
+
+      // 暑期有数据也保留，只有成功但空的学期被剔除
+      expect(kept, equals(['2024-2025-3', '2024-2025-1', '2025-2026-1']));
+    },
+  );
 
   testWidgets(
     'probe pipeline retains semester whose probe throws after retries',

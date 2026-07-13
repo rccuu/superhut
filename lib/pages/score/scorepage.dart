@@ -36,9 +36,7 @@ _parseSemesterLabelPartsStatic(String value) {
   var firstDash = -1;
   var secondDash = -1;
   for (var index = 0; index < value.length; index++) {
-    if (value.codeUnitAt(index) != 0x2D) {
-      continue;
-    }
+    if (value.codeUnitAt(index) != 0x2D) continue;
     if (firstDash == -1) {
       firstDash = index;
     } else if (secondDash == -1) {
@@ -47,23 +45,12 @@ _parseSemesterLabelPartsStatic(String value) {
       return null;
     }
   }
-
-  if (firstDash == -1 || secondDash == -1) {
-    return null;
-  }
-
+  if (firstDash == -1 || secondDash == -1) return null;
   return (
     startYear: value.substring(0, firstDash),
     endYear: value.substring(firstDash + 1, secondDash),
     term: value.substring(secondDash + 1),
   );
-}
-
-@visibleForTesting
-bool debugIsRegularTermSemester(String id) {
-  final parts = _parseSemesterLabelPartsStatic(id);
-  if (parts == null) return false;
-  return parts.term == '1' || parts.term == '2';
 }
 
 class ScorePage extends StatefulWidget {
@@ -298,10 +285,7 @@ class _ScorePageState extends State<ScorePage> {
     return true;
   }
 
-  bool _isRegularTermSemesterStatic(String id) =>
-      debugIsRegularTermSemester(id);
-
-  Future<List<String>> _probeRegularSemesters(List<String> ids) async {
+  Future<List<String>> _probeSemesters(List<String> ids) async {
     if (ids.isEmpty) return const <String>[];
     const int fullConcurrencyThreshold = 6;
     const int poolSize = 6;
@@ -346,18 +330,13 @@ class _ScorePageState extends State<ScorePage> {
   }
 
   @visibleForTesting
-  Future<List<String>> debugProbeRegularSemesters(List<String> ids) {
-    return _probeRegularSemesters(ids);
-  }
-
   @visibleForTesting
   Future<List<String>> debugProbeAvailableSemesters(List<String> ids) async {
     // 复用与 _probeAvailableSemesters 相同的纯过滤+探测管线，
     // 但不写回 semesterId / 不触发 UI 同步，不持有 _isSemesterProbeStarted 锁，
     // 便于测试直接断言探测结果。
     if (ids.isEmpty) return const <String>[];
-    final regularIds = ids.where(_isRegularTermSemesterStatic).toList();
-    return _probeRegularSemesters(regularIds);
+    return _probeSemesters(ids);
   }
 
   Future<void> _probeAvailableSemesters(List<String> semesterIds) async {
@@ -366,8 +345,7 @@ class _ScorePageState extends State<ScorePage> {
     }
     _isSemesterProbeStarted = true;
 
-    final regularIds = semesterIds.where(_isRegularTermSemesterStatic).toList();
-    final keptIds = await _probeRegularSemesters(regularIds);
+    final keptIds = await _probeSemesters(semesterIds);
     if (!mounted) {
       return;
     }
