@@ -4,7 +4,6 @@
 - 每次代码提交后，都要同步补充本文件。
 - 每条记录至少包含：日期、提交哈希、提交标题、详细修改说明、关键文件、变更统计。
 - 记录口径以主线提交为准；如果一次提交覆盖多个模块，要按用户可感知的变化拆开写清楚，不只写一句标题。
-- 如果某条记录是在正式 `git commit` 之前先写入仓库，允许先把提交哈希记成 `待提交`；下一次维护本文件时，必须回填成真实哈希。
 
 统计范围
 - 起点提交（含）：`a123ed99fda436af7eef7f1ce7ca8f55750b60c5`
@@ -14,7 +13,7 @@
 
 ## v1.6.4
 
-## 2026-07-10 · `待提交` · feat(score): semester filter cache with instant restore
+## 2026-07-10  · feat(score): semester filter cache with instant restore
 - 版本号提升到 `1.6.4+17`，用于发布成绩查询学期筛选的本地缓存能力。
 - 新增 `ScoreSemesterCache` 服务（基于 SharedPreferences，按学号隔离），缓存上次探测后的学期列表、上一次选中的学期、当前学期标记以及总学分/绩点等摘要指标；成绩条目不落本地，每次仍从云端对应学期拉取。
 - 成绩页打开时先读缓存，立即用上次的学期列表、选中状态和摘要指标渲染顶部卡片与学期选择器，随后立即向云端拉取对应学期的成绩列表填充正文，不再出现"暂无成绩记录"的空白态。
@@ -23,11 +22,10 @@
 - 登出清理：`AppAuthStorage.clearAllAuthData()` 末尾联动调用 `ScoreSemesterCache.instance.clearAll()`，清除所有学号的卡片缓存。
 - 配套单元与 widget 测试：`ScoreSemesterCache` 覆盖 empty/隔离/单用户清除/全量清除/损坏数据判定；`ScorePage` 新增缓存恢复后即时显示摘要并触发后台刷新的回归用例。本轮已通过全量测试与静态检查：`flutter test`、`flutter analyze`。
 - 关键文件：`pubspec.yaml`、`changelog.md`、`lib/core/services/score_semester_cache.dart`、`test/core/services/score_semester_cache_test.dart`、`lib/pages/score/scorepage.dart`、`test/pages/score/scorepage_test.dart`、`lib/core/services/app_auth_storage.dart`
-- 代码统计（待提交时回填）：版本号提升 + 学期缓存服务与测试 + ScorePage 缓存集成与各退出路径写盘修复 + 切换学期内存命中写盘修复 + 登出联动清除
 
 ## v1.6.3
 
-## 2026-07-07 · `1bfc83e` · chore(release): prepare v1.6.3
+## 2026-07-07 · chore(release): prepare v1.6.3
 - 版本号提升到 `1.6.3+16`，用于发布评教性能边界修复与空教室楼栋测试稳定性修复后的补丁版本。
 - 学生评教题目页的一键完成路径复用已缓存的题目选项，避免再次扫描原始选项列表，并把自动选择的分数匹配规则抽成共享函数，减少页面和自动选择逻辑之间的重复判断。
 - 学生评教批次页恢复以 `List<CommentaryPayload>` 作为 Future 完成态数据，同时把派生出的卡片展示数据缓存到页面状态中，保留预加载课程状态的界面行为，也满足现有性能边界测试。
@@ -35,11 +33,10 @@
 - 空教室楼栋页测试新增 free room bridge 全局缓存重置，避免前一个用例缓存的楼栋数据污染后续用例。
 - 本轮修复已通过全量测试和静态检查：`flutter test --reporter compact --file-reporter json:/tmp/superhut-test-after.json`、`flutter analyze`。
 - 关键文件：`pubspec.yaml`、`changelog.md`、`lib/pages/Commentary/commentary_auto_selection.dart`、`lib/pages/Commentary/commentary_batch_page.dart`、`lib/pages/Commentary/commentary_course_list_page.dart`、`lib/pages/Commentary/commentary_question_page.dart`、`test/pages/freeroom/building_page_test.dart`
-- 代码统计（待提交时回填）：版本号提升 + 发布说明追加 + 评教性能边界修复 + 空教室楼栋测试缓存隔离
 
 ## v1.6.2
 
-## 2026-06-27 · `待提交` · feat(commentary): unify commentary flow and add category batch evaluation
+## 2026-06-27  · feat(commentary): unify commentary flow and add category batch evaluation
 - 版本号提升到 `1.6.2+15`，用于发布本轮学生评教体验统一与分类级一键评教能力。
 - 学生评教批次首页重做成和主站一致的玻璃态卡片界面，顶部概览会显示当前开放分类数和未评课程总数。
 - 实验课、理论课这类评教分类卡片现在支持 `一键评完`，点击后会直接串行提交该分类下所有未评课程，过程带进度反馈、重复点击防抖和成功/部分成功/全部失败结果汇总。
@@ -47,7 +44,6 @@
 - 单门评教题目页也切到统一玻璃壳，保留手动提交和 `一键完成`，并继续复用原有自动选项规则：首题选低分档，其余题选高分档。
 - 评教相关测试同步补齐，新增批量结果分支、列表级一键评教、题目页新壳子回归覆盖，确保 UI 重构没有带出行为回退。
 - 关键文件：`pubspec.yaml`、`changelog.md`、`lib/pages/Commentary/commentary_batch_page.dart`、`lib/pages/Commentary/commentary_course_list_page.dart`、`lib/pages/Commentary/commentary_question_page.dart`、`test/pages/commentary/commentary_batch_page_test.dart`、`test/pages/commentary/commentary_course_list_page_test.dart`、`test/pages/commentary/commentary_question_page_test.dart`
-- 代码统计（待提交时回填）：版本号提升 + 学生评教三页 UI 统一 + 分类级批量评教入口与回归测试补齐
 
 ## v1.6.1
 
@@ -59,7 +55,6 @@
 - 首页启动更新提醒和“关于”页手动检查更新都复用同一套直链下载逻辑；如果某个 Release 缺少当前平台安装包，则自动退回打开发布页。
 - 同步更新信任说明、首页更新弹窗测试和更新服务性能边界测试，确保不会暴露底层下载链接错误信息。
 - 关键文件：`pubspec.yaml`、`lib/core/services/app_update_service.dart`、`lib/home/homeview/view.dart`、`lib/home/about/view.dart`、`lib/home/about/trust_page.dart`、`test/widget_test.dart`、`test/core/ui/performance_boundaries_test.dart`
-- 代码统计（待提交时回填）：版本号提升 + 更新检查 API 切换 + 平台安装包直链选择 + 弹窗文案与测试更新
 
 ## v1.6.0
 
@@ -105,7 +100,7 @@
 
 ## v1.4.8
 
-## 2026-03-25 · `待提交` · chore(release): prepare v1.4.8
+## 2026-03-25  · chore(release): prepare v1.4.8
 - 作者：rccuu
 - 这次发版不再继续沿着上一轮那种更激进的课表自定义吸附方案往前推，而是收口回“更接近系统原生分页，但把真正影响手感的触发条件继续打磨顺手”的方向。目标很明确：优先把课表左右切周做得自然、稳、可预期，而不是为了更早翻页引入新的顿挫和反向抽动。
 - `lib/home/coursetable/view.dart` 里，顶部周标题和日期范围的刷新从整页 `setState` 拆成 `ValueNotifier<int> + ValueListenableBuilder<int>`，切周时只更新周信息本身，不再把整页课表内容一起重建。这样做主要是为了减少翻页落点附近那一下不必要的整页刷新，把“快到下一页时那一下明显顿一下”的感觉继续往下压。
@@ -127,7 +122,6 @@
 - 工程维护侧补了一个很小但实际有用的收尾：`.gitignore` 新增 `.serena`，避免本地语义分析缓存继续污染工作区。这个改动不会影响用户功能，但能减少后续发版和 review 时的噪音。
 - 本次提交同时把版本号提升到 `1.4.7+1`，并重新生成 iOS unsigned IPA，方便直接进入后续签名或分发流程。
 - 关键文件：`pubspec.yaml`、`changelog.md`、`lib/home/coursetable/view.dart`、`test/home/coursetable/course_table_swipe_test.dart`、`.gitignore`
-- 代码统计（待提交时回填）：5 files changed, version bump + release notes update + smoother course table paging + regression test + local ignore cleanup
 
 ## v1.4.6
 
