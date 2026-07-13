@@ -32,6 +32,7 @@ import '../../utils/course/get_course.dart';
 import '../../utils/course/coursemain.dart';
 import '../../utils/token.dart';
 import '../../widget_refresh_service.dart';
+import 'widgets/course_semester_picker_sheet.dart';
 import 'widgets/course_table_widgets.dart';
 
 typedef CourseTableBottomSheetPresenter =
@@ -1405,21 +1406,7 @@ class _CourseTableViewState extends State<CourseTableView> {
       }
       final selectedSemester = await _showAdaptiveBottomSheet<CourseSemester>(
         expand: false,
-        builder:
-            (sheetContext) => SafeArea(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  const ListTile(title: Text('选择学期')),
-                  for (final semester in semesters)
-                    ListTile(
-                      title: Text(semester.label),
-                      trailing: semester.isCurrent ? const Text('当前') : null,
-                      onTap: () => Navigator.of(sheetContext).pop(semester),
-                    ),
-                ],
-              ),
-            ),
+        builder: (_) => CourseSemesterPickerSheet(semesters: semesters),
       );
       if (!mounted || selectedSemester == null) return;
       final started = await CourseSyncService.instance.startManualSync(
