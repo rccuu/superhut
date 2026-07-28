@@ -5,7 +5,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:superhut/core/services/app_logger.dart';
 import 'package:superhut/generated/assets.dart';
 import 'package:superhut/home/home_route.dart';
+import 'package:superhut/login/hut/sms_command.dart';
 import 'package:superhut/login/hut_cas_login_page.dart';
+import 'package:superhut/login/hut_sms_login_enabled.dart';
 import 'package:superhut/login/webview_login_screen.dart';
 import 'package:superhut/utils/course/coursemain.dart';
 import 'package:superhut/utils/hut_user_api.dart';
@@ -30,6 +32,8 @@ typedef UnifiedLoginOfficialLoginOpener =
       required String password,
     });
 
+enum _UnifiedLoginMode { password, sms }
+
 class UnifiedLoginPage extends StatefulWidget {
   const UnifiedLoginPage({
     super.key,
@@ -38,6 +42,7 @@ class UnifiedLoginPage extends StatefulWidget {
     this.loadJwxtCredentials,
     this.loadSavedLoginCredentials,
     this.openOfficialLogin,
+    this.smsCommand,
   });
 
   final UnifiedLoginHomeRouteBuilder? buildHomeRoute;
@@ -45,6 +50,7 @@ class UnifiedLoginPage extends StatefulWidget {
   final UnifiedLoginJwxtCredentialLoader? loadJwxtCredentials;
   final UnifiedLoginSavedCredentialLoader? loadSavedLoginCredentials;
   final UnifiedLoginOfficialLoginOpener? openOfficialLogin;
+  final HutSmsLoginCommand? smsCommand;
 
   static Route<bool?> route() {
     return buildAppPageRoute<bool?>(
@@ -61,25 +67,54 @@ class UnifiedLoginPage extends StatefulWidget {
 class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   final TextEditingController _userNoController = TextEditingController();
   final TextEditingController _pwdController = TextEditingController();
+  final TextEditingController _mobileController = TextEditingController();
+  final TextEditingController _smsCodeController = TextEditingController();
   final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
+
+  late final HutSmsLoginCommand _smsCommand;
+  _UnifiedLoginMode _mode = _UnifiedLoginMode.password;
+  bool _mobilePrefillDone = false;
   bool _isOpeningOfficialLogin = false;
   bool _isContinuingAsGuest = false;
 
   bool get _isLoading => _isLoadingNotifier.value;
+  bool get _smsModeEnabled => kHutSmsLoginEnabled;
 
   @override
   void initState() {
     super.initState();
+    _smsCommand = widget.smsCommand ?? HutSmsLoginCommand();
+    _smsCommand.onCountdownChanged = () {
+      if (mounted) {
+        setState(() {});
+      }
+    };
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSavedCredentials();
+      unawaited(_prefillMobile());
     });
+  }
+
+  Future<void> _prefillMobile() async {
+    final mobile = await AppAuthStorage.instance.readHutMobile();
+    if (!mounted || mobile.isEmpty || _mobilePrefillDone) {
+      return;
+    }
+    if (_mobileController.text.isEmpty) {
+      _mobileController.text = mobile;
+    }
+    _mobilePrefillDone = true;
   }
 
   @override
   void dispose() {
     _userNoController.dispose();
     _pwdController.dispose();
+    _mobileController.dispose();
+    _smsCodeController.dispose();
     _isLoadingNotifier.dispose();
+    _smsCommand.onCountdownChanged = null;
+    _smsCommand.dispose();
     super.dispose();
   }
 
@@ -167,6 +202,16 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     return HutUserApi().userLogin(username: username, password: password);
   }
 
+  Future<HutAuthResult> _loginWithHutDetailed({
+    required String username,
+    required String password,
+  }) {
+    return HutUserApi().userLoginDetailed(
+      username: username,
+      password: password,
+    );
+  }
+
   Future<Map<String, String>?> _loadJwxtCredentials(BuildContext context) {
     final loader = widget.loadJwxtCredentials;
     if (loader != null) {
@@ -217,10 +262,16 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
       }
 
       final opener = widget.openOfficialLogin ?? _openOfficialLoginPage;
+      final username =
+          _mode == _UnifiedLoginMode.sms
+              ? _mobileController.text.trim()
+              : _userNoController.text.trim();
+      final password =
+          _mode == _UnifiedLoginMode.sms ? '' : _pwdController.text;
       final result = await opener(
         context,
-        username: _userNoController.text.trim(),
-        password: _pwdController.text,
+        username: username,
+        password: password,
       );
       return result == true;
     } catch (error, stackTrace) {
@@ -254,6 +305,34 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     );
   }
 
+  Future<void> _completeAfterHutSuccess({
+    required String username,
+    required String password,
+  }) async {
+    if (!mounted) {
+      return;
+    }
+
+    final result = await _loadJwxtCredentials(context);
+    if (result == null || (result['token'] ?? '').isEmpty) {
+      await _tryOfficialJwxtLogin('统一认证未返回教务凭据，正在切换到教务系统官方登录...');
+      return;
+    }
+
+    await AppAuthStorage.instance.setFirstOpen(false);
+    if (username.isNotEmpty && password.isNotEmpty) {
+      await AppAuthStorage.instance.saveJwxtCredentials(
+        username: username,
+        password: password,
+      );
+    }
+
+    if (!mounted) {
+      return;
+    }
+    _finishLogin();
+  }
+
   Future<void> _loginWithCAS() async {
     if (_isLoading) {
       return;
@@ -270,35 +349,37 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     _setLoading(true);
 
     try {
-      final isLoginSuccess = await _loginWithHut(
-        username: username,
-        password: password,
-      );
-      if (!isLoginSuccess) {
-        await _tryOfficialJwxtLogin('智慧工大登录失败，正在切换到教务系统官方登录...');
-        return;
+      // Keep injected bool authenticator compatible; default path uses detailed.
+      if (widget.loginWithHut != null) {
+        final isLoginSuccess = await _loginWithHut(
+          username: username,
+          password: password,
+        );
+        if (!isLoginSuccess) {
+          await _tryOfficialJwxtLogin('智慧工大登录失败，正在切换到教务系统官方登录...');
+          return;
+        }
+      } else {
+        final detailed = await _loginWithHutDetailed(
+          username: username,
+          password: password,
+        );
+        if (detailed.needMfa) {
+          _showSnackBar(
+            detailed.message.isNotEmpty
+                ? detailed.message
+                : '需要二次验证，请使用验证码登录',
+            type: AppSnackBarType.warning,
+          );
+          return;
+        }
+        if (!detailed.success) {
+          await _tryOfficialJwxtLogin('智慧工大登录失败，正在切换到教务系统官方登录...');
+          return;
+        }
       }
 
-      if (!mounted) {
-        return;
-      }
-
-      final result = await _loadJwxtCredentials(context);
-      if (result == null || (result['token'] ?? '').isEmpty) {
-        await _tryOfficialJwxtLogin('统一认证未返回教务凭据，正在切换到教务系统官方登录...');
-        return;
-      }
-
-      await AppAuthStorage.instance.setFirstOpen(false);
-      await AppAuthStorage.instance.saveJwxtCredentials(
-        username: username,
-        password: password,
-      );
-
-      if (!mounted) {
-        return;
-      }
-      _finishLogin();
+      await _completeAfterHutSuccess(username: username, password: password);
     } catch (error, stackTrace) {
       AppLogger.error(
         'Unified login failed unexpectedly',
@@ -309,6 +390,196 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     } finally {
       _setLoading(false);
     }
+  }
+
+  Future<void> _requestSmsCode() async {
+    if (_isLoading) {
+      return;
+    }
+
+    final mobile = _mobileController.text.trim();
+    if (mobile.isEmpty) {
+      _showSnackBar('请输入手机号', type: AppSnackBarType.warning);
+      return;
+    }
+
+    _setLoading(true);
+    try {
+      final result = await _smsCommand.requestCode(mobile);
+      if (!mounted) {
+        return;
+      }
+      if (result.success) {
+        _showSnackBar(
+          result.message.isEmpty ? '验证码已发送' : result.message,
+          type: AppSnackBarType.success,
+        );
+      } else {
+        _showSnackBar(
+          result.message.isEmpty ? '获取验证码失败' : result.message,
+          type: AppSnackBarType.error,
+        );
+      }
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Future<void> _loginWithSms() async {
+    if (_isLoading) {
+      return;
+    }
+
+    final mobile = _mobileController.text.trim();
+    final code = _smsCodeController.text.trim();
+    if (mobile.isEmpty || code.isEmpty) {
+      _showSnackBar('请输入手机号和验证码', type: AppSnackBarType.warning);
+      return;
+    }
+
+    _setLoading(true);
+    try {
+      final result = await _smsCommand.login(mobile: mobile, smscode: code);
+      if (!mounted) {
+        return;
+      }
+      if (!result.success) {
+        _showSnackBar(
+          result.message.isEmpty ? '登录失败' : result.message,
+          type: AppSnackBarType.error,
+        );
+        return;
+      }
+
+      await _completeAfterHutSuccess(username: mobile, password: '');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Unified SMS login failed unexpectedly',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      await _tryOfficialJwxtLogin('登录过程异常，正在切换到教务系统官方登录...');
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  Widget _buildModeSwitcher(BuildContext context) {
+    if (!_smsModeEnabled) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isPassword = _mode == _UnifiedLoginMode.password;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          TextButton(
+            onPressed:
+                isPassword
+                    ? null
+                    : () => setState(() => _mode = _UnifiedLoginMode.password),
+            child: Text(
+              '密码登录',
+              style: TextStyle(
+                fontWeight: isPassword ? FontWeight.bold : FontWeight.normal,
+                color:
+                    isPassword ? colorScheme.primary : colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed:
+                isPassword
+                    ? () => setState(() => _mode = _UnifiedLoginMode.sms)
+                    : null,
+            child: Text(
+              '验证码登录',
+              style: TextStyle(
+                fontWeight: !isPassword ? FontWeight.bold : FontWeight.normal,
+                color:
+                    !isPassword
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordFields(ThemeData theme) {
+    return Column(
+      children: [
+        TextField(
+          keyboardType: TextInputType.number,
+          style: theme.textTheme.titleMedium,
+          maxLength: 13,
+          decoration: const InputDecoration(
+            hintText: '学号 / 手机号',
+            counterText: '',
+            prefixIcon: Icon(Icons.person_outline_rounded),
+          ),
+          controller: _userNoController,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          style: theme.textTheme.titleMedium,
+          maxLength: 40,
+          decoration: const InputDecoration(
+            hintText: '密码',
+            counterText: '',
+            prefixIcon: Icon(Icons.lock_outline_rounded),
+          ),
+          controller: _pwdController,
+          obscureText: true,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSmsFields(ThemeData theme) {
+    final remaining = _smsCommand.remainingSeconds;
+    final canRequest = remaining <= 0 && !_isLoading;
+
+    return Column(
+      children: [
+        TextField(
+          keyboardType: TextInputType.phone,
+          style: theme.textTheme.titleMedium,
+          maxLength: 13,
+          decoration: const InputDecoration(
+            hintText: '手机号',
+            counterText: '',
+            prefixIcon: Icon(Icons.phone_iphone_rounded),
+          ),
+          controller: _mobileController,
+          onChanged: (_) {
+            _mobilePrefillDone = true;
+          },
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          keyboardType: TextInputType.number,
+          style: theme.textTheme.titleMedium,
+          maxLength: 8,
+          decoration: InputDecoration(
+            hintText: '验证码',
+            counterText: '',
+            prefixIcon: const Icon(Icons.sms_outlined),
+            suffixIcon: TextButton(
+              onPressed: canRequest ? () => unawaited(_requestSmsCode()) : null,
+              child: Text(remaining > 0 ? '${remaining}s' : '获取验证码'),
+            ),
+          ),
+          controller: _smsCodeController,
+        ),
+      ],
+    );
   }
 
   @override
@@ -405,29 +676,11 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                             ],
                           ),
                           const SizedBox(height: 24),
-                          TextField(
-                            keyboardType: TextInputType.number,
-                            style: theme.textTheme.titleMedium,
-                            maxLength: 13,
-                            decoration: const InputDecoration(
-                              hintText: '学号 / 手机号',
-                              counterText: '',
-                              prefixIcon: Icon(Icons.person_outline_rounded),
-                            ),
-                            controller: _userNoController,
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            style: theme.textTheme.titleMedium,
-                            maxLength: 40,
-                            decoration: const InputDecoration(
-                              hintText: '密码',
-                              counterText: '',
-                              prefixIcon: Icon(Icons.lock_outline_rounded),
-                            ),
-                            controller: _pwdController,
-                            obscureText: true,
-                          ),
+                          _buildModeSwitcher(context),
+                          if (_mode == _UnifiedLoginMode.password)
+                            _buildPasswordFields(theme)
+                          else
+                            _buildSmsFields(theme),
                           const SizedBox(height: 18),
                           ValueListenableBuilder<bool>(
                             valueListenable: _isLoadingNotifier,
@@ -438,7 +691,16 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                                     width: double.infinity,
                                     child: FilledButton(
                                       onPressed:
-                                          isLoading ? null : _loginWithCAS,
+                                          isLoading
+                                              ? null
+                                              : () {
+                                                if (_mode ==
+                                                    _UnifiedLoginMode.sms) {
+                                                  unawaited(_loginWithSms());
+                                                } else {
+                                                  unawaited(_loginWithCAS());
+                                                }
+                                              },
                                       child:
                                           isLoading
                                               ? const AppLoadingIndicator(
