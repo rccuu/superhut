@@ -12,7 +12,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('switches to SMS mode and requests code via command', (tester) async {
+  testWidgets('switches to SMS mode and requests code via command', (
+    tester,
+  ) async {
     var requestMobile = '';
     final smsCommand = HutSmsLoginCommand(
       smsInit: () async => const HutAuthResult(success: true, nonce: 'n'),
@@ -23,9 +25,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: HutLoginPage(smsCommand: smsCommand),
-      ),
+      MaterialApp(home: HutLoginPage(smsCommand: smsCommand)),
     );
 
     // 切换到验证码登录（按钮/Segment 文案以实现为准，测试用 find.text）

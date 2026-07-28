@@ -157,30 +157,34 @@ class _HutLoginPageState extends State<HutLoginPage> {
       child: Row(
         children: [
           TextButton(
-            onPressed: isPassword
-                ? null
-                : () => setState(() => _mode = _HutLoginMode.password),
+            onPressed:
+                isPassword
+                    ? null
+                    : () => setState(() => _mode = _HutLoginMode.password),
             child: Text(
               '密码登录',
               style: TextStyle(
                 fontWeight: isPassword ? FontWeight.bold : FontWeight.normal,
-                color: isPassword
-                    ? Theme.of(context).primaryColor
-                    : Theme.of(context).hintColor,
+                color:
+                    isPassword
+                        ? Theme.of(context).primaryColor
+                        : Theme.of(context).hintColor,
               ),
             ),
           ),
           TextButton(
-            onPressed: isPassword
-                ? () => setState(() => _mode = _HutLoginMode.sms)
-                : null,
+            onPressed:
+                isPassword
+                    ? () => setState(() => _mode = _HutLoginMode.sms)
+                    : null,
             child: Text(
               '验证码登录',
               style: TextStyle(
                 fontWeight: !isPassword ? FontWeight.bold : FontWeight.normal,
-                color: !isPassword
-                    ? Theme.of(context).primaryColor
-                    : Theme.of(context).hintColor,
+                color:
+                    !isPassword
+                        ? Theme.of(context).primaryColor
+                        : Theme.of(context).hintColor,
               ),
             ),
           ),
@@ -329,7 +333,8 @@ class _HutLoginPageState extends State<HutLoginPage> {
                 ),
               ),
               TextButton(
-                onPressed: canRequest ? () => unawaited(_requestSmsCode()) : null,
+                onPressed:
+                    canRequest ? () => unawaited(_requestSmsCode()) : null,
                 child: Text(remaining > 0 ? '${remaining}s' : '获取验证码'),
               ),
             ],

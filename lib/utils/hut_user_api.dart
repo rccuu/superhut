@@ -36,10 +36,7 @@ const String _kDefaultHutAuthFailureMessage = '操作失败，请稍后重试';
 
 String buildHutSmsInitPath() => '/token/passwordless/smsInit';
 
-String buildHutSmsSendPath({
-  required String mobile,
-  required String nonce,
-}) {
+String buildHutSmsSendPath({required String mobile, required String nonce}) {
   return '/token/passwordless/smsSend?'
       'mobile=${Uri.encodeQueryComponent(mobile)}'
       '&nonce=${Uri.encodeQueryComponent(nonce)}';
@@ -86,20 +83,12 @@ HutAuthResult parseHutSmsInitResponse(dynamic data) {
   final needMfa = hutResponseIndicatesNeedMfa(envelope);
 
   if (!_isHutSuccessCode(envelope['code']) || payloadMap == null) {
-    return HutAuthResult(
-      success: false,
-      message: message,
-      needMfa: needMfa,
-    );
+    return HutAuthResult(success: false, message: message, needMfa: needMfa);
   }
 
   final nonce = payloadMap['nonce']?.toString();
   if (nonce == null || nonce.isEmpty) {
-    return HutAuthResult(
-      success: false,
-      message: message,
-      needMfa: needMfa,
-    );
+    return HutAuthResult(success: false, message: message, needMfa: needMfa);
   }
 
   return HutAuthResult(
@@ -126,11 +115,7 @@ HutAuthResult parseHutSmsSendResponse(dynamic data) {
   final needMfa = hutResponseIndicatesNeedMfa(envelope);
 
   if (!_isHutSuccessCode(envelope['code'])) {
-    return HutAuthResult(
-      success: false,
-      message: message,
-      needMfa: needMfa,
-    );
+    return HutAuthResult(success: false, message: message, needMfa: needMfa);
   }
 
   return HutAuthResult(
@@ -156,20 +141,12 @@ HutAuthResult parseHutSmsLoginTokenData(dynamic data) {
   final needMfa = hutResponseIndicatesNeedMfa(envelope);
 
   if (!_isHutSuccessCode(envelope['code']) || payloadMap == null) {
-    return HutAuthResult(
-      success: false,
-      message: message,
-      needMfa: needMfa,
-    );
+    return HutAuthResult(success: false, message: message, needMfa: needMfa);
   }
 
   final session = HutPortalSession.fromLoginData(payloadMap);
   if (session.token.isEmpty) {
-    return HutAuthResult(
-      success: false,
-      message: message,
-      needMfa: needMfa,
-    );
+    return HutAuthResult(success: false, message: message, needMfa: needMfa);
   }
 
   return HutAuthResult(

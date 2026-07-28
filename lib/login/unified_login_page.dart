@@ -366,9 +366,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
         );
         if (detailed.needMfa) {
           _showSnackBar(
-            detailed.message.isNotEmpty
-                ? detailed.message
-                : '需要二次验证，请使用验证码登录',
+            detailed.message.isNotEmpty ? detailed.message : '需要二次验证，请使用验证码登录',
             type: AppSnackBarType.warning,
           );
           return;
@@ -487,7 +485,9 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
               style: TextStyle(
                 fontWeight: isPassword ? FontWeight.bold : FontWeight.normal,
                 color:
-                    isPassword ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                    isPassword
+                        ? colorScheme.primary
+                        : colorScheme.onSurfaceVariant,
               ),
             ),
           ),

@@ -8,10 +8,7 @@ void main() {
   test('requestCode success starts countdown and stores nonce', () async {
     final command = HutSmsLoginCommand(
       countdownSeconds: 60,
-      smsInit: () async => const HutAuthResult(
-        success: true,
-        nonce: 'n1',
-      ),
+      smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
       smsSend: ({required mobile, required nonce}) async {
         expect(mobile, '13800138000');
         expect(nonce, 'n1');
@@ -33,8 +30,9 @@ void main() {
   test('requestCode does not start countdown on send failure', () async {
     final command = HutSmsLoginCommand(
       smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
-      smsSend: ({required mobile, required nonce}) async =>
-          const HutAuthResult(success: false, message: '发送过于频繁'),
+      smsSend:
+          ({required mobile, required nonce}) async =>
+              const HutAuthResult(success: false, message: '发送过于频繁'),
     );
     final result = await command.requestCode('13800138000');
     expect(result.success, isFalse);
@@ -59,8 +57,9 @@ void main() {
     var loginCalls = 0;
     final command = HutSmsLoginCommand(
       smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
-      smsSend: ({required mobile, required nonce}) async =>
-          const HutAuthResult(success: true),
+      smsSend:
+          ({required mobile, required nonce}) async =>
+              const HutAuthResult(success: true),
       smsLogin: ({required mobile, required smscode, required nonce}) {
         loginCalls++;
         return completer.future;
@@ -97,8 +96,9 @@ void main() {
     final command = HutSmsLoginCommand(
       countdownSeconds: 3,
       smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
-      smsSend: ({required mobile, required nonce}) async =>
-          const HutAuthResult(success: true),
+      smsSend:
+          ({required mobile, required nonce}) async =>
+              const HutAuthResult(success: true),
     );
     await command.requestCode('13800138000');
     expect(command.remainingSeconds, 3);
@@ -110,28 +110,30 @@ void main() {
     command.dispose();
   });
 
-  test('dispose during in-flight requestCode does not restart countdown',
-      () async {
-    final sendCompleter = Completer<HutAuthResult>();
-    var countdownCallbacks = 0;
-    final command = HutSmsLoginCommand(
-      countdownSeconds: 60,
-      smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
-      smsSend: ({required mobile, required nonce}) => sendCompleter.future,
-    );
-    command.onCountdownChanged = () {
-      countdownCallbacks++;
-    };
+  test(
+    'dispose during in-flight requestCode does not restart countdown',
+    () async {
+      final sendCompleter = Completer<HutAuthResult>();
+      var countdownCallbacks = 0;
+      final command = HutSmsLoginCommand(
+        countdownSeconds: 60,
+        smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
+        smsSend: ({required mobile, required nonce}) => sendCompleter.future,
+      );
+      command.onCountdownChanged = () {
+        countdownCallbacks++;
+      };
 
-    final request = command.requestCode('13800138000');
-    command.dispose();
-    expect(command.remainingSeconds, 0);
+      final request = command.requestCode('13800138000');
+      command.dispose();
+      expect(command.remainingSeconds, 0);
 
-    sendCompleter.complete(const HutAuthResult(success: true, message: 'ok'));
-    final result = await request;
+      sendCompleter.complete(const HutAuthResult(success: true, message: 'ok'));
+      final result = await request;
 
-    expect(result.success, isTrue);
-    expect(command.remainingSeconds, 0);
-    expect(countdownCallbacks, 0);
-  });
+      expect(result.success, isTrue);
+      expect(command.remainingSeconds, 0);
+      expect(countdownCallbacks, 0);
+    },
+  );
 }

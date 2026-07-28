@@ -31,9 +31,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: UnifiedLoginPage(smsCommand: smsCommand),
-      ),
+      MaterialApp(home: UnifiedLoginPage(smsCommand: smsCommand)),
     );
     await tester.pump();
 

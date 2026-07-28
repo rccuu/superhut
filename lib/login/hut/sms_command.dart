@@ -5,15 +5,17 @@ import 'package:flutter/foundation.dart';
 import '../../utils/hut_user_api.dart';
 
 typedef HutSmsInit = Future<HutAuthResult> Function();
-typedef HutSmsSend = Future<HutAuthResult> Function({
-  required String mobile,
-  required String nonce,
-});
-typedef HutSmsLogin = Future<HutAuthResult> Function({
-  required String mobile,
-  required String smscode,
-  required String nonce,
-});
+typedef HutSmsSend =
+    Future<HutAuthResult> Function({
+      required String mobile,
+      required String nonce,
+    });
+typedef HutSmsLogin =
+    Future<HutAuthResult> Function({
+      required String mobile,
+      required String smscode,
+      required String nonce,
+    });
 
 class HutSmsLoginCommand {
   HutSmsLoginCommand({
@@ -21,19 +23,21 @@ class HutSmsLoginCommand {
     HutSmsSend? smsSend,
     HutSmsLogin? smsLogin,
     this.countdownSeconds = 60,
-  })  : _smsInit = smsInit ?? (() => HutUserApi().smsInit()),
-        _smsSend = smsSend ??
-            (({required mobile, required nonce}) {
-              return HutUserApi().smsSend(mobile: mobile, nonce: nonce);
-            }),
-        _smsLogin = smsLogin ??
-            (({required mobile, required smscode, required nonce}) {
-              return HutUserApi().smsLogin(
-                mobile: mobile,
-                smscode: smscode,
-                nonce: nonce,
-              );
-            });
+  }) : _smsInit = smsInit ?? (() => HutUserApi().smsInit()),
+       _smsSend =
+           smsSend ??
+           (({required mobile, required nonce}) {
+             return HutUserApi().smsSend(mobile: mobile, nonce: nonce);
+           }),
+       _smsLogin =
+           smsLogin ??
+           (({required mobile, required smscode, required nonce}) {
+             return HutUserApi().smsLogin(
+               mobile: mobile,
+               smscode: smscode,
+               nonce: nonce,
+             );
+           });
 
   final int countdownSeconds;
   final HutSmsInit _smsInit;
@@ -93,10 +97,7 @@ class HutSmsLoginCommand {
 
       final nonce = initResult.nonce;
       if (nonce == null || nonce.isEmpty) {
-        return const HutAuthResult(
-          success: false,
-          message: '获取验证码失败，请稍后重试',
-        );
+        return const HutAuthResult(success: false, message: '获取验证码失败，请稍后重试');
       }
 
       _activeNonce = nonce;
@@ -157,9 +158,10 @@ class HutSmsLoginCommand {
         _activeNonce = null;
         return HutAuthResult(
           success: false,
-          message: result.message.isEmpty
-              ? '验证码已失效，请重新获取'
-              : '${result.message}，请重新获取',
+          message:
+              result.message.isEmpty
+                  ? '验证码已失效，请重新获取'
+                  : '${result.message}，请重新获取',
           needMfa: result.needMfa,
         );
       }

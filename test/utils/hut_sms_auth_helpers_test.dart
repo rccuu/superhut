@@ -89,7 +89,10 @@ void main() {
       isTrue,
     );
     expect(
-      hutResponseIndicatesNeedMfa({'code': 0, 'data': {'idToken': 't'}}),
+      hutResponseIndicatesNeedMfa({
+        'code': 0,
+        'data': {'idToken': 't'},
+      }),
       isFalse,
     );
   });
