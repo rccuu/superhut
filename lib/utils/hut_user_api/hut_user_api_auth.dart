@@ -3,6 +3,7 @@ part of '../hut_user_api.dart';
 mixin _HutAuthMixin on _HutUserApiCore {
   static const _hexLowerDigits = '0123456789abcdef';
   static const _hexUpperDigits = '0123456789ABCDEF';
+  static const _kHutAppId = 'com.supwisdom.hut';
 
   String generateDeviceIdAlphabet() {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -50,47 +51,162 @@ mixin _HutAuthMixin on _HutUserApiCore {
     return uuid.v4().replaceAll('-', '');
   }
 
-  @override
-  Future<bool> userLogin({
+  Dio _loginDio() => _createConfiguredDio(
+    baseUrl: _kMyCasBaseUrl,
+    headers: {
+      'User-Agent': _kHutLoginUserAgent,
+      'Accept': '*/*',
+      'Accept-Encoding': 'gzip, deflate, br',
+    },
+  );
+
+  Future<HutAuthResult> smsInit() async {
+    try {
+      final response = await _loginDio().get(buildHutSmsInitPath());
+      return parseHutSmsInitResponse(response.data);
+    } catch (_) {
+      return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
+    }
+  }
+
+  Future<HutAuthResult> smsSend({
+    required String mobile,
+    required String nonce,
+  }) async {
+    final normalized = normalizeHutMobile(mobile);
+    if (!isPlausibleHutMobile(normalized)) {
+      return const HutAuthResult(success: false, message: '请输入正确的手机号');
+    }
+    try {
+      final response = await _loginDio().post(
+        buildHutSmsSendPath(mobile: normalized, nonce: nonce),
+        data: {},
+      );
+      return parseHutSmsSendResponse(response.data);
+    } catch (_) {
+      return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
+    }
+  }
+
+  Future<HutAuthResult> smsLogin({
+    required String mobile,
+    required String smscode,
+    required String nonce,
+  }) async {
+    final normalized = normalizeHutMobile(mobile);
+    if (!isPlausibleHutMobile(normalized)) {
+      return const HutAuthResult(success: false, message: '请输入正确的手机号');
+    }
+    if (smscode.trim().isEmpty) {
+      return const HutAuthResult(success: false, message: '请输入验证码');
+    }
+    final deviceId = generateDeviceIdAlphabet();
+    try {
+      final response = await _loginDio().post(
+        buildHutSmsLoginPath(
+          mobile: normalized,
+          smscode: smscode.trim(),
+          appId: _kHutAppId,
+          deviceId: deviceId,
+          osType: 'android',
+          geo: '',
+          nonce: nonce,
+        ),
+        data: {},
+      );
+      return completeSmsLoginFromResponseData(
+        responseData: response.data,
+        mobile: normalized,
+        deviceId: deviceId,
+      );
+    } catch (_) {
+      return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
+    }
+  }
+
+  @visibleForTesting
+  Future<HutAuthResult> completeSmsLoginFromResponseData({
+    required dynamic responseData,
+    required String mobile,
+    required String deviceId,
+  }) async {
+    final parsed = parseHutSmsLoginTokenData(responseData);
+    if (!parsed.success) {
+      return parsed;
+    }
+    final data = responseData is Map ? responseData['data'] : null;
+    if (data is! Map) {
+      return const HutAuthResult(success: false, message: '登录失败，请稍后重试');
+    }
+    final session = HutPortalSession.fromLoginData(data);
+    final refreshToken = data['refreshToken']?.toString() ?? '';
+    await _storage.saveHutSession(
+      token: session.token,
+      refreshToken: refreshToken,
+      deviceId: deviceId,
+      ticket: session.ticket,
+    );
+    await _storage.saveHutMobile(mobile);
+    await _storage.saveLoginType('hut');
+    _token['idToken'] = session.token;
+    AppLogger.debug('HUT SMS login completed');
+    return const HutAuthResult(success: true, message: '登录成功');
+  }
+
+  Future<HutAuthResult> userLoginDetailed({
     required String username,
     required String password,
+    String mfaState = '',
   }) async {
     final passwordBase = Uri.encodeComponent(password);
     final deviceId = generateDeviceIdAlphabet();
     final clientId = generateUuidV4();
     final loginUrl =
         '/token/password/passwordLogin?username=$username&password=$passwordBase'
-        '&appId=com.supwisdom.hut&geo&deviceId=$deviceId&osType=android'
-        '&clientId=$clientId&mfaState';
-    final dio = _createConfiguredDio(
-      baseUrl: _kMyCasBaseUrl,
-      headers: {
-        'User-Agent': _kHutLoginUserAgent,
-        'Accept': '*/*',
-        'Accept-Encoding': 'gzip, deflate, br',
-      },
-    );
+        '&appId=$_kHutAppId&geo&deviceId=$deviceId&osType=android'
+        '&clientId=$clientId&mfaState=${Uri.encodeQueryComponent(mfaState)}';
 
     Response response;
     try {
-      response = await dio.post(loginUrl, data: {});
+      response = await _loginDio().post(loginUrl, data: {});
     } catch (_) {
-      return false;
+      return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
     }
 
     final data = response.data;
-    if (data is! Map ||
-        data['code']?.toString() != '0' ||
-        data['data'] is! Map) {
-      return false;
+    if (data is! Map) {
+      return const HutAuthResult(success: false, message: '登录失败，请稍后重试');
+    }
+
+    if (hutResponseIndicatesNeedMfa(data)) {
+      return const HutAuthResult(
+        success: false,
+        needMfa: true,
+        message: '需要二次验证，请使用验证码登录或稍后再试',
+      );
+    }
+
+    if (data['code']?.toString() != '0' || data['data'] is! Map) {
+      final payload = data['data'];
+      final payloadMap =
+          payload is Map ? Map<dynamic, dynamic>.from(payload) : null;
+      return HutAuthResult(
+        success: false,
+        message: _hutAuthMessage(Map<dynamic, dynamic>.from(data), payloadMap),
+      );
     }
 
     final tokenData = data['data'] as Map;
     final session = HutPortalSession.fromLoginData(tokenData);
     final refreshToken = tokenData['refreshToken']?.toString() ?? '';
     if (session.token.isEmpty) {
-      return false;
+      final payloadMap = Map<dynamic, dynamic>.from(tokenData);
+      return HutAuthResult(
+        success: false,
+        message: _hutAuthMessage(Map<dynamic, dynamic>.from(data), payloadMap),
+      );
     }
+
     await _storage.saveHutSession(
       token: session.token,
       refreshToken: refreshToken,
@@ -99,8 +215,21 @@ mixin _HutAuthMixin on _HutUserApiCore {
     );
     await _storage.saveHutCredentials(username: username, password: password);
     await _storage.saveLoginType('hut');
+    _token['idToken'] = session.token;
     AppLogger.debug('HUT login completed');
-    return true;
+    return const HutAuthResult(success: true, message: '登录成功');
+  }
+
+  @override
+  Future<bool> userLogin({
+    required String username,
+    required String password,
+  }) async {
+    final result = await userLoginDetailed(
+      username: username,
+      password: password,
+    );
+    return result.success;
   }
 
   @override
