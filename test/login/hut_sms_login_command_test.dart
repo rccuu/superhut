@@ -109,4 +109,29 @@ void main() {
     expect(command.remainingSeconds, 0);
     command.dispose();
   });
+
+  test('dispose during in-flight requestCode does not restart countdown',
+      () async {
+    final sendCompleter = Completer<HutAuthResult>();
+    var countdownCallbacks = 0;
+    final command = HutSmsLoginCommand(
+      countdownSeconds: 60,
+      smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
+      smsSend: ({required mobile, required nonce}) => sendCompleter.future,
+    );
+    command.onCountdownChanged = () {
+      countdownCallbacks++;
+    };
+
+    final request = command.requestCode('13800138000');
+    command.dispose();
+    expect(command.remainingSeconds, 0);
+
+    sendCompleter.complete(const HutAuthResult(success: true, message: 'ok'));
+    final result = await request;
+
+    expect(result.success, isTrue);
+    expect(command.remainingSeconds, 0);
+    expect(countdownCallbacks, 0);
+  });
 }

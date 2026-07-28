@@ -45,6 +45,7 @@ class HutSmsLoginCommand {
   String? _activeNonce;
   Future<HutAuthResult>? _requestInFlight;
   Future<HutAuthResult>? _loginInFlight;
+  bool _disposed = false;
 
   VoidCallback? onCountdownChanged;
 
@@ -179,6 +180,9 @@ class HutSmsLoginCommand {
   }
 
   void _startCountdown() {
+    if (_disposed) {
+      return;
+    }
     _timer?.cancel();
     _remainingSeconds = countdownSeconds;
     onCountdownChanged?.call();
@@ -188,6 +192,9 @@ class HutSmsLoginCommand {
   }
 
   void _elapseSecond() {
+    if (_disposed) {
+      return;
+    }
     if (_remainingSeconds <= 1) {
       _remainingSeconds = 0;
       _timer?.cancel();
@@ -202,7 +209,9 @@ class HutSmsLoginCommand {
   void debugElapseSecond() => _elapseSecond();
 
   void dispose() {
+    _disposed = true;
     _timer?.cancel();
     _timer = null;
+    onCountdownChanged = null;
   }
 }
