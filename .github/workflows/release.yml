@@ -60,7 +60,7 @@ jobs:
             brew install ldid
           fi
 
-      - name: Build iOS TrollStore IPA
+      - name: Build iOS TrollStore TIPA
         run: |
           UNSIGNED_IPA="$(ls -t releases/superhut-*-unsigned-*.ipa | head -n 1)"
           bash scripts/build_ios_trollstore.sh "$UNSIGNED_IPA"
@@ -83,4 +83,4 @@ jobs:
           fi
           gh release upload "$RELEASE_TAG" releases/superhut-*-arm64-v8a-*.apk --clobber
           gh release upload "$RELEASE_TAG" releases/superhut-*-unsigned-*.ipa --clobber
-          gh release upload "$RELEASE_TAG" releases/superhut-*-trollstore-*.ipa --clobber
+          gh release upload "$RELEASE_TAG" releases/superhut-*-trollstore-*.tipa --clobber

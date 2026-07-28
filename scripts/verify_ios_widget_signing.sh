@@ -7,7 +7,7 @@ EXPECTED_APP_GROUP="${EXPECTED_APP_GROUP:-}"
 WIDGET_APPEX_NAME="${WIDGET_APPEX_NAME:-CourseWidget.appex}"
 
 usage() {
-  echo "Usage: $0 [--mode auto|profile|trollstore] [--app-group group.id] path/to/app.ipa|path/to/Superhut.app"
+  echo "Usage: $0 [--mode auto|profile|trollstore] [--app-group group.id] path/to/app.ipa|path/to/app.tipa|path/to/Superhut.app"
   echo
   echo "Checks whether the main app and widget extension share a usable App Group."
   echo "  auto       Uses profile mode if any embedded profile exists, otherwise TrollStore mode."
@@ -84,7 +84,7 @@ ensure_tmp_dir() {
 
 APP_PATH=""
 case "$INPUT_PATH" in
-  *.ipa)
+  *.ipa|*.tipa)
     ensure_tmp_dir
     unzip -q "$INPUT_PATH" -d "$TMP_DIR"
     APP_PATH="$(find "$TMP_DIR/Payload" -maxdepth 1 -type d -name "*.app" | head -n 1)"
@@ -93,7 +93,7 @@ case "$INPUT_PATH" in
     APP_PATH="$INPUT_PATH"
     ;;
   *)
-    echo "ERROR: input must be a .ipa or .app bundle" >&2
+    echo "ERROR: input must be a .ipa, .tipa, or .app bundle" >&2
     exit 2
     ;;
 esac

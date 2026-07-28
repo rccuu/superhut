@@ -222,7 +222,13 @@ abstract final class AppUpdateService {
       case TargetPlatform.iOS:
         return _firstMatchingAsset(
               candidates,
-              (name) => name.endsWith('.ipa') && name.contains('trollstore'),
+              (name) =>
+                  name.endsWith('.tipa') && name.contains('trollstore'),
+            ) ??
+            _firstMatchingAsset(
+              candidates,
+              (name) =>
+                  name.endsWith('.ipa') && name.contains('trollstore'),
             ) ??
             _firstMatchingAsset(
               candidates,

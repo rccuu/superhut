@@ -14,7 +14,7 @@ WIDGET_ENTITLEMENTS="$SCRIPT_DIR/trollstore/CourseWidget.entitlements.plist"
 usage() {
   echo "Usage: $0 [path/to/unsigned.ipa]"
   echo
-  echo "Builds a TrollStore fakesigned IPA. If no IPA is provided, it first builds"
+  echo "Builds a TrollStore fakesigned TIPA (.tipa). If no IPA is provided, it first builds"
   echo "the regular unsigned IPA with scripts/build_ios_quick.sh."
   echo
   echo "Set LDID=/path/to/ldid if ldid is not in PATH."
@@ -54,10 +54,10 @@ fi
 
 VERSION="$(grep "version:" pubspec.yaml | awk '{print $2}' | tr -d '\r')"
 TIMESTAMP="$(date +"%Y%m%d_%H%M%S")"
-OUTPUT_IPA="releases/superhut-v${VERSION}-trollstore-${TIMESTAMP}.ipa"
+OUTPUT_TIPA="releases/superhut-v${VERSION}-trollstore-${TIMESTAMP}.tipa"
 WORK_DIR="build/ios/trollstore"
 
-echo "🚀 开始构建 SuperHUT TrollStore IPA..."
+echo "🚀 开始构建 SuperHUT TrollStore TIPA..."
 echo "📦 输入 IPA: $INPUT_IPA"
 echo "🔏 ldid: $LDID_BIN"
 
@@ -110,14 +110,14 @@ echo "🔏 fakesign widget executable..."
 "$LDID_BIN" "-S$WIDGET_ENTITLEMENTS" "$WIDGET_EXECUTABLE_PATH"
 
 mkdir -p releases
-rm -f "$OUTPUT_IPA"
+rm -f "$OUTPUT_TIPA"
 (
   cd "$WORK_DIR"
-  zip -r "$PROJECT_ROOT/$OUTPUT_IPA" Payload > /dev/null
+  zip -r "$PROJECT_ROOT/$OUTPUT_TIPA" Payload > /dev/null
 )
 
-echo "✅ TrollStore IPA 构建完成！"
-echo "📦 文件位置: $OUTPUT_IPA"
-echo "📏 文件大小: $(ls -lh "$OUTPUT_IPA" | awk '{print $5}')"
+echo "✅ TrollStore TIPA 构建完成！"
+echo "📦 文件位置: $OUTPUT_TIPA"
+echo "📏 文件大小: $(ls -lh "$OUTPUT_TIPA" | awk '{print $5}')"
 
-bash scripts/verify_ios_widget_signing.sh --mode trollstore --app-group "$EXPECTED_APP_GROUP" "$OUTPUT_IPA"
+bash scripts/verify_ios_widget_signing.sh --mode trollstore --app-group "$EXPECTED_APP_GROUP" "$OUTPUT_TIPA"
