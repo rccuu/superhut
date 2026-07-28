@@ -11,6 +11,7 @@ class AppAuthStorage {
 
   static const _hasSeenTrustNoticeKey = 'hasSeenTrustNotice';
   static const _ignoredUpdateVersionKey = 'ignoredUpdateVersion';
+  static const _hutMobileKey = 'hutMobile';
   static const _jwxtPasswordKey = 'secure_jwxt_password';
   static const _hutPasswordKey = 'secure_hut_password';
 
@@ -206,6 +207,21 @@ class AppAuthStorage {
     return prefs.getString('deviceId') ?? '';
   }
 
+  Future<void> saveHutMobile(String mobile) async {
+    final prefs = await _prefs;
+    final normalized = mobile.replaceAll(' ', '').trim();
+    if (normalized.isEmpty) {
+      await prefs.remove(_hutMobileKey);
+      return;
+    }
+    await prefs.setString(_hutMobileKey, normalized);
+  }
+
+  Future<String> readHutMobile() async {
+    final prefs = await _prefs;
+    return prefs.getString(_hutMobileKey) ?? '';
+  }
+
   Future<void> setHutLoginStatus(bool value) async {
     final prefs = await _prefs;
     await prefs.setBool('hutIsLogin', value);
@@ -223,6 +239,7 @@ class AppAuthStorage {
       'password',
       'hutUsername',
       'hutPassword',
+      'hutMobile',
       'token',
       'my_client_ticket',
       'hutToken',
@@ -262,6 +279,7 @@ class AppAuthStorage {
     final prefs = await _prefs;
     await prefs.remove('hutUsername');
     await prefs.remove('hutPassword');
+    await prefs.remove(_hutMobileKey);
     await prefs.remove('hutToken');
     await prefs.remove('hutRefreshToken');
     await prefs.remove('hutTicket');
