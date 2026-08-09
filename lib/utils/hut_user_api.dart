@@ -63,6 +63,17 @@ String buildHutSmsLoginPath({
       '&clientId=${Uri.encodeQueryComponent(clientId)}';
 }
 
+/// Path for the federation binding step that mints the final HUT session
+/// token from the intermediate `smsLogin` idToken.
+///
+/// Reverse-engineered from the official iOS client: after `passwordless/smsLogin`
+/// returns an intermediate `data.idToken`, the official app POSTs to
+/// `/token/federation/federatedBinding` with `X-Id-Token: <idToken>` and a
+/// form body containing `nonce`. The response's `data.idToken` is the token
+/// actually persisted and used by `userOnlineDetect` / CAS. Skipping this step
+/// leaves the session in an intermediate state that mycas rejects as invalid.
+String buildHutFederatedBindingPath() => '/token/federation/federatedBinding';
+
 String normalizeHutMobile(String mobile) => mobile.trim().replaceAll(' ', '');
 
 /// Chooses the `username` query value for `userOnlineDetect`.

@@ -143,6 +143,7 @@ mixin _HutAuthMixin on _HutUserApiCore {
         responseData: response.data,
         mobile: normalized,
         deviceId: deviceId,
+        nonce: nonce,
       );
     } catch (error) {
       return _authResultFromCaughtError(error);
@@ -154,6 +155,12 @@ mixin _HutAuthMixin on _HutUserApiCore {
     required dynamic responseData,
     required String mobile,
     required String deviceId,
+    String? nonce,
+    Future<({HutAuthResult? result, dynamic data})> Function({
+      required String idToken,
+      required String nonce,
+    })?
+    federatedBinding,
   }) async {
     final parsed = parseHutSmsLoginTokenData(responseData);
     if (!parsed.success) {
@@ -163,8 +170,28 @@ mixin _HutAuthMixin on _HutUserApiCore {
     if (data is! Map) {
       return const HutAuthResult(success: false, message: '登录失败，请稍后重试');
     }
-    final session = HutPortalSession.fromLoginData(data);
-    final refreshToken = data['refreshToken']?.toString() ?? '';
+    // smsLogin returns an INTERMEDIATE idToken. The official iOS client then
+    // POSTs /token/federation/federatedBinding with that idToken (X-Id-Token)
+    // and the smsInit nonce to mint the FINAL session token. Without this
+    // step mycas rejects the session as invalid ("登录状态已失效").
+    final intermediateToken = HutPortalSession.fromLoginData(data).token;
+    if (intermediateToken.isEmpty) {
+      return const HutAuthResult(success: false, message: '登录失败，请稍后重试');
+    }
+    final binding =
+        await (federatedBinding ?? _smsFederatedBinding)(
+          idToken: intermediateToken,
+          nonce: nonce ?? '',
+        );
+    if (binding.result != null) {
+      return binding.result!;
+    }
+    final bindingData = binding.data;
+    if (bindingData is! Map) {
+      return const HutAuthResult(success: false, message: '登录失败，请稍后重试');
+    }
+    final session = HutPortalSession.fromLoginData(bindingData);
+    final refreshToken = bindingData['refreshToken']?.toString() ?? '';
     await _storage.saveHutSession(
       token: session.token,
       refreshToken: refreshToken,
@@ -174,8 +201,50 @@ mixin _HutAuthMixin on _HutUserApiCore {
     await _storage.saveHutMobile(mobile);
     await _storage.saveLoginType('hut');
     _token['idToken'] = session.token;
-    AppLogger.debug('HUT SMS login completed');
+    AppLogger.debug('HUT SMS login completed (federatedBinding)');
     return const HutAuthResult(success: true, message: '登录成功');
+  }
+
+  /// Calls `/token/federation/federatedBinding` to exchange the intermediate
+  /// `smsLogin` idToken for the final HUT session token. On success returns
+  /// the response `data` map; on failure returns a non-null [HutAuthResult].
+  @visibleForTesting
+  Future<({HutAuthResult? result, dynamic data})> smsFederatedBinding({
+    required String idToken,
+    required String nonce,
+  }) => _smsFederatedBinding(idToken: idToken, nonce: nonce);
+
+  Future<({HutAuthResult? result, dynamic data})> _smsFederatedBinding({
+    required String idToken,
+    required String nonce,
+  }) async {
+    if (idToken.isEmpty) {
+      return (
+        result: const HutAuthResult(success: false, message: '登录失败，请稍后重试'),
+        data: null,
+      );
+    }
+    try {
+      final response = await _loginDio().post(
+        buildHutFederatedBindingPath(),
+        data: 'nonce=${Uri.encodeQueryComponent(nonce)}',
+        options: Options(headers: {'X-Id-Token': idToken}),
+      );
+      final parsed = parseHutSmsLoginTokenData(response.data);
+      if (!parsed.success) {
+        return (result: parsed, data: null);
+      }
+      final data = response.data is Map ? response.data['data'] : null;
+      if (data is! Map) {
+        return (
+          result: const HutAuthResult(success: false, message: '登录失败，请稍后重试'),
+          data: null,
+        );
+      }
+      return (result: null, data: data);
+    } catch (error) {
+      return (result: _authResultFromCaughtError(error), data: null);
+    }
   }
 
   Future<HutAuthResult> userLoginDetailed({
