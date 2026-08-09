@@ -17,39 +17,28 @@ void main() {
     SecureStorageMock.reset();
   });
 
-  test('completeSmsLoginFromResponseData saves the federatedBinding token', () async {
+  test('completeSmsLoginFromResponseData saves the RAW smsLogin idToken', () async {
     final api = HutUserApi();
-    // smsLogin returns an INTERMEDIATE idToken; the persisted token must come
-    // from the federatedBinding response, not the smsLogin response.
+    // Official SMS success handler (sub_100079334) stores data.idToken VERBATIM
+    // into kToken — no federatedBinding, no JWT decoding. We must persist the
+    // exact token mycas issued so checkTokenValidity / CAS accept it.
+    const rawIdToken = 'raw-id-token-from-smsLogin';
     final result = await api.completeSmsLoginFromResponseData(
       responseData: {
         'code': 0,
         'data': {
-          'idToken': 'intermediate-id-token',
+          'idToken': rawIdToken,
           'refreshToken': 'sms-refresh',
           'ticket': '',
         },
       },
       mobile: '13800138000',
       deviceId: 'abcdefghijklmnopqrstuvwx',
-      nonce: 'init-nonce',
-      federatedBinding: ({required idToken, required nonce}) async {
-        expect(idToken, 'intermediate-id-token');
-        expect(nonce, 'init-nonce');
-        return (
-          result: null,
-          data: {
-            'idToken': 'final-id-token',
-            'refreshToken': 'final-refresh',
-            'ticket': '',
-          },
-        );
-      },
     );
 
     expect(result.success, isTrue);
-    expect(await storage.readHutToken(), 'final-id-token');
-    expect(await storage.readHutRefreshToken(), 'final-refresh');
+    expect(await storage.readHutToken(), rawIdToken);
+    expect(await storage.readHutRefreshToken(), 'sms-refresh');
     expect(await storage.readHutDeviceId(), 'abcdefghijklmnopqrstuvwx');
     expect(await storage.readLoginType(), 'hut');
     expect(await storage.readHutMobile(), '13800138000');
@@ -57,56 +46,27 @@ void main() {
     expect(await storage.readHutUsername(), isEmpty);
   });
 
-  test('completeSmsLoginFromResponseData surfaces federatedBinding failure', () async {
-    final api = HutUserApi();
-    final result = await api.completeSmsLoginFromResponseData(
-      responseData: {
-        'code': 0,
-        'data': {'idToken': 'intermediate-id-token', 'refreshToken': '', 'ticket': ''},
-      },
-      mobile: '13800138000',
-      deviceId: 'abcdefghijklmnopqrstuvwx',
-      federatedBinding: ({required idToken, required nonce}) async {
-        return (
-          result: const HutAuthResult(success: false, message: '绑定失败'),
-          data: null,
-        );
-      },
-    );
-    expect(result.success, isFalse);
-    expect(result.message, contains('绑定失败'));
-    expect(await storage.readHutToken(), isEmpty);
-  });
-
   test(
-    'completeSmsLoginFromResponseData passes the RAW smsLogin idToken to federatedBinding',
+    'completeSmsLoginFromResponseData stores a JWT idToken verbatim, not decoded',
     () async {
-      // smsLogin may return data.idToken as a JWT whose payload embeds a
-      // different idToken. federatedBinding must receive the RAW outer token
-      // mycas issued for this session, not a decoded/transformed variant —
-      // otherwise mycas rejects it as "exception.federated.login.state.invalid".
+      // If data.idToken is a JWT whose payload embeds a different idToken, we
+      // must persist the RAW outer JWT — not the decoded inner token. Decoding
+      // would persist a token mycas never issued, so checkTokenValidity / CAS
+      // reject it as "登录状态已失效".
       final api = HutUserApi();
-      // A JWT with an embedded idToken in its payload.
       const rawIdToken =
           'eyJhbGciOiJub25lIn0.eyJpZFRva2VuIjoiZW1iZWRkZWQtaW5ub2NlbnQifQ.';
-      String? receivedToken;
-      await api.completeSmsLoginFromResponseData(
+      final result = await api.completeSmsLoginFromResponseData(
         responseData: {
           'code': 0,
           'data': {'idToken': rawIdToken, 'refreshToken': '', 'ticket': ''},
         },
         mobile: '13800138000',
         deviceId: 'abcdefghijklmnopqrstuvwx',
-        federatedBinding: ({required idToken, required nonce}) async {
-          receivedToken = idToken;
-          return (
-            result: const HutAuthResult(success: false, message: 'stop'),
-            data: null,
-          );
-        },
       );
-      expect(receivedToken, rawIdToken);
-      expect(receivedToken, isNot('embedded-innocent'));
+      expect(result.success, isTrue);
+      expect(await storage.readHutToken(), rawIdToken);
+      expect(await storage.readHutToken(), isNot('embedded-innocent'));
     },
   );
 
@@ -119,9 +79,5 @@ void main() {
     );
     expect(result.success, isFalse);
     expect(await storage.readHutToken(), isEmpty);
-  });
-
-  test('buildHutFederatedBindingPath is under /token/federation', () {
-    expect(buildHutFederatedBindingPath(), '/token/federation/federatedBinding');
   });
 }
