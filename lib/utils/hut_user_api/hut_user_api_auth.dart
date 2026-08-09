@@ -53,19 +53,37 @@ mixin _HutAuthMixin on _HutUserApiCore {
 
   Dio _loginDio() => _createConfiguredDio(
     baseUrl: _kMyCasBaseUrl,
+    // SMS gateway + mycas can exceed the default 3s receive window.
+    receiveTimeout: const Duration(seconds: 15),
     headers: {
       'User-Agent': _kHutLoginUserAgent,
-      'Accept': '*/*',
-      'Accept-Encoding': 'gzip, deflate, br',
+      // Match official mini-program / wexinRequest headers for passwordless.
+      'Accept': 'application/json',
+      'Accept-Language': 'zh-CN',
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
+    // Business failures (wrong code, invalid nonce, unbound mobile, …) are
+    // often returned as HTTP 4xx/5xx with a JSON body. Accept them so callers
+    // can parse `code`/`error`/`message` instead of collapsing to "网络异常".
+    validateStatus: (status) => status != null && status < 600,
   );
+
+  HutAuthResult _authResultFromCaughtError(Object error) {
+    if (error is DioException) {
+      return hutAuthResultFromTransportError(
+        statusCode: error.response?.statusCode,
+        responseData: error.response?.data,
+      );
+    }
+    return hutAuthResultFromTransportError();
+  }
 
   Future<HutAuthResult> smsInit() async {
     try {
       final response = await _loginDio().get(buildHutSmsInitPath());
       return parseHutSmsInitResponse(response.data);
-    } catch (_) {
-      return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
+    } catch (error) {
+      return _authResultFromCaughtError(error);
     }
   }
 
@@ -80,11 +98,12 @@ mixin _HutAuthMixin on _HutUserApiCore {
     try {
       final response = await _loginDio().post(
         buildHutSmsSendPath(mobile: normalized, nonce: nonce),
-        data: {},
+        // Official client posts form-urlencoded with empty body; params are query.
+        data: '',
       );
       return parseHutSmsSendResponse(response.data);
-    } catch (_) {
-      return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
+    } catch (error) {
+      return _authResultFromCaughtError(error);
     }
   }
 
@@ -100,7 +119,12 @@ mixin _HutAuthMixin on _HutUserApiCore {
     if (smscode.trim().isEmpty) {
       return const HutAuthResult(success: false, message: '请输入验证码');
     }
-    final deviceId = generateDeviceIdAlphabet();
+    // Match the official iOS client (reverse-engineered from SWUserModel):
+    //   * osType must be "iOS" — we previously sent "android" which the mycas
+    //     SSO origin/device check can reject before issuing a usable session.
+    //   * clientId defaults to "CLIENT_ID" when the app has not persisted one.
+    //   * deviceId mirrors the officially generated UUID.
+    final deviceId = generateUuidV4();
     try {
       final response = await _loginDio().post(
         buildHutSmsLoginPath(
@@ -108,19 +132,20 @@ mixin _HutAuthMixin on _HutUserApiCore {
           smscode: smscode.trim(),
           appId: _kHutAppId,
           deviceId: deviceId,
-          osType: 'android',
+          osType: 'iOS',
           geo: '',
           nonce: nonce,
+          clientId: 'CLIENT_ID',
         ),
-        data: {},
+        data: '',
       );
       return completeSmsLoginFromResponseData(
         responseData: response.data,
         mobile: normalized,
         deviceId: deviceId,
       );
-    } catch (_) {
-      return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
+    } catch (error) {
+      return _authResultFromCaughtError(error);
     }
   }
 
@@ -168,9 +193,11 @@ mixin _HutAuthMixin on _HutUserApiCore {
 
     Response response;
     try {
-      response = await _loginDio().post(loginUrl, data: {});
-    } catch (_) {
-      return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
+      // passwordLogin historically used empty JSON body; keep empty body with
+      // the shared form-urlencoded content-type (server accepts both).
+      response = await _loginDio().post(loginUrl, data: '');
+    } catch (error) {
+      return _authResultFromCaughtError(error);
     }
 
     final data = response.data;
@@ -286,10 +313,16 @@ mixin _HutAuthMixin on _HutUserApiCore {
       }
 
       final deviceId = await _storage.readHutDeviceId();
-      final username = await _storage.readHutUsername();
+      // SMS sessions never persist hutUsername; fall back to the bound mobile
+      // so onlineDetect does not reject an empty username and falsely mark a
+      // freshly minted SMS idToken as invalid.
+      final username = resolveHutOnlineDetectUsername(
+        await _storage.readHutUsername(),
+        await _storage.readHutMobile(),
+      );
       final url =
           '/token/login/userOnlineDetect?appId=com.supwisdom.hut'
-          '&deviceId=${deviceId.isEmpty ? 'null' : deviceId}&username=$username';
+          '&deviceId=${deviceId.isEmpty ? 'null' : deviceId}&username=${Uri.encodeQueryComponent(username)}';
       final dio = _createConfiguredDio(
         baseUrl: _kMyCasBaseUrl,
         headers: {
@@ -316,6 +349,10 @@ mixin _HutAuthMixin on _HutUserApiCore {
     final userName = await _storage.readHutUsername();
     final orgPassword = await _storage.readHutPassword();
     if (userName.isEmpty || orgPassword.isEmpty) {
+      // SMS/passwordless sessions have no stored password to re-login with.
+      // Return false so callers fall back to the (still-valid) token or a CAS
+      // retry rather than crashing into "登录状态已失效". A real
+      // jwt/token/refreshToken path for SMS-only refresh is Phase 2.
       return false;
     }
     return userLogin(username: userName, password: orgPassword);

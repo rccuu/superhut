@@ -47,6 +47,7 @@ class HutSmsLoginCommand {
   Timer? _timer;
   int _remainingSeconds = 0;
   String? _activeNonce;
+  String? _boundMobile;
   Future<HutAuthResult>? _requestInFlight;
   Future<HutAuthResult>? _loginInFlight;
   bool _disposed = false;
@@ -59,6 +60,9 @@ class HutSmsLoginCommand {
 
   @visibleForTesting
   String? get activeNonce => _activeNonce;
+
+  @visibleForTesting
+  String? get boundMobile => _boundMobile;
 
   Future<HutAuthResult> requestCode(String mobile) {
     final normalized = normalizeHutMobile(mobile);
@@ -95,17 +99,23 @@ class HutSmsLoginCommand {
         return initResult;
       }
 
-      final nonce = initResult.nonce;
-      if (nonce == null || nonce.isEmpty) {
+      final initNonce = initResult.nonce;
+      if (initNonce == null || initNonce.isEmpty) {
         return const HutAuthResult(success: false, message: '获取验证码失败，请稍后重试');
       }
 
-      _activeNonce = nonce;
-
-      final sendResult = await _smsSend(mobile: mobile, nonce: nonce);
-      if (sendResult.success) {
-        _startCountdown();
+      final sendResult = await _smsSend(mobile: mobile, nonce: initNonce);
+      if (!sendResult.success) {
+        // Do not keep a half-open session: failed send must not unlock login.
+        _clearSession();
+        return sendResult;
       }
+
+      final sendNonce = sendResult.nonce;
+      _activeNonce =
+          (sendNonce != null && sendNonce.isNotEmpty) ? sendNonce : initNonce;
+      _boundMobile = mobile;
+      _startCountdown();
       return sendResult;
     } finally {
       if (identical(_requestInFlight, currentRequest())) {
@@ -131,6 +141,16 @@ class HutSmsLoginCommand {
     }
 
     final normalized = normalizeHutMobile(mobile);
+    final bound = _boundMobile;
+    if (bound != null && bound.isNotEmpty && bound != normalized) {
+      return Future.value(
+        const HutAuthResult(
+          success: false,
+          message: '手机号与获取验证码时不一致，请使用原手机号或重新获取',
+        ),
+      );
+    }
+
     late final Future<HutAuthResult> submit;
     submit = _runLogin(
       mobile: normalized,
@@ -154,16 +174,19 @@ class HutSmsLoginCommand {
         smscode: smscode,
         nonce: nonce,
       );
-      if (!result.success && _isNonceExpiredMessage(result.message)) {
-        _activeNonce = null;
+      if (!result.success && _shouldInvalidateSession(result.message)) {
+        _clearSession();
+        final base = result.message.isEmpty ? '验证码已失效，请重新获取' : result.message;
+        // Avoid doubling the “请重新获取” suffix when localization already has it.
+        final message = base.contains('重新获取') ? base : '$base，请重新获取';
         return HutAuthResult(
           success: false,
-          message:
-              result.message.isEmpty
-                  ? '验证码已失效，请重新获取'
-                  : '${result.message}，请重新获取',
+          message: message,
           needMfa: result.needMfa,
         );
+      }
+      if (result.success) {
+        _clearSession();
       }
       return result;
     } finally {
@@ -173,12 +196,22 @@ class HutSmsLoginCommand {
     }
   }
 
-  bool _isNonceExpiredMessage(String message) {
+  bool _shouldInvalidateSession(String message) {
+    if (isHutSmsSessionInvalidMessage(message)) {
+      return true;
+    }
     final lower = message.toLowerCase();
     return lower.contains('过期') ||
         lower.contains('失效') ||
         lower.contains('无效') ||
-        lower.contains('expire');
+        lower.contains('expire') ||
+        lower.contains('bad request') ||
+        lower.contains('请求无效');
+  }
+
+  void _clearSession() {
+    _activeNonce = null;
+    _boundMobile = null;
   }
 
   void _startCountdown() {

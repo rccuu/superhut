@@ -6,12 +6,15 @@ import 'package:superhut/utils/hut_user_api.dart';
 
 void main() {
   test('requestCode success starts countdown and stores nonce', () async {
-    final command = HutSmsLoginCommand(
+    late final HutSmsLoginCommand command;
+    command = HutSmsLoginCommand(
       countdownSeconds: 60,
       smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
       smsSend: ({required mobile, required nonce}) async {
         expect(mobile, '13800138000');
         expect(nonce, 'n1');
+        // Nonce must not be committed before send succeeds.
+        expect(command.activeNonce, isNull);
         return const HutAuthResult(success: true, message: 'ok');
       },
     );
@@ -20,10 +23,24 @@ void main() {
     expect(result.success, isTrue);
     expect(command.remainingSeconds, 60);
     expect(command.activeNonce, 'n1');
+    expect(command.boundMobile, '13800138000');
 
     command.debugElapseSecond();
     expect(command.remainingSeconds, 59);
 
+    command.dispose();
+  });
+
+  test('requestCode prefers nonce returned by smsSend', () async {
+    final command = HutSmsLoginCommand(
+      smsInit: () async => const HutAuthResult(success: true, nonce: 'init-n'),
+      smsSend:
+          ({required mobile, required nonce}) async =>
+              const HutAuthResult(success: true, nonce: 'send-n'),
+    );
+    final result = await command.requestCode('13800138000');
+    expect(result.success, isTrue);
+    expect(command.activeNonce, 'send-n');
     command.dispose();
   });
 
@@ -37,6 +54,55 @@ void main() {
     final result = await command.requestCode('13800138000');
     expect(result.success, isFalse);
     expect(command.remainingSeconds, 0);
+    expect(command.activeNonce, isNull);
+    expect(command.boundMobile, isNull);
+  });
+
+  test(
+    'login rejects mobile different from the one that received the code',
+    () async {
+      var loginCalls = 0;
+      final command = HutSmsLoginCommand(
+        smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
+        smsSend:
+            ({required mobile, required nonce}) async =>
+                const HutAuthResult(success: true),
+        smsLogin: ({required mobile, required smscode, required nonce}) async {
+          loginCalls++;
+          return const HutAuthResult(success: true);
+        },
+      );
+      await command.requestCode('13800138000');
+      final result = await command.login(
+        mobile: '13900139000',
+        smscode: '123456',
+      );
+      expect(result.success, isFalse);
+      expect(result.message, contains('手机号'));
+      expect(loginCalls, 0);
+      command.dispose();
+    },
+  );
+
+  test('login clears nonce after Bad request style failure', () async {
+    final command = HutSmsLoginCommand(
+      smsInit: () async => const HutAuthResult(success: true, nonce: 'n1'),
+      smsSend:
+          ({required mobile, required nonce}) async =>
+              const HutAuthResult(success: true),
+      smsLogin:
+          ({required mobile, required smscode, required nonce}) async =>
+              const HutAuthResult(success: false, message: 'Bad request'),
+    );
+    await command.requestCode('13800138000');
+    final result = await command.login(
+      mobile: '13800138000',
+      smscode: '123456',
+    );
+    expect(result.success, isFalse);
+    expect(result.message, contains('重新获取'));
+    expect(command.activeNonce, isNull);
+    command.dispose();
   });
 
   test('requestCode rejects invalid mobile without calling network', () async {

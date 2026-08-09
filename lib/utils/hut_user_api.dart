@@ -50,6 +50,7 @@ String buildHutSmsLoginPath({
   required String osType,
   required String geo,
   required String nonce,
+  String clientId = 'CLIENT_ID',
 }) {
   return '/token/passwordless/smsLogin?'
       'mobile=${Uri.encodeQueryComponent(mobile)}'
@@ -58,10 +59,30 @@ String buildHutSmsLoginPath({
       '&deviceId=${Uri.encodeQueryComponent(deviceId)}'
       '&osType=${Uri.encodeQueryComponent(osType)}'
       '&geo=${Uri.encodeQueryComponent(geo)}'
-      '&nonce=${Uri.encodeQueryComponent(nonce)}';
+      '&nonce=${Uri.encodeQueryComponent(nonce)}'
+      '&clientId=${Uri.encodeQueryComponent(clientId)}';
 }
 
 String normalizeHutMobile(String mobile) => mobile.trim().replaceAll(' ', '');
+
+/// Chooses the `username` query value for `userOnlineDetect`.
+///
+/// Password/SMS HUT sessions are both identified by a token-bearing session,
+/// but only password login persists `hutUsername`. SMS login persists
+/// `hutMobile` instead. mycas rejects an empty username with
+/// `{"code":-1,"message":"请求不合法","error":{"error":"请求不合法（username error）"}}`,
+/// which made [checkTokenValidity] falsely invalidate an otherwise-valid fresh
+/// SMS idToken — the root cause of the post-login
+/// "智慧工大登录状态已失效，请重新登录后再试" screen.
+///
+/// Falls back to the bound mobile so SMS sessions keep a non-empty username.
+String resolveHutOnlineDetectUsername(String username, String mobile) {
+  final user = username.trim();
+  if (user.isNotEmpty) {
+    return user;
+  }
+  return mobile.trim();
+}
 
 bool isPlausibleHutMobile(String mobile) {
   return RegExp(r'^1\d{10}$').hasMatch(normalizeHutMobile(mobile));
@@ -118,9 +139,12 @@ HutAuthResult parseHutSmsSendResponse(dynamic data) {
     return HutAuthResult(success: false, message: message, needMfa: needMfa);
   }
 
+  // Some deployments rotate/echo nonce on send success; prefer it when present.
+  final sendNonce = payloadMap?['nonce']?.toString();
   return HutAuthResult(
     success: true,
     message: message == _kDefaultHutAuthFailureMessage ? '' : message,
+    nonce: (sendNonce != null && sendNonce.isNotEmpty) ? sendNonce : null,
     needMfa: needMfa,
   );
 }
@@ -200,19 +224,126 @@ bool _mapIndicatesNeedMfa(Map<dynamic, dynamic> map) {
   return false;
 }
 
+const String _kHutSmsSessionInvalidMessage = '验证码已失效，请重新获取';
+
+/// True when mycas returned a bare/opaque failure that usually means the SMS
+/// session (nonce) is no longer usable for login.
+bool isHutSmsSessionInvalidMessage(String message) {
+  final trimmed = message.trim();
+  if (trimmed.isEmpty) {
+    return false;
+  }
+  final lower = trimmed.toLowerCase();
+  if (lower == 'bad request' ||
+      lower == 'badrequest' ||
+      lower.contains('nonce invalid') ||
+      lower.contains('nonce expire') ||
+      lower.contains('invalid nonce')) {
+    return true;
+  }
+  return trimmed == '请求无效' ||
+      trimmed == '请求参数错误' ||
+      trimmed.contains('验证码已失效') ||
+      trimmed.contains('验证码已过期') ||
+      trimmed.contains('验证码失效') ||
+      trimmed.contains('验证码过期') ||
+      (trimmed.contains('nonce') &&
+          (trimmed.contains('无效') ||
+              trimmed.contains('过期') ||
+              trimmed.contains('失效')));
+}
+
+String localizeHutAuthMessage(String message) {
+  final trimmed = message.trim();
+  if (trimmed.isEmpty) {
+    return _kDefaultHutAuthFailureMessage;
+  }
+  if (isHutSmsSessionInvalidMessage(trimmed)) {
+    return _kHutSmsSessionInvalidMessage;
+  }
+
+  final lower = trimmed.toLowerCase();
+  if (lower.contains('phone number not equals') ||
+      trimmed.contains('与接收验证码的手机号码不一致')) {
+    return '手机号与获取验证码时不一致，请使用原手机号或重新获取';
+  }
+  if (lower.contains('secure mobile invalid') || trimmed.contains('安全手机无效')) {
+    return '该手机号未绑定智慧工大安全手机';
+  }
+  if (lower == 'unauthorized' ||
+      lower.contains('bad credentials') ||
+      trimmed == '未授权') {
+    return '账号或密码错误';
+  }
+  if (lower == 'request parameter error' || trimmed == '请求参数错误') {
+    return '请求参数错误，请重新获取验证码后再试';
+  }
+  return trimmed;
+}
+
 String _hutAuthMessage(
   Map<dynamic, dynamic> envelope, [
   Map<dynamic, dynamic>? data,
 ]) {
   final fromData = data?['message']?.toString().trim();
   if (fromData != null && fromData.isNotEmpty) {
-    return fromData;
+    return localizeHutAuthMessage(fromData);
   }
   final fromEnvelope = envelope['message']?.toString().trim();
   if (fromEnvelope != null && fromEnvelope.isNotEmpty) {
-    return fromEnvelope;
+    return localizeHutAuthMessage(fromEnvelope);
+  }
+  // mycas passwordless endpoints often return {"code":-1,"error":"..."} only.
+  final fromError = envelope['error']?.toString().trim();
+  if (fromError != null &&
+      fromError.isNotEmpty &&
+      fromError.toLowerCase() != 'bad request' &&
+      fromError.toLowerCase() != 'unauthorized' &&
+      fromError.toLowerCase() != 'internal server error') {
+    return localizeHutAuthMessage(fromError);
+  }
+  // Fall through: Spring often puts useful text only in message already handled;
+  // bare error:"Bad Request" is useless — treat as session invalid when path-ish.
+  if (fromError != null && fromError.toLowerCase() == 'bad request') {
+    return _kHutSmsSessionInvalidMessage;
   }
   return _kDefaultHutAuthFailureMessage;
+}
+
+/// Maps a Dio/transport failure into [HutAuthResult].
+///
+/// HUT mycas often encodes business failures as HTTP 4xx/5xx with a JSON body
+/// (`code` / `error` / `message`). Those must surface the body text — not the
+/// generic network copy — because the server may already have side effects
+/// (e.g. SMS already sent) before returning a non-2xx status.
+HutAuthResult hutAuthResultFromTransportError({
+  int? statusCode,
+  dynamic responseData,
+}) {
+  if (responseData != null) {
+    if (responseData is Map) {
+      final envelope = Map<dynamic, dynamic>.from(responseData);
+      final payload = envelope['data'];
+      final payloadMap =
+          payload is Map ? Map<dynamic, dynamic>.from(payload) : null;
+      final message = _hutAuthMessage(envelope, payloadMap);
+      return HutAuthResult(
+        success: false,
+        message: message,
+        needMfa: hutResponseIndicatesNeedMfa(envelope),
+      );
+    }
+    final text = responseData.toString().trim();
+    if (text.isNotEmpty) {
+      return HutAuthResult(
+        success: false,
+        message: localizeHutAuthMessage(text),
+      );
+    }
+  }
+  // No usable body: genuine transport / timeout / DNS failure.
+  // statusCode alone is not enough to invent a business message.
+  return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
 }
 
 abstract class _HutUserApiCore {
