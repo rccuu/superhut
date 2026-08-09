@@ -4,6 +4,9 @@ mixin _HutAuthMixin on _HutUserApiCore {
   static const _hexLowerDigits = '0123456789abcdef';
   static const _hexUpperDigits = '0123456789ABCDEF';
   static const _kHutAppId = 'com.supwisdom.hut';
+  // Matches the official iOS client's CFBundleShortVersionString, surfaced in
+  // the X-Device-Infos header that YYRequestManger injects on every request.
+  static const _kHutAppVersion = '1.1.8';
 
   String generateDeviceIdAlphabet() {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -61,6 +64,12 @@ mixin _HutAuthMixin on _HutUserApiCore {
       'Accept': 'application/json',
       'Accept-Language': 'zh-CN',
       'Content-Type': 'application/x-www-form-urlencoded',
+      // Official YYRequestManger injects X-Device-Infos on every request:
+      // "packagename=<bundleId>;version=<appVersion>;system=iOS". mycas uses
+      // it for origin/device validation; omitting it can make federatedBinding
+      // reject the session as "exception.federated.login.state.invalid".
+      'X-Device-Infos':
+          'packagename=$_kHutAppId;version=$_kHutAppVersion;system=iOS',
     },
     // Business failures (wrong code, invalid nonce, unbound mobile, …) are
     // often returned as HTTP 4xx/5xx with a JSON body. Accept them so callers
@@ -174,7 +183,13 @@ mixin _HutAuthMixin on _HutUserApiCore {
     // POSTs /token/federation/federatedBinding with that idToken (X-Id-Token)
     // and the smsInit nonce to mint the FINAL session token. Without this
     // step mycas rejects the session as invalid ("登录状态已失效").
-    final intermediateToken = HutPortalSession.fromLoginData(data).token;
+    //
+    // CRITICAL: federatedBinding must receive the RAW smsLogin data.idToken,
+    // not a JWT-decoded/transformed variant. HutPortalSession.fromLoginData
+    // decodes JWT payloads and may return an embedded idToken that differs
+    // from the one mycas issued for this SMS session; sending that to
+    // federatedBinding yields "exception.federated.login.state.invalid".
+    final intermediateToken = data['idToken']?.toString().trim() ?? '';
     if (intermediateToken.isEmpty) {
       return const HutAuthResult(success: false, message: '登录失败，请稍后重试');
     }

@@ -78,6 +78,38 @@ void main() {
     expect(await storage.readHutToken(), isEmpty);
   });
 
+  test(
+    'completeSmsLoginFromResponseData passes the RAW smsLogin idToken to federatedBinding',
+    () async {
+      // smsLogin may return data.idToken as a JWT whose payload embeds a
+      // different idToken. federatedBinding must receive the RAW outer token
+      // mycas issued for this session, not a decoded/transformed variant —
+      // otherwise mycas rejects it as "exception.federated.login.state.invalid".
+      final api = HutUserApi();
+      // A JWT with an embedded idToken in its payload.
+      const rawIdToken =
+          'eyJhbGciOiJub25lIn0.eyJpZFRva2VuIjoiZW1iZWRkZWQtaW5ub2NlbnQifQ.';
+      String? receivedToken;
+      await api.completeSmsLoginFromResponseData(
+        responseData: {
+          'code': 0,
+          'data': {'idToken': rawIdToken, 'refreshToken': '', 'ticket': ''},
+        },
+        mobile: '13800138000',
+        deviceId: 'abcdefghijklmnopqrstuvwx',
+        federatedBinding: ({required idToken, required nonce}) async {
+          receivedToken = idToken;
+          return (
+            result: const HutAuthResult(success: false, message: 'stop'),
+            data: null,
+          );
+        },
+      );
+      expect(receivedToken, rawIdToken);
+      expect(receivedToken, isNot('embedded-innocent'));
+    },
+  );
+
   test('completeSmsLoginFromResponseData fails without token', () async {
     final api = HutUserApi();
     final result = await api.completeSmsLoginFromResponseData(
