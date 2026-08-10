@@ -330,20 +330,27 @@ mixin _HutAuthMixin on _HutUserApiCore {
 
   @override
   Future<bool> checkTokenValidity() async {
-    try {
-      final token = await getToken();
-      if (token.isEmpty) {
-        return false;
-      }
+    final token = await getToken();
+    if (token.isEmpty) {
+      return false;
+    }
 
+    // SMS/passwordless sessions never persist hutUsername. The official iOS
+    // client does NOT run userOnlineDetect right after an SMS login — it goes
+    // straight to safety-check completion. userOnlineDetect is only used to
+    // validate an EXISTING password session on app launch. Re-validating a
+    // freshly minted SMS token here is both unnecessary and harmful (a
+    // non-empty username for the detect call is not defined for SMS), and it
+    // was making the CAS bootstrap falsely throw "登录状态已失效" right after a
+    // successful SMS login. Trust the fresh token for SMS sessions; keep the
+    // online check for password sessions that persist a username.
+    final username = await _storage.readHutUsername();
+    if (username.trim().isEmpty) {
+      return true;
+    }
+
+    try {
       final deviceId = await _storage.readHutDeviceId();
-      // SMS sessions never persist hutUsername; fall back to the bound mobile
-      // so onlineDetect does not reject an empty username and falsely mark a
-      // freshly minted SMS idToken as invalid.
-      final username = resolveHutOnlineDetectUsername(
-        await _storage.readHutUsername(),
-        await _storage.readHutMobile(),
-      );
       final url =
           '/token/login/userOnlineDetect?appId=com.supwisdom.hut'
           '&deviceId=${deviceId.isEmpty ? 'null' : deviceId}&username=${Uri.encodeQueryComponent(username)}';
@@ -354,6 +361,9 @@ mixin _HutAuthMixin on _HutUserApiCore {
           'Accept': '*/*',
           'Accept-Encoding': 'gzip, deflate, br',
           'X-Id-Token': token,
+          // Official YYRequestManger injects X-Device-Infos on every request.
+          'X-Device-Infos':
+              'packagename=$_kHutAppId;version=$_kHutAppVersion;system=iOS',
         },
       );
       final response = await dio.post(url, data: {});

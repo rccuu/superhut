@@ -80,4 +80,25 @@ void main() {
     expect(result.success, isFalse);
     expect(await storage.readHutToken(), isEmpty);
   });
+
+  test(
+    'checkTokenValidity trusts a fresh SMS token without calling userOnlineDetect',
+    () async {
+      // SMS/passwordless sessions persist no hutUsername. The official client
+      // does not re-validate a freshly minted SMS token via userOnlineDetect,
+      // and doing so made the CAS bootstrap throw "智慧工大登录状态已失效" right
+      // after a successful SMS login. With an empty username, validity must be
+      // trusted (the token was just issued) — this must not hit the network,
+      // which would fail the test with no overrides if it did.
+      final api = HutUserApi();
+      await storage.saveHutSession(
+        token: 'fresh-sms-token',
+        refreshToken: '',
+        deviceId: 'abcdefghijklmnopqrstuvwx',
+      );
+      await storage.saveHutMobile('13800138000');
+
+      expect(await api.checkTokenValidity(), isTrue);
+    },
+  );
 }
