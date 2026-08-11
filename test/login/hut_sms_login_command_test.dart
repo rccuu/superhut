@@ -202,4 +202,32 @@ void main() {
       expect(countdownCallbacks, 0);
     },
   );
+
+  test('reset cancels countdown and clears sms session', () async {
+    final command = HutSmsLoginCommand(
+      smsInit: () async => const HutAuthResult(success: true, nonce: 'init-n'),
+      smsSend: ({required mobile, required nonce}) async {
+        return const HutAuthResult(success: true, nonce: 'send-n');
+      },
+      smsLogin: ({required mobile, required smscode, required nonce}) async {
+        return const HutAuthResult(success: true);
+      },
+    );
+
+    final result = await command.requestCode('13800138000');
+    expect(result.success, isTrue);
+    expect(command.remainingSeconds, greaterThan(0));
+    expect(command.activeNonce, 'send-n');
+    expect(command.boundMobile, '13800138000');
+
+    command.reset();
+
+    expect(command.remainingSeconds, 0);
+    expect(command.activeNonce, isNull);
+    expect(command.boundMobile, isNull);
+
+    final retry = await command.requestCode('13800138000');
+    expect(retry.success, isTrue, reason: 'reset 后应立即允许重新获取验证码');
+    command.dispose();
+  });
 }

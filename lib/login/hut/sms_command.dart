@@ -243,6 +243,21 @@ class HutSmsLoginCommand {
   @visibleForTesting
   void debugElapseSecond() => _elapseSecond();
 
+  /// 主动放弃当前验证码会话：取消倒计时并清空绑定（「更换号码」使用）。
+  void reset() {
+    if (_disposed) {
+      return;
+    }
+    _timer?.cancel();
+    _timer = null;
+    _remainingSeconds = 0;
+    _activeNonce = null;
+    _boundMobile = null;
+    _requestInFlight = null;
+    _loginInFlight = null;
+    onCountdownChanged?.call();
+  }
+
   void dispose() {
     _disposed = true;
     _timer?.cancel();
