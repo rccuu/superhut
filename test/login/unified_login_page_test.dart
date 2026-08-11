@@ -246,13 +246,11 @@ void main() {
   testWidgets('returnToCaller pops with true instead of replacing home', (
     tester,
   ) async {
-    late BuildContext pageContext;
     bool? popResult;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) {
-            pageContext = context;
             return ElevatedButton(
               onPressed: () async {
                 popResult = await Navigator.of(context).push<bool>(
