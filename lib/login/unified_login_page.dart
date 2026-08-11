@@ -17,6 +17,7 @@ import '../core/ui/app_loading_indicator.dart';
 import '../core/ui/app_page_route.dart';
 import '../core/ui/app_snack_bar.dart';
 import '../core/ui/apple_glass.dart';
+import '../core/ui/color_scheme_ext.dart';
 
 typedef UnifiedLoginHomeRouteBuilder = Route<void> Function({int initialIndex});
 typedef UnifiedLoginAuthenticator =
@@ -33,6 +34,11 @@ typedef UnifiedLoginOfficialLoginOpener =
     });
 
 enum _UnifiedLoginMode { password, sms }
+
+enum _SmsStep { phone, code }
+
+const _UnifiedLoginMode _smsModeDefault =
+    kHutSmsLoginEnabled ? _UnifiedLoginMode.sms : _UnifiedLoginMode.password;
 
 class UnifiedLoginPage extends StatefulWidget {
   const UnifiedLoginPage({
@@ -76,13 +82,18 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
 
   late final HutSmsLoginCommand _smsCommand;
-  _UnifiedLoginMode _mode = _UnifiedLoginMode.password;
+  // ignore: prefer_final_fields -- _mode 由 Task 4 的 needMfa->验证码重定向重新赋值。
+  _UnifiedLoginMode _mode = _smsModeDefault;
+  _SmsStep _smsStep = _SmsStep.phone;
+  final FocusNode _smsCodeFocusNode = FocusNode();
+  final GlobalKey _smsCodeFieldKey = GlobalKey();
+  String? _inlineText;
+  AppSnackBarType? _inlineType;
   bool _mobilePrefillDone = false;
   bool _isOpeningOfficialLogin = false;
   bool _isContinuingAsGuest = false;
 
   bool get _isLoading => _isLoadingNotifier.value;
-  bool get _smsModeEnabled => kHutSmsLoginEnabled;
 
   @override
   void initState() {
@@ -116,6 +127,7 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     _pwdController.dispose();
     _mobileController.dispose();
     _smsCodeController.dispose();
+    _smsCodeFocusNode.dispose();
     _isLoadingNotifier.dispose();
     _smsCommand.onCountdownChanged = null;
     _smsCommand.dispose();
@@ -173,6 +185,50 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     }
 
     showAppSnackBar(context, message: message, type: type);
+  }
+
+  String _maskMobile(String mobile) {
+    final text = mobile.trim();
+    if (text.length < 7) {
+      return text;
+    }
+    return '${text.substring(0, 3)}****${text.substring(text.length - 4)}';
+  }
+
+  void _clearInlineFeedback() {
+    _inlineText = null;
+    _inlineType = null;
+  }
+
+  void _setInlineFeedback(String text, AppSnackBarType type) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _inlineText = text;
+      _inlineType = type;
+    });
+  }
+
+  void _changePhoneNumber() {
+    _smsCommand.reset();
+    _smsCodeController.clear();
+    _clearInlineFeedback();
+    setState(() => _smsStep = _SmsStep.phone);
+  }
+
+  void _focusSmsCode() {
+    if (!mounted) {
+      return;
+    }
+    _smsCodeFocusNode.requestFocus();
+    final fieldContext = _smsCodeFieldKey.currentContext;
+    if (fieldContext != null) {
+      Scrollable.ensureVisible(
+        fieldContext,
+        duration: const Duration(milliseconds: 200),
+      );
+    }
   }
 
   void _setLoading(bool isLoading) {
@@ -253,6 +309,26 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
       );
       _isContinuingAsGuest = false;
       _showSnackBar('无法进入游客模式，请稍后重试', type: AppSnackBarType.error);
+    }
+  }
+
+  String get _primaryActionLabel {
+    if (_mode == _UnifiedLoginMode.password) {
+      return '登录并继续';
+    }
+    return _smsStep == _SmsStep.phone ? '获取验证码' : '登录并继续';
+  }
+
+  void _onPrimaryAction() {
+    switch (_mode) {
+      case _UnifiedLoginMode.password:
+        unawaited(_loginWithCAS());
+      case _UnifiedLoginMode.sms:
+        if (_smsStep == _SmsStep.phone) {
+          unawaited(_requestSmsCode());
+        } else {
+          unawaited(_loginWithSms());
+        }
     }
   }
 
@@ -402,28 +478,25 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     if (_isLoading) {
       return;
     }
-
     final mobile = _mobileController.text.trim();
     if (mobile.isEmpty) {
-      _showSnackBar('请输入手机号', type: AppSnackBarType.warning);
+      _setInlineFeedback('请输入手机号', AppSnackBarType.warning);
       return;
     }
-
     _setLoading(true);
+    _clearInlineFeedback();
     try {
       final result = await _smsCommand.requestCode(mobile);
       if (!mounted) {
         return;
       }
       if (result.success) {
-        _showSnackBar(
-          result.message.isEmpty ? '验证码已发送' : result.message,
-          type: AppSnackBarType.success,
-        );
+        setState(() => _smsStep = _SmsStep.code);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _focusSmsCode());
       } else {
-        _showSnackBar(
+        _setInlineFeedback(
           result.message.isEmpty ? '获取验证码失败' : result.message,
-          type: AppSnackBarType.error,
+          AppSnackBarType.error,
         );
       }
     } finally {
@@ -435,28 +508,29 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     if (_isLoading) {
       return;
     }
-
     final mobile = _mobileController.text.trim();
     final code = _smsCodeController.text.trim();
     if (mobile.isEmpty || code.isEmpty) {
-      _showSnackBar('请输入手机号和验证码', type: AppSnackBarType.warning);
+      _setInlineFeedback('请输入验证码', AppSnackBarType.warning);
+      if (mobile.isEmpty) {
+        setState(() => _smsStep = _SmsStep.phone);
+      }
       return;
     }
-
     _setLoading(true);
+    _clearInlineFeedback();
     try {
       final result = await _smsCommand.login(mobile: mobile, smscode: code);
       if (!mounted) {
         return;
       }
       if (!result.success) {
-        _showSnackBar(
+        _setInlineFeedback(
           result.message.isEmpty ? '登录失败' : result.message,
-          type: AppSnackBarType.error,
+          AppSnackBarType.error,
         );
         return;
       }
-
       await _completeAfterHutSuccess(username: mobile, password: '');
     } catch (error, stackTrace) {
       AppLogger.error(
@@ -468,56 +542,6 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     } finally {
       _setLoading(false);
     }
-  }
-
-  Widget _buildModeSwitcher(BuildContext context) {
-    if (!_smsModeEnabled) {
-      return const SizedBox.shrink();
-    }
-
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isPassword = _mode == _UnifiedLoginMode.password;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          TextButton(
-            onPressed:
-                isPassword
-                    ? null
-                    : () => setState(() => _mode = _UnifiedLoginMode.password),
-            child: Text(
-              '密码登录',
-              style: TextStyle(
-                fontWeight: isPassword ? FontWeight.bold : FontWeight.normal,
-                color:
-                    isPassword
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed:
-                isPassword
-                    ? () => setState(() => _mode = _UnifiedLoginMode.sms)
-                    : null,
-            child: Text(
-              '验证码登录',
-              style: TextStyle(
-                fontWeight: !isPassword ? FontWeight.bold : FontWeight.normal,
-                color:
-                    !isPassword
-                        ? colorScheme.primary
-                        : colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildPasswordFields(ThemeData theme) {
@@ -550,43 +574,129 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     );
   }
 
-  Widget _buildSmsFields(ThemeData theme) {
+  Widget _buildLoginFields(ThemeData theme) {
+    if (_mode == _UnifiedLoginMode.password) {
+      return Column(
+        children: [_buildPasswordFields(theme), _buildInlineHint()],
+      );
+    }
+    final hint = _buildInlineHint();
+    if (_smsStep == _SmsStep.phone) {
+      return Column(children: [_buildMobileField(theme), hint]);
+    }
+    return Column(children: [_buildSentRow(), _buildCodeField(theme), hint]);
+  }
+
+  Widget _buildMobileField(ThemeData theme) {
+    return TextField(
+      keyboardType: TextInputType.phone,
+      style: theme.textTheme.titleMedium,
+      maxLength: 13,
+      decoration: const InputDecoration(
+        hintText: '手机号',
+        counterText: '',
+        prefixIcon: Icon(Icons.phone_iphone_rounded),
+      ),
+      controller: _mobileController,
+      onChanged: (_) {
+        _mobilePrefillDone = true;
+      },
+    );
+  }
+
+  Widget _buildCodeField(ThemeData theme) {
     final remaining = _smsCommand.remainingSeconds;
     final canRequest = remaining <= 0 && !_isLoading;
-
-    return Column(
-      children: [
-        TextField(
-          keyboardType: TextInputType.phone,
-          style: theme.textTheme.titleMedium,
-          maxLength: 13,
-          decoration: const InputDecoration(
-            hintText: '手机号',
-            counterText: '',
-            prefixIcon: Icon(Icons.phone_iphone_rounded),
-          ),
-          controller: _mobileController,
-          onChanged: (_) {
-            _mobilePrefillDone = true;
-          },
+    return TextField(
+      key: _smsCodeFieldKey,
+      focusNode: _smsCodeFocusNode,
+      keyboardType: TextInputType.number,
+      style: theme.textTheme.titleMedium,
+      maxLength: 8,
+      decoration: InputDecoration(
+        hintText: '验证码',
+        counterText: '',
+        prefixIcon: const Icon(Icons.sms_outlined),
+        suffixIcon: TextButton(
+          onPressed: canRequest ? () => unawaited(_requestSmsCode()) : null,
+          child: Text(remaining > 0 ? '${remaining}s' : '获取验证码'),
         ),
-        const SizedBox(height: 12),
-        TextField(
-          keyboardType: TextInputType.number,
-          style: theme.textTheme.titleMedium,
-          maxLength: 8,
-          decoration: InputDecoration(
-            hintText: '验证码',
-            counterText: '',
-            prefixIcon: const Icon(Icons.sms_outlined),
-            suffixIcon: TextButton(
-              onPressed: canRequest ? () => unawaited(_requestSmsCode()) : null,
-              child: Text(remaining > 0 ? '${remaining}s' : '获取验证码'),
+      ),
+      controller: _smsCodeController,
+    );
+  }
+
+  Widget _buildSentRow() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Icon(
+            Icons.check_circle_rounded,
+            size: 16,
+            color: colorScheme.success,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              '已发送到 ${_maskMobile(_mobileController.text)}',
+              style: TextStyle(
+                color: colorScheme.success,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-          controller: _smsCodeController,
-        ),
-      ],
+          TextButton(
+            onPressed: _isLoading ? null : _changePhoneNumber,
+            child: const Text('更换号码'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInlineHint() {
+    final text = _inlineText;
+    final type = _inlineType;
+    if (text == null || text.isEmpty || type == null) {
+      return const SizedBox.shrink();
+    }
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = switch (type) {
+      AppSnackBarType.success => colorScheme.success,
+      AppSnackBarType.error => colorScheme.error,
+      AppSnackBarType.warning => colorScheme.warning,
+      AppSnackBarType.info => colorScheme.primary,
+    };
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            switch (type) {
+              AppSnackBarType.success => Icons.check_circle_rounded,
+              AppSnackBarType.error => Icons.error_rounded,
+              _ => Icons.info_rounded,
+            },
+            size: 16,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -684,54 +794,46 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                             ],
                           ),
                           const SizedBox(height: 24),
-                          _buildModeSwitcher(context),
-                          if (_mode == _UnifiedLoginMode.password)
-                            _buildPasswordFields(theme)
-                          else
-                            _buildSmsFields(theme),
+                          _buildLoginFields(theme),
                           const SizedBox(height: 18),
                           ValueListenableBuilder<bool>(
                             valueListenable: _isLoadingNotifier,
                             builder: (context, isLoading, _) {
+                              final primaryLabel = _primaryActionLabel;
                               return Column(
                                 children: [
                                   SizedBox(
                                     width: double.infinity,
                                     child: FilledButton(
                                       onPressed:
-                                          isLoading
-                                              ? null
-                                              : () {
-                                                if (_mode ==
-                                                    _UnifiedLoginMode.sms) {
-                                                  unawaited(_loginWithSms());
-                                                } else {
-                                                  unawaited(_loginWithCAS());
-                                                }
-                                              },
+                                          isLoading ? null : _onPrimaryAction,
                                       child:
                                           isLoading
                                               ? const AppLoadingIndicator(
                                                 size: 20,
                                                 color: Colors.white,
                                               )
-                                              : const Text('登录并继续'),
+                                              : Text(primaryLabel),
                                     ),
                                   ),
-                                  const SizedBox(height: 10),
-                                  if (!widget.returnToCaller)
+                                  if (!widget.returnToCaller) ...[
+                                    const SizedBox(height: 6),
                                     SizedBox(
                                       width: double.infinity,
-                                      child: OutlinedButton(
+                                      child: TextButton(
                                         onPressed:
                                             isLoading ? null : _continueAsGuest,
                                         child: Text(
                                           Navigator.of(context).canPop()
                                               ? '暂不登录'
                                               : '先逛功能',
+                                          style: TextStyle(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
                                         ),
                                       ),
                                     ),
+                                  ],
                                 ],
                               );
                             },

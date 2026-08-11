@@ -18,36 +18,44 @@ void main() {
     SecureStorageMock.reset();
   });
 
-  testWidgets('shows SMS login entry and requests code via command', (
-    tester,
-  ) async {
-    var requestMobile = '';
-    final smsCommand = HutSmsLoginCommand(
-      smsInit: () async => const HutAuthResult(success: true, nonce: 'n'),
-      smsSend: ({required mobile, required nonce}) async {
-        requestMobile = mobile;
-        return const HutAuthResult(success: true);
-      },
-    );
+  testWidgets(
+    'defaults to SMS two-step: send expands code field with inline success, no snackbar',
+    (tester) async {
+      var requestMobile = '';
+      final smsCommand = HutSmsLoginCommand(
+        smsInit: () async => const HutAuthResult(success: true, nonce: 'n'),
+        smsSend: ({required mobile, required nonce}) async {
+          requestMobile = mobile;
+          return const HutAuthResult(success: true);
+        },
+      );
 
-    await tester.pumpWidget(
-      MaterialApp(home: UnifiedLoginPage(smsCommand: smsCommand)),
-    );
-    await tester.pump();
+      await tester.pumpWidget(
+        MaterialApp(home: UnifiedLoginPage(smsCommand: smsCommand)),
+      );
+      await tester.pump();
 
-    expect(find.text('验证码登录'), findsOneWidget);
+      // 默认验证码登录：首屏只有手机号一个输入框
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '获取验证码'), findsOneWidget);
 
-    await tester.tap(find.text('验证码登录'));
-    await tester.pump();
+      await tester.enterText(find.byType(TextField), '13800138000');
+      await tester.tap(find.widgetWithText(FilledButton, '获取验证码'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump();
 
-    await tester.enterText(find.byType(TextField).first, '13800138000');
-    await tester.tap(find.text('获取验证码'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
-
-    expect(requestMobile, '13800138000');
-    smsCommand.dispose();
-  });
+      expect(requestMobile, '13800138000');
+      // 两步展开：出现验证码输入框 + inline 成功提示
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.text('已发送到 138****8000'), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+      // 自动聚焦验证码框
+      final codeField = tester.widget<TextField>(find.byType(TextField));
+      expect(codeField.focusNode?.hasFocus, isTrue);
+      smsCommand.dispose();
+    },
+  );
 
   testWidgets('SMS login success loads JWXT credentials and finishes login', (
     tester,
@@ -85,16 +93,12 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.text('验证码登录'));
-    await tester.pump();
-
-    final fields = find.byType(TextField);
-    await tester.enterText(fields.at(0), '13800138000');
-    await tester.tap(find.text('获取验证码'));
+    await tester.enterText(find.byType(TextField), '13800138000');
+    await tester.tap(find.widgetWithText(FilledButton, '获取验证码'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    await tester.enterText(fields.at(1), '123456');
+    await tester.enterText(find.byType(TextField), '123456');
     await tester.tap(find.widgetWithText(FilledButton, '登录并继续'));
     await tester.pump();
     await tester.pumpAndSettle();
@@ -103,6 +107,61 @@ void main() {
     expect(loginCode, '123456');
     expect(credentialCalls, 1);
     expect(find.text('home 0'), findsOneWidget);
+    smsCommand.dispose();
+  });
+
+  testWidgets(
+    'change phone number returns to phone step and resets countdown',
+    (tester) async {
+      final smsCommand = HutSmsLoginCommand(
+        smsInit: () async => const HutAuthResult(success: true, nonce: 'n'),
+        smsSend: ({required mobile, required nonce}) async {
+          return const HutAuthResult(success: true);
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(home: UnifiedLoginPage(smsCommand: smsCommand)),
+      );
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField), '13800138000');
+      await tester.tap(find.widgetWithText(FilledButton, '获取验证码'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('已发送到 138****8000'), findsOneWidget);
+      await tester.tap(find.text('更换号码'));
+      await tester.pump();
+
+      expect(find.byType(TextField), findsOneWidget);
+      final phoneField = tester.widget<TextField>(find.byType(TextField));
+      expect(phoneField.controller?.text, '13800138000');
+      expect(smsCommand.remainingSeconds, 0);
+      smsCommand.dispose();
+    },
+  );
+
+  testWidgets('send without mobile shows inline warning, no snackbar', (
+    tester,
+  ) async {
+    final smsCommand = HutSmsLoginCommand(
+      smsInit: () async => const HutAuthResult(success: true, nonce: 'n'),
+      smsSend: ({required mobile, required nonce}) async {
+        return const HutAuthResult(success: true);
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: UnifiedLoginPage(smsCommand: smsCommand)),
+    );
+    await tester.pump();
+
+    await tester.tap(find.widgetWithText(FilledButton, '获取验证码'));
+    await tester.pump();
+
+    expect(find.text('请输入手机号'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
     smsCommand.dispose();
   });
 }
