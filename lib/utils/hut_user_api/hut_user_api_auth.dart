@@ -196,6 +196,12 @@ mixin _HutAuthMixin on _HutUserApiCore {
       ticket: ticket,
     );
     await _storage.saveHutMobile(mobile);
+    // Clear any leftover password credentials from a prior password login so
+    // checkTokenValidity/refreshToken don't reuse a stale username with the
+    // fresh SMS token (which would falsely invalidate the session on account
+    // switch). Mark the auth method explicitly instead of inferring it.
+    await _storage.clearHutPasswordCredentials();
+    await _storage.saveHutAuthMethod(kHutAuthMethodSms);
     await _storage.saveLoginType('hut');
     _token['idToken'] = idToken;
     AppLogger.debug('HUT SMS login completed');
@@ -265,6 +271,7 @@ mixin _HutAuthMixin on _HutUserApiCore {
       ticket: session.ticket,
     );
     await _storage.saveHutCredentials(username: username, password: password);
+    await _storage.saveHutAuthMethod(kHutAuthMethodPassword);
     await _storage.saveLoginType('hut');
     _token['idToken'] = session.token;
     AppLogger.debug('HUT login completed');
@@ -335,18 +342,29 @@ mixin _HutAuthMixin on _HutUserApiCore {
       return false;
     }
 
-    // SMS/passwordless sessions never persist hutUsername. The official iOS
-    // client does NOT run userOnlineDetect right after an SMS login — it goes
-    // straight to safety-check completion. userOnlineDetect is only used to
-    // validate an EXISTING password session on app launch. Re-validating a
-    // freshly minted SMS token here is both unnecessary and harmful (a
-    // non-empty username for the detect call is not defined for SMS), and it
-    // was making the CAS bootstrap falsely throw "登录状态已失效" right after a
-    // successful SMS login. Trust the fresh token for SMS sessions; keep the
-    // online check for password sessions that persist a username.
+    // Branch on the explicit auth-method marker. Fall back to inferring from
+    // hutUsername for sessions persisted before hutAuthMethod existed, so the
+    // migration is transparent.
     final username = await _storage.readHutUsername();
+    final authMethod = await _storage.readHutAuthMethod();
+    final resolvedMethod = authMethod.isNotEmpty
+        ? authMethod
+        : (username.trim().isNotEmpty
+              ? kHutAuthMethodPassword
+              : kHutAuthMethodSms);
+
+    if (resolvedMethod == kHutAuthMethodSms) {
+      // SMS sessions carry a JWT idToken; validate its format + exp locally
+      // instead of permanently trusting any non-empty token. An expired,
+      // revoked, or corrupted token now returns false so the caller can
+      // refresh or re-authenticate. No network round-trip: userOnlineDetect
+      // needs a username SMS sessions don't have.
+      return !isHutJwtExpired(token);
+    }
+
+    // Password sessions: keep the server-side userOnlineDetect check.
     if (username.trim().isEmpty) {
-      return true;
+      return false;
     }
 
     try {
@@ -382,11 +400,23 @@ mixin _HutAuthMixin on _HutUserApiCore {
   Future<bool> refreshToken() async {
     final userName = await _storage.readHutUsername();
     final orgPassword = await _storage.readHutPassword();
+
+    // SMS/passwordless sessions have no stored password to re-login with.
+    // The SMS token is long-lived (official research shows it never expires);
+    // just re-validate the JWT and only clear session state when it is
+    // corrupted/empty so callers surface re-authentication. Return true when
+    // the session is still usable.
     if (userName.isEmpty || orgPassword.isEmpty) {
-      // SMS/passwordless sessions have no stored password to re-login with.
-      // Return false so callers fall back to the (still-valid) token or a CAS
-      // retry rather than crashing into "登录状态已失效". A real
-      // jwt/token/refreshToken path for SMS-only refresh is Phase 2.
+      final authMethod = await _storage.readHutAuthMethod();
+      if (authMethod == kHutAuthMethodSms) {
+        final token = await getToken();
+        if (isHutJwtExpired(token)) {
+          await _storage.clearHutSessionState();
+          _token['idToken'] = '';
+          return false;
+        }
+        return true;
+      }
       return false;
     }
     return userLogin(username: userName, password: orgPassword);

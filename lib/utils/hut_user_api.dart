@@ -84,6 +84,59 @@ String resolveHutOnlineDetectUsername(String username, String mobile) {
   return mobile.trim();
 }
 
+/// Persisted auth method marker (SharedPreferences key `hutAuthMethod`).
+///
+/// Distinguishes password vs SMS sessions explicitly so [checkTokenValidity]
+/// and [refreshToken] can branch on how the session was established, instead
+/// of inferring it from whether `hutUsername` is empty (which breaks on
+/// account switch: a prior password login leaves `hutUsername` around and a
+/// fresh SMS token would be re-validated with the stale username).
+const String kHutAuthMethodPassword = 'password';
+const String kHutAuthMethodSms = 'sms';
+
+/// True when [token] is a JWT whose `exp` has passed (or it is malformed).
+///
+/// SMS sessions carry a mycas `idToken` (a JWT). [checkTokenValidity] uses this
+/// to decide validity without a network round-trip, so an expired/revoked/
+/// corrupted token is no longer permanently trusted. Malformed input (not a
+/// 3-segment JWT, bad base64, non-JSON payload, missing/invalid `exp`) returns
+/// `true` — i.e. treated as expired — so the caller clears login state and
+/// asks the user to re-authenticate, rather than silently trusting garbage.
+/// [clockSkew] lets callers tolerate minor client/server clock drift.
+bool isHutJwtExpired(String token, {Duration clockSkew = Duration.zero}) {
+  final parts = token.split('.');
+  if (parts.length != 3) {
+    return true;
+  }
+  final payload = parts[1];
+  Uint8List bytes;
+  try {
+    bytes = base64Url.decode(base64Url.normalize(payload));
+  } catch (_) {
+    return true;
+  }
+  dynamic decoded;
+  try {
+    decoded = jsonDecode(utf8.decode(bytes));
+  } catch (_) {
+    return true;
+  }
+  if (decoded is! Map) {
+    return true;
+  }
+  final exp = decoded['exp'];
+  if (exp == null) {
+    return true;
+  }
+  final expSeconds = num.tryParse(exp.toString());
+  if (expSeconds == null) {
+    return true;
+  }
+  final expMillis = (expSeconds * 1000).toInt();
+  final nowMillis = DateTime.now().millisecondsSinceEpoch;
+  return expMillis <= nowMillis + clockSkew.inMilliseconds;
+}
+
 bool isPlausibleHutMobile(String mobile) {
   return RegExp(r'^1\d{10}$').hasMatch(normalizeHutMobile(mobile));
 }

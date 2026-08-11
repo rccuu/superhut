@@ -1,5 +1,16 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:superhut/utils/hut_user_api.dart';
+
+/// Builds a JWT with the given [payload] for testing [isHutJwtExpired].
+/// The signature segment is arbitrary; only the payload is inspected.
+String _buildJwt(Map<String, dynamic> payload) {
+  final header = base64Url.encode(utf8.encode('{"alg":"HS256"}'));
+  final body = base64Url.encode(utf8.encode(jsonEncode(payload)));
+  const signature = 'sig';
+  return '$header.$body.$signature';
+}
 
 void main() {
   test('buildHutSmsInitPath is under /token/passwordless', () {
@@ -235,5 +246,49 @@ void main() {
 
   test('resolveHutOnlineDetectUsername returns empty when both missing', () {
     expect(resolveHutOnlineDetectUsername('', ''), '');
+  });
+
+  group('isHutJwtExpired', () {
+    test('returns false for a JWT whose exp is in the future', () {
+      final futureExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
+      final token = _buildJwt({'exp': futureExp});
+      expect(isHutJwtExpired(token), isFalse);
+    });
+
+    test('returns true for a JWT whose exp has passed', () {
+      final pastExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) - 3600;
+      final token = _buildJwt({'exp': pastExp});
+      expect(isHutJwtExpired(token), isTrue);
+    });
+
+    test('respects clockSkew tolerance', () {
+      // exp is 30s in the future; with 60s skew it is still considered expired.
+      final exp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 30;
+      final token = _buildJwt({'exp': exp});
+      expect(
+        isHutJwtExpired(token, clockSkew: const Duration(seconds: 60)),
+        isTrue,
+      );
+      expect(isHutJwtExpired(token), isFalse);
+    });
+
+    test('returns true for a non-JWT string (no dots)', () {
+      expect(isHutJwtExpired('not-a-jwt'), isTrue);
+      expect(isHutJwtExpired(''), isTrue);
+    });
+
+    test('returns true when payload is not valid base64/JSON', () {
+      expect(isHutJwtExpired('header.!!!.sig'), isTrue);
+    });
+
+    test('returns true when exp is missing', () {
+      final token = _buildJwt({'sub': 'no-exp'});
+      expect(isHutJwtExpired(token), isTrue);
+    });
+
+    test('returns true when exp is non-numeric', () {
+      final token = _buildJwt({'exp': 'soon'});
+      expect(isHutJwtExpired(token), isTrue);
+    });
   });
 }

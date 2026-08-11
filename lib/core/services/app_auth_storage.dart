@@ -222,6 +222,39 @@ class AppAuthStorage {
     return prefs.getString(_hutMobileKey) ?? '';
   }
 
+  Future<void> saveHutAuthMethod(String value) async {
+    final prefs = await _prefs;
+    await prefs.setString('hutAuthMethod', value);
+  }
+
+  Future<String> readHutAuthMethod() async {
+    final prefs = await _prefs;
+    return prefs.getString('hutAuthMethod') ?? '';
+  }
+
+  /// Clears only the password credentials (`hutUsername`/`hutPassword`), keeping
+  /// the HUT session (token, mobile, deviceId) intact.
+  ///
+  /// Used when switching to SMS login: a prior password login leaves these
+  /// behind, and re-using the stale username with a fresh SMS token would make
+  /// [checkTokenValidity] falsely invalidate the session on account switch.
+  Future<void> clearHutPasswordCredentials() async {
+    final prefs = await _prefs;
+    await prefs.remove('hutUsername');
+    await prefs.remove('hutPassword');
+    await _deleteSecurePassword(_hutPasswordKey, label: 'HUT');
+  }
+
+  /// Clears the HUT session tokens/auth-method/login flag, keeping `hutMobile`
+  /// so the user can re-request an SMS code without retyping the number.
+  Future<void> clearHutSessionState() async {
+    final prefs = await _prefs;
+    await prefs.remove('hutToken');
+    await prefs.remove('hutRefreshToken');
+    await prefs.remove('hutAuthMethod');
+    await prefs.setBool('hutIsLogin', false);
+  }
+
   Future<void> setHutLoginStatus(bool value) async {
     final prefs = await _prefs;
     await prefs.setBool('hutIsLogin', value);
@@ -247,6 +280,7 @@ class AppAuthStorage {
       'hutTicket',
       'deviceId',
       'loginType',
+      'hutAuthMethod',
       'hutIsLogin',
       'name',
       'entranceYear',
@@ -284,6 +318,7 @@ class AppAuthStorage {
     await prefs.remove('hutRefreshToken');
     await prefs.remove('hutTicket');
     await prefs.remove('deviceId');
+    await prefs.remove('hutAuthMethod');
     await prefs.remove('hutIsLogin');
     await _deleteSecurePassword(_hutPasswordKey, label: 'HUT');
   }
