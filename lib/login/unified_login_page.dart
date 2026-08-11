@@ -43,6 +43,7 @@ class UnifiedLoginPage extends StatefulWidget {
     this.loadSavedLoginCredentials,
     this.openOfficialLogin,
     this.smsCommand,
+    this.returnToCaller = false,
   });
 
   final UnifiedLoginHomeRouteBuilder? buildHomeRoute;
@@ -51,6 +52,9 @@ class UnifiedLoginPage extends StatefulWidget {
   final UnifiedLoginSavedCredentialLoader? loadSavedLoginCredentials;
   final UnifiedLoginOfficialLoginOpener? openOfficialLogin;
   final HutSmsLoginCommand? smsCommand;
+
+  /// 是否由调用方 push 进入（webview / 功能页）：成功后 pop(true) 返回调用方续会话。
+  final bool returnToCaller;
 
   static Route<bool?> route() {
     return buildAppPageRoute<bool?>(
@@ -181,6 +185,10 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
 
   void _finishLogin() {
     unawaited(ensureCourseScheduleFreshness());
+    if (widget.returnToCaller) {
+      Navigator.of(context).pop(true);
+      return;
+    }
     Navigator.of(
       context,
     ).pushAndRemoveUntil(_buildHomeRoute(initialIndex: 0), (route) => false);
@@ -711,18 +719,19 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                                     ),
                                   ),
                                   const SizedBox(height: 10),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: OutlinedButton(
-                                      onPressed:
-                                          isLoading ? null : _continueAsGuest,
-                                      child: Text(
-                                        Navigator.of(context).canPop()
-                                            ? '暂不登录'
-                                            : '先逛功能',
+                                  if (!widget.returnToCaller)
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton(
+                                        onPressed:
+                                            isLoading ? null : _continueAsGuest,
+                                        child: Text(
+                                          Navigator.of(context).canPop()
+                                              ? '暂不登录'
+                                              : '先逛功能',
+                                        ),
                                       ),
                                     ),
-                                  ),
                                 ],
                               );
                             },

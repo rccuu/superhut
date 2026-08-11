@@ -242,4 +242,66 @@ void main() {
     expect(usernameField.controller?.text, 'typed-user');
     expect(passwordField.controller?.text, 'typed-pass');
   });
+
+  testWidgets('returnToCaller pops with true instead of replacing home', (
+    tester,
+  ) async {
+    late BuildContext pageContext;
+    bool? popResult;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            pageContext = context;
+            return ElevatedButton(
+              onPressed: () async {
+                popResult = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder:
+                        (_) => UnifiedLoginPage(
+                          returnToCaller: true,
+                          loginWithHut: ({
+                            required username,
+                            required password,
+                          }) async {
+                            return true;
+                          },
+                          loadJwxtCredentials: (_) async {
+                            return {'token': 't', 'my_client_ticket': 'c'};
+                          },
+                        ),
+                  ),
+                );
+              },
+              child: const Text('open login'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open login'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '20260001');
+    await tester.enterText(find.byType(TextField).last, 'secret-pass');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '登录并继续'));
+    await tester.pumpAndSettle();
+
+    expect(popResult, isTrue);
+    expect(find.text('open login'), findsOneWidget);
+  });
+
+  testWidgets('returnToCaller hides guest continuation buttons', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: UnifiedLoginPage(returnToCaller: true)),
+    );
+    await tester.pump();
+
+    expect(find.text('先逛功能'), findsNothing);
+    expect(find.text('暂不登录'), findsNothing);
+  });
 }
