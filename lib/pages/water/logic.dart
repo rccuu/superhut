@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:superhut/login/hut/view.dart';
+import 'package:superhut/login/unified_login_page.dart';
 import 'package:superhut/utils/hut_user_api.dart';
 
 import '../../core/services/app_auth_storage.dart';
@@ -140,7 +140,8 @@ class FunctionHotWaterLogic extends GetxController {
   }) : hutUserApi = hotWaterApi ?? HutHotWaterApiClient(),
        _storage = authStorage ?? AppHotWaterAuthStorage(),
        _redirectToLogin =
-           redirectToLogin ?? (() => Get.off(() => HutLoginPage()));
+           redirectToLogin ??
+           (() => Get.off(() => UnifiedLoginPage(returnToCaller: true)));
 
   final FunctionHotWaterState state = FunctionHotWaterState();
   final HotWaterApiClient hutUserApi;

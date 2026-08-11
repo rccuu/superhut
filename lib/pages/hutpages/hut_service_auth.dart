@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/color_scheme_ext.dart';
-import '../../login/hut/view.dart';
+import '../../login/unified_login_page.dart';
 import '../../utils/hut_user_api.dart';
 
 typedef HutPortalSessionLoader =
@@ -234,7 +234,9 @@ class HutWebViewLoadingOverlay extends StatelessWidget {
 }
 
 Future<void> openHutLoginPage(BuildContext context) async {
-  await Navigator.of(
-    context,
-  ).push(MaterialPageRoute(builder: (context) => const HutLoginPage()));
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => const UnifiedLoginPage(returnToCaller: true),
+    ),
+  );
 }

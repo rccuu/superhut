@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:superhut/pages/hutpages/hutmain_state.dart';
 
 import '../../core/services/app_auth_storage.dart';
-import '../../login/hut/view.dart';
+import '../../login/unified_login_page.dart';
 import '../../utils/hut_user_api.dart';
 
 typedef HutFunctionListLogicLoader = Future<List> Function();
@@ -20,7 +20,8 @@ class HutMainLogic extends GetxController {
   }) : _loadFunctionList = loadFunctionList ?? HutUserApi().getFunctionList,
        _isHutLoggedIn = isHutLoggedIn ?? AppAuthStorage.instance.isHutLoggedIn,
        _redirectToLogin =
-           redirectToLogin ?? (() => Get.off(() => HutLoginPage()));
+           redirectToLogin ??
+           (() => Get.off(() => UnifiedLoginPage(returnToCaller: true)));
 
   final HutMainState state = HutMainState();
   final HutFunctionListLogicLoader _loadFunctionList;

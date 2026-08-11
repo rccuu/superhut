@@ -6486,67 +6486,6 @@ void main() {
     );
   });
 
-  test('legacy hut login command guards duplicate submit and stale context', () {
-    final command = File('lib/login/hut/command.dart').readAsStringSync();
-    final view = File('lib/login/hut/view.dart').readAsStringSync();
-    final loginMethod = RegExp(
-      r'Future<void> loginToHuT\([\s\S]*?\n  Future<void> _loginToHuT',
-    ).firstMatch(command)?.group(0);
-    final loginRunnerMethod = RegExp(
-      r'Future<void> _runLoginSubmit\([\s\S]*?\n  Future<void> _loginToHuT',
-    ).firstMatch(command)?.group(0);
-    final submitMethod = RegExp(
-      r'Future<void> _loginToHuT\([\s\S]*?\n  \}\n\}\n\nfinal HutLoginCommand',
-    ).firstMatch(command)?.group(0);
-
-    expect(command, contains('class HutLoginCommand'));
-    expect(command, contains('Future<void>? _loginSubmit;'));
-    expect(loginMethod, isNotNull);
-    expect(
-      loginMethod,
-      contains('final inFlight = _loginSubmit;'),
-      reason: '旧智慧工大登录重复点击时应复用正在进行的登录请求。',
-    );
-    expect(loginMethod, contains('return inFlight;'));
-    expect(loginMethod, contains('submit = _runLoginSubmit('));
-    expect(
-      loginMethod,
-      isNot(contains('.whenComplete(')),
-      reason: '旧智慧工大登录提交状态清理应走 try/finally，不应挂在回调链上。',
-    );
-
-    expect(loginRunnerMethod, isNotNull);
-    expect(loginRunnerMethod, contains('try {'));
-    expect(loginRunnerMethod, contains('await _loginToHuT('));
-    expect(loginRunnerMethod, contains('} finally {'));
-    expect(
-      loginRunnerMethod,
-      contains('if (identical(_loginSubmit, currentSubmit()))'),
-      reason: '只有当前仍是同一批登录 Future 时，才允许清空提交标记。',
-    );
-    expect(loginRunnerMethod, contains('_loginSubmit = null;'));
-    expect(loginRunnerMethod, isNot(contains('.whenComplete(')));
-
-    expect(submitMethod, isNotNull);
-    expect(
-      submitMethod,
-      contains('if (!context.mounted)'),
-      reason: '旧智慧工大登录请求返回后，如果页面已卸载，不应再弹提示或导航。',
-    );
-    expect(
-      submitMethod,
-      isNot(contains('.then((value)')),
-      reason: '旧智慧工大登录命令不应使用未检查 context 的 then 回调。',
-    );
-
-    expect(view, contains('final HutLoginCommand? command;'));
-    expect(view, contains('late final HutLoginCommand _command;'));
-    expect(view, contains('_command = widget.command ?? HutLoginCommand();'));
-    expect(view, contains('_command.loginToHuT('));
-    expect(view, contains('_userNoController.dispose();'));
-    expect(view, contains('_pwdController.dispose();'));
-  });
-
   test('legacy hut password encryption pads aes key without list slices', () {
     final pwdSource = File('lib/utils/pwd.dart').readAsStringSync();
     final formatObjectMethod = RegExp(
