@@ -32,6 +32,11 @@ typedef UnifiedLoginOfficialLoginOpener =
       required String username,
       required String password,
     });
+typedef UnifiedLoginDetailedAuthenticator =
+    Future<HutAuthResult> Function({
+      required String username,
+      required String password,
+    });
 
 enum _UnifiedLoginMode { password, sms }
 
@@ -45,6 +50,7 @@ class UnifiedLoginPage extends StatefulWidget {
     super.key,
     this.buildHomeRoute,
     this.loginWithHut,
+    this.loginWithHutDetailed,
     this.loadJwxtCredentials,
     this.loadSavedLoginCredentials,
     this.openOfficialLogin,
@@ -54,6 +60,7 @@ class UnifiedLoginPage extends StatefulWidget {
 
   final UnifiedLoginHomeRouteBuilder? buildHomeRoute;
   final UnifiedLoginAuthenticator? loginWithHut;
+  final UnifiedLoginDetailedAuthenticator? loginWithHutDetailed;
   final UnifiedLoginJwxtCredentialLoader? loadJwxtCredentials;
   final UnifiedLoginSavedCredentialLoader? loadSavedLoginCredentials;
   final UnifiedLoginOfficialLoginOpener? openOfficialLogin;
@@ -82,7 +89,6 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(false);
 
   late final HutSmsLoginCommand _smsCommand;
-  // ignore: prefer_final_fields -- _mode 由 Task 4 的 needMfa->验证码重定向重新赋值。
   _UnifiedLoginMode _mode = _smsModeDefault;
   _SmsStep _smsStep = _SmsStep.phone;
   final FocusNode _smsCodeFocusNode = FocusNode();
@@ -94,6 +100,8 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   bool _isContinuingAsGuest = false;
 
   bool get _isLoading => _isLoadingNotifier.value;
+
+  bool get _smsModeEnabled => kHutSmsLoginEnabled;
 
   @override
   void initState() {
@@ -196,8 +204,14 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
   }
 
   void _clearInlineFeedback() {
+    if (_inlineText == null && _inlineType == null) {
+      return;
+    }
     _inlineText = null;
     _inlineType = null;
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _setInlineFeedback(String text, AppSnackBarType type) {
@@ -227,6 +241,9 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
       Scrollable.ensureVisible(
         fieldContext,
         duration: const Duration(milliseconds: 200),
+        // 已在可视区内时无需滚动：显式对齐会让内容因 mode 链接溢出而触发无谓的滚动动画，
+        // 动画期间 Scrollable 会忽略指针事件，导致验证码框出现后的短时间内无法点按。
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
       );
     }
   }
@@ -270,6 +287,10 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     required String username,
     required String password,
   }) {
+    final detailed = widget.loginWithHutDetailed;
+    if (detailed != null) {
+      return detailed(username: username, password: password);
+    }
     return HutUserApi().userLoginDetailed(
       username: username,
       password: password,
@@ -310,6 +331,28 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
       _isContinuingAsGuest = false;
       _showSnackBar('无法进入游客模式，请稍后重试', type: AppSnackBarType.error);
     }
+  }
+
+  Widget _buildModeSwitchLink() {
+    if (!_smsModeEnabled) {
+      return const SizedBox.shrink();
+    }
+    final isPassword = _mode == _UnifiedLoginMode.password;
+    return Center(
+      child: TextButton(
+        onPressed: _isLoading
+            ? null
+            : () {
+                _clearInlineFeedback();
+                setState(() {
+                  _mode = isPassword
+                      ? _UnifiedLoginMode.sms
+                      : _UnifiedLoginMode.password;
+                });
+              },
+        child: Text(isPassword ? '返回验证码登录' : '使用密码登录'),
+      ),
+    );
   }
 
   String get _primaryActionLabel {
@@ -449,10 +492,13 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
           password: password,
         );
         if (detailed.needMfa) {
-          _showSnackBar(
-            detailed.message.isNotEmpty ? detailed.message : '需要二次验证，请使用验证码登录',
-            type: AppSnackBarType.warning,
+          _setInlineFeedback(
+            detailed.message.isNotEmpty
+                ? detailed.message
+                : '需要二次验证，请使用验证码登录',
+            AppSnackBarType.warning,
           );
+          setState(() => _mode = _UnifiedLoginMode.sms);
           return;
         }
         if (!detailed.success) {
@@ -838,6 +884,8 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                               );
                             },
                           ),
+                          const SizedBox(height: 12),
+                          _buildModeSwitchLink(),
                           const SizedBox(height: 14),
                           Text(
                             '如智慧工大不可用，将自动切换到教务系统官方页面。课表同步改为在课表页手动触发。',

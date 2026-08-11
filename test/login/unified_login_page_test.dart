@@ -3,9 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:superhut/login/hut/sms_command.dart';
 import 'package:superhut/login/unified_login_page.dart';
+import 'package:superhut/utils/hut_user_api.dart';
 
 import '../support/secure_storage_mock.dart';
+
+Future<void> switchToPassword(WidgetTester tester) async {
+  await tester.tap(find.text('使用密码登录'));
+  await tester.pump();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -37,9 +44,9 @@ void main() {
     );
     await tester.pump();
 
-    final guestButton = find.widgetWithText(OutlinedButton, '先逛功能');
+    final guestButton = find.widgetWithText(TextButton, '先逛功能');
     await tester.ensureVisible(guestButton);
-    final button = tester.widget<OutlinedButton>(guestButton);
+    final button = tester.widget<TextButton>(guestButton);
     button.onPressed!();
     button.onPressed!();
     await tester.pumpAndSettle();
@@ -66,9 +73,9 @@ void main() {
     );
     await tester.pump();
 
-    final guestButton = find.widgetWithText(OutlinedButton, '先逛功能');
+    final guestButton = find.widgetWithText(TextButton, '先逛功能');
     await tester.ensureVisible(guestButton);
-    final button = tester.widget<OutlinedButton>(guestButton);
+    final button = tester.widget<TextButton>(guestButton);
     button.onPressed!();
     await tester.pump();
     await tester.pump();
@@ -113,6 +120,8 @@ void main() {
         ),
       );
       await tester.pump();
+
+      await switchToPassword(tester);
 
       await tester.enterText(find.byType(TextField).first, '20260001');
       await tester.enterText(find.byType(TextField).last, 'secret-pass');
@@ -162,6 +171,8 @@ void main() {
     );
     await tester.pump();
 
+    await switchToPassword(tester);
+
     await tester.enterText(find.byType(TextField).first, '20260001');
     await tester.enterText(find.byType(TextField).last, 'secret-pass');
     await tester.pump();
@@ -198,6 +209,8 @@ void main() {
     );
     await tester.pump();
 
+    await switchToPassword(tester);
+
     await tester.enterText(find.byType(TextField).first, 'typed-user');
     await tester.enterText(find.byType(TextField).last, 'typed-pass');
     await tester.pump();
@@ -230,6 +243,8 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('读取已保存账号失败，请手动输入'), findsOneWidget);
+
+    await switchToPassword(tester);
 
     await tester.enterText(find.byType(TextField).first, 'typed-user');
     await tester.enterText(find.byType(TextField).last, 'typed-pass');
@@ -281,6 +296,8 @@ void main() {
     await tester.tap(find.text('open login'));
     await tester.pumpAndSettle();
 
+    await switchToPassword(tester);
+
     await tester.enterText(find.byType(TextField).first, '20260001');
     await tester.enterText(find.byType(TextField).last, 'secret-pass');
     await tester.pump();
@@ -301,5 +318,62 @@ void main() {
 
     expect(find.text('先逛功能'), findsNothing);
     expect(find.text('暂不登录'), findsNothing);
+  });
+
+  testWidgets('password login needMfa switches to SMS with inline warning', (
+    tester,
+  ) async {
+    var loginCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UnifiedLoginPage(
+          loginWithHutDetailed: ({required username, required password}) async {
+            loginCalls++;
+            return const HutAuthResult(
+              success: true,
+              needMfa: true,
+              message: '需要二次验证',
+            );
+          },
+          smsCommand: HutSmsLoginCommand(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await switchToPassword(tester);
+
+    await tester.enterText(find.byType(TextField).first, '20260001');
+    await tester.enterText(find.byType(TextField).last, 'secret-pass');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '登录并继续'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(loginCalls, 1);
+    expect(find.text('需要二次验证'), findsOneWidget);
+    // 自动切回验证码模式：手机号框可见
+    expect(find.byType(TextField), findsOneWidget);
+  });
+
+  testWidgets('mode switch link toggles between sms and password', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UnifiedLoginPage(
+          smsCommand: HutSmsLoginCommand(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 默认验证码 → 切密码
+    await switchToPassword(tester);
+    expect(find.byType(TextField), findsNWidgets(2));
+    expect(find.text('返回验证码登录'), findsOneWidget);
+
+    // 切回验证码
+    await tester.tap(find.text('返回验证码登录'));
+    await tester.pump();
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('使用密码登录'), findsOneWidget);
   });
 }
