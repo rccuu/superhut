@@ -492,6 +492,9 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
           password: password,
         );
         if (detailed.needMfa) {
+          if (!mounted) {
+            return;
+          }
           _setInlineFeedback(
             detailed.message.isNotEmpty
                 ? detailed.message
