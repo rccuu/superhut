@@ -11,9 +11,36 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..347de3918e66fecd12b58dea6ca3baf0e0d23ddc` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
+## v1.6.6
+
+## 2026-08-11 · feat(login): HUT SMS passwordless login
+- 版本号提升到 `1.6.6+19`，用于发布智慧工大短信验证码免密登录能力。
+- 新增 `HUTClient.smsLogin` 接口（`lib/utils/hut_user_api/sms_login.dart`），向 `https://sso.hut.edu.cn` 发送短信验证码完成登录，返回 `idToken` 与 `refreshToken`。
+- 登录页新增短信模式切换开关（`lib/login/login_page.dart`），支持在密码登录与短信验证码登录之间切换。
+- 短信登录页（`lib/login/login_page.dart`）集成手机号输入、获取验证码倒计时、验证码输入与提交完整流程；倒计时由 `_SmsCountdownState` 管理，页面销毁时自动停止计时器。
+- 统一登录页（`lib/login/unified_login_page.dart`）新增短信登录入口，与密码登录共用同一页面布局，通过枚举切换模式。
+- 短信登录后的 token 存储采用新路径：`data.idToken` 直接加密写入 `AppAuthStorage` 的 `hutToken` 字段，跳过 `federatedBinding` 接口（该接口仅用于第三方登录绑定，短信登录不应调用）。
+- `checkTokenValidity` 对短信登录签发的 token 不再走在线校验，直接信任本地状态（`hasAuthData`），因官方客户端也不对短信 token 做在线过期检查。
+- 登录后登录页在 `clearStaleHutCreds` 中清理可能残留的旧版 hut 凭据（密码登录留下的 token/refreshToken/deviceId），避免混合状态干扰；同时新增 `checkTokenValidity` 对本地 hutToken 的 JWT exp 声明做解码校验，过期则标记为未登录。
+- `AppAuthStorage` 新增 `hutMobile` 持久化字段，用于短信登录时自动回填手机号。
+- 包构建流程新增 TrollStore 无签名 IPA 输出（`.tipa` 后缀），通过 `--dart-define=TROLLSTORE=true` 切换。
+- 本轮功能已通过全量测试与静态检查：`flutter test`、`flutter analyze`。
+- 关键文件：`pubspec.yaml`、`changelog.md`、`lib/utils/hut_user_api/`、`lib/login/login_page.dart`、`lib/login/unified_login_page.dart`、`lib/core/services/app_auth_storage.dart`
+
+## v1.6.5
+
+## 2026-07-28 · feat(coursetable): choose semester before sync
+- 版本号提升到 `1.6.5+18`，用于发布课表学期选择器与课程 widget 学期结束空状态。
+- 课表页面新增学期选择器（`lib/home/coursetable/`），在同步课表前允许用户选择目标学期，不再只能拉取当前学期。
+- 成绩查询页修复学期探测逻辑：`ScoreApi` 不再只取第一个返回的学期，而是遍历所有返回的学期数据，确保不遗漏。
+- 课程 widget（Android / iOS）新增学期结课空状态：当所有课程均已结束时，widget 显示"本学期课程已结束"占位提示，而非空白或过期数据。
+- 关键文件：`pubspec.yaml`、`changelog.md`、`lib/home/coursetable/`、`lib/pages/score/scorepage.dart`、`lib/widgets/`
+
+
 ## v1.6.4
 
 ## 2026-07-10  · feat(score): semester filter cache with instant restore
+
 - 版本号提升到 `1.6.4+17`，用于发布成绩查询学期筛选的本地缓存能力。
 - 新增 `ScoreSemesterCache` 服务（基于 SharedPreferences，按学号隔离），缓存上次探测后的学期列表、上一次选中的学期、当前学期标记以及总学分/绩点等摘要指标；成绩条目不落本地，每次仍从云端对应学期拉取。
 - 成绩页打开时先读缓存，立即用上次的学期列表、选中状态和摘要指标渲染顶部卡片与学期选择器，随后立即向云端拉取对应学期的成绩列表填充正文，不再出现"暂无成绩记录"的空白态。
