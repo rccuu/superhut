@@ -37,6 +37,7 @@ migrate_working_dir/
 /ios/Pods/
 /android/.gradle/
 /android/.kotlin/
+/android/build/reports/
 
 # Symbolication related
 app.*.symbols

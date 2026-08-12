@@ -3,7 +3,6 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../core/services/app_logger.dart';
 import '../core/ui/app_loading_indicator.dart';
-import '../core/ui/app_snack_bar.dart';
 import '../core/ui/color_scheme_ext.dart';
 
 const String _casLoginTokenMarker = '#/casLogin?token=';
@@ -413,34 +412,6 @@ class _HutLoginSystemState extends State<HutLoginSystem> {
           ),
         ],
       ),
-    );
-  }
-}
-
-// 使用示例：
-
-class HutLoginExample extends StatelessWidget {
-  final String idToken;
-
-  const HutLoginExample({super.key, required this.idToken});
-
-  @override
-  Widget build(BuildContext context) {
-    return HutLoginSystem(
-      initialIdToken: idToken,
-      onTokenAndCookieExtracted: (result) {
-        String token = result['token'] ?? '';
-        String myClientTicket = result['my_client_ticket'] ?? '';
-        AppLogger.debug('提取到的token: $token');
-        AppLogger.debug('提取到的my_client_ticket: $myClientTicket');
-        showAppSnackBar(
-          context,
-          message: '登录成功',
-          type: AppSnackBarType.success,
-        );
-        Navigator.of(context).pop(result); // 返回包含token和cookie的Map并关闭页面
-      },
-      onError: (errorMessage) {},
     );
   }
 }

@@ -3,8 +3,6 @@ import 'dart:typed_data';
 
 import 'package:encrypt/encrypt.dart' as encrypt;
 
-import '../core/services/app_logger.dart';
-
 // 密钥
 final String sw = "qzkj1kjghd=876&*";
 final RegExp _unsafeObjectKeyPattern = RegExp(r'[^\w$]');
@@ -74,17 +72,4 @@ String encryptPassword(String password, String key) {
 
   // 修正这里：添加.bytes获取实际字节
   return base64Encode(encrypted.bytes);
-}
-
-void main() {
-  // 示例密码
-  final password = "cc80212562";
-
-  // 加密密码
-  final encryptedPassword = encryptPassword(password, sw);
-  AppLogger.debug('加密后的密码：  $encryptedPassword');
-
-  // 二次Base64编码
-  final pwd = base64Encode(utf8.encode(encryptedPassword));
-  AppLogger.debug('加密并Base64 编码后的密码：  $pwd');
 }

@@ -305,35 +305,6 @@ class _HutCasTokenLoadState {
   final String? errorMessage;
 }
 
-// 使用示例
-class HutCasLoginExample extends StatelessWidget {
-  const HutCasLoginExample({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ElevatedButton(
-      onPressed: () async {
-        final result = await Navigator.of(context).push<Map<String, String>>(
-          MaterialPageRoute(
-            builder:
-                (context) => const HutCasLoginPage(
-                  tokenKey: 'token',
-                  cookieKey: 'my_client_ticket',
-                ),
-          ),
-        );
-        if (result != null) {
-          final token = result['token'] ?? '';
-          final myClientTicket = result['my_client_ticket'] ?? '';
-          AppLogger.debug('CAS token acquired: $token');
-          AppLogger.debug('CAS cookie acquired: $myClientTicket');
-        }
-      },
-      child: const Text('打开教务系统登录'),
-    );
-  }
-}
-
 // 另一种使用方式 - 获取token和cookie不返回
 class HutCasTokenRetriever {
   static Future<Map<String, String>?>? _jwxtTokenAndCookieLoad;

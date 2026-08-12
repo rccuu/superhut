@@ -6492,7 +6492,7 @@ void main() {
       r'String U\(dynamic data\) \{[\s\S]*?\n\}\n\n// 加密函数',
     ).firstMatch(pwdSource)?.group(0);
     final encryptPasswordMethod = RegExp(
-      r'String encryptPassword\(String password, String key\) \{[\s\S]*?\n\}\n\nvoid main',
+      r'String encryptPassword\(String password, String key\) \{[\s\S]*?\n\}(?=\s*$)',
     ).firstMatch(pwdSource)?.group(0);
 
     expect(
