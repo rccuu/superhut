@@ -232,6 +232,29 @@ class AppAuthStorage {
     return prefs.getString('hutAuthMethod') ?? '';
   }
 
+  /// Persists the mycas account id (`sub` claim of the SMS JWT) used by
+  /// [checkTokenValidity] to run `userOnlineDetect` for SMS sessions. An empty
+  /// [account] removes the key.
+  Future<void> saveHutAccount(String account) async {
+    final prefs = await _prefs;
+    final trimmed = account.trim();
+    if (trimmed.isEmpty) {
+      await prefs.remove('hutAccount');
+      return;
+    }
+    await prefs.setString('hutAccount', trimmed);
+  }
+
+  Future<String> readHutAccount() async {
+    final prefs = await _prefs;
+    return prefs.getString('hutAccount') ?? '';
+  }
+
+  Future<void> clearHutAccount() async {
+    final prefs = await _prefs;
+    await prefs.remove('hutAccount');
+  }
+
   /// Clears only the password credentials (`hutUsername`/`hutPassword`), keeping
   /// the HUT session (token, mobile, deviceId) intact.
   ///
@@ -252,6 +275,7 @@ class AppAuthStorage {
     await prefs.remove('hutToken');
     await prefs.remove('hutRefreshToken');
     await prefs.remove('hutAuthMethod');
+    await prefs.remove('hutAccount');
     await prefs.setBool('hutIsLogin', false);
   }
 
@@ -281,6 +305,7 @@ class AppAuthStorage {
       'deviceId',
       'loginType',
       'hutAuthMethod',
+      'hutAccount',
       'hutIsLogin',
       'name',
       'entranceYear',
@@ -319,6 +344,7 @@ class AppAuthStorage {
     await prefs.remove('hutTicket');
     await prefs.remove('deviceId');
     await prefs.remove('hutAuthMethod');
+    await prefs.remove('hutAccount');
     await prefs.remove('hutIsLogin');
     await _deleteSecurePassword(_hutPasswordKey, label: 'HUT');
   }

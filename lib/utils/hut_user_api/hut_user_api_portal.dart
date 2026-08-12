@@ -2,7 +2,21 @@ part of '../hut_user_api.dart';
 
 mixin _HutPortalMixin on _HutUserApiCore {
   Future<bool> _ensureHutPortalLogin() async {
-    final isLogin = await checkTokenValidity();
+    bool isLogin;
+    try {
+      isLogin = await checkTokenValidity();
+    } catch (error, stackTrace) {
+      // checkTokenValidity propagates transport failures by design (renewal
+      // must not clear state on a transient flake). For the portal list a
+      // network hiccup is not "logged out" either — degrade to the stored
+      // re-login path below, or the empty list for SMS users.
+      AppLogger.error(
+        'HUT portal login validity check failed',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      isLogin = false;
+    }
     if (isLogin) {
       return true;
     }

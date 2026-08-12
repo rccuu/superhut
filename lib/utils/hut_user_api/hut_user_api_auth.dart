@@ -196,6 +196,10 @@ mixin _HutAuthMixin on _HutUserApiCore {
       ticket: ticket,
     );
     await _storage.saveHutMobile(mobile);
+    // Persist the mycas account id (JWT `sub`) so checkTokenValidity can run
+    // userOnlineDetect for this SMS session without a stored username — mirror
+    // the official client, which decodes only the `sub` claim for that check.
+    await _storage.saveHutAccount(extractHutJwtSubject(idToken) ?? '');
     // Clear any leftover password credentials from a prior password login so
     // checkTokenValidity/refreshToken don't reuse a stale username with the
     // fresh SMS token (which would falsely invalidate the session on account
@@ -353,64 +357,80 @@ mixin _HutAuthMixin on _HutUserApiCore {
               ? kHutAuthMethodPassword
               : kHutAuthMethodSms);
 
-    if (resolvedMethod == kHutAuthMethodSms) {
-      // SMS sessions carry a JWT idToken; validate its format + exp locally
-      // instead of permanently trusting any non-empty token. An expired,
-      // revoked, or corrupted token now returns false so the caller can
-      // refresh or re-authenticate. No network round-trip: userOnlineDetect
-      // needs a username SMS sessions don't have.
-      return !isHutJwtExpired(token);
-    }
-
-    // Password sessions: keep the server-side userOnlineDetect check.
-    if (username.trim().isEmpty) {
+    // Fail-fast local gate: an expired or malformed SMS JWT is invalid before
+    // it ever reaches the server.
+    if (resolvedMethod == kHutAuthMethodSms && isHutJwtExpired(token)) {
       return false;
     }
 
-    try {
-      final deviceId = await _storage.readHutDeviceId();
-      final url =
-          '/token/login/userOnlineDetect?appId=com.supwisdom.hut'
-          '&deviceId=${deviceId.isEmpty ? 'null' : deviceId}&username=${Uri.encodeQueryComponent(username)}';
-      final dio = _createConfiguredDio(
-        baseUrl: _kMyCasBaseUrl,
-        headers: {
-          'User-Agent': _kHutLoginUserAgent,
-          'Accept': '*/*',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'X-Id-Token': token,
-          // Official YYRequestManger injects X-Device-Infos on every request.
-          'X-Device-Infos':
-              'packagename=$_kHutAppId;version=$_kHutAppVersion;system=iOS',
-        },
-      );
-      final response = await dio.post(url, data: {});
-      final data = response.data;
-      return data is Map && data['code']?.toString() == '0';
-    } catch (error, stackTrace) {
-      AppLogger.error(
-        'HUT token validation failed',
-        error: error,
-        stackTrace: stackTrace,
-      );
+    // The account mycas's userOnlineDetect validates against. Password
+    // sessions use the persisted username; SMS sessions persist `hutAccount`
+    // (the JWT `sub`, mirroring the official client which decodes only that
+    // claim for this check). Migrate a legacy SMS session that predates
+    // hutAccount by extracting sub from the token itself.
+    var account = resolvedMethod == kHutAuthMethodSms
+        ? await _storage.readHutAccount()
+        : username;
+    if (resolvedMethod == kHutAuthMethodSms && account.trim().isEmpty) {
+      account = extractHutJwtSubject(token) ?? '';
+      if (account.isNotEmpty) {
+        await _storage.saveHutAccount(account);
+      }
+    }
+    if (account.trim().isEmpty) {
       return false;
     }
+
+    final deviceId = await _storage.readHutDeviceId();
+    final validator = _onlineTokenValidator;
+    if (validator != null) {
+      return validator(
+        token: token,
+        account: account.trim(),
+        deviceId: deviceId.isEmpty ? 'null' : deviceId,
+      );
+    }
+
+    // Server-side verdict. No try/catch here on purpose: a transport failure
+    // must propagate so refreshToken keeps the session (transient network ≠
+    // logged out) and the caller's own error handling surfaces it.
+    final url =
+        '/token/login/userOnlineDetect?appId=com.supwisdom.hut'
+        '&deviceId=${deviceId.isEmpty ? 'null' : deviceId}'
+        '&username=${Uri.encodeQueryComponent(account.trim())}';
+    final dio = _createConfiguredDio(
+      baseUrl: _kMyCasBaseUrl,
+      headers: {
+        'User-Agent': _kHutLoginUserAgent,
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'X-Id-Token': token,
+        // Official YYRequestManger injects X-Device-Infos on every request.
+        'X-Device-Infos':
+            'packagename=$_kHutAppId;version=$_kHutAppVersion;system=iOS',
+      },
+    );
+    final response = await dio.post(url, data: {});
+    final data = response.data;
+    return data is Map && data['code']?.toString() == '0';
   }
 
   Future<bool> refreshToken() async {
     final userName = await _storage.readHutUsername();
     final orgPassword = await _storage.readHutPassword();
 
-    // SMS/passwordless sessions have no stored password to re-login with.
-    // The SMS token is long-lived (official research shows it never expires);
-    // just re-validate the JWT and only clear session state when it is
-    // corrupted/empty so callers surface re-authentication. Return true when
-    // the session is still usable.
+    // SMS/passwordless sessions have no stored password to re-login with. The
+    // SMS token is long-lived (official research shows it never expires), so
+    // there is no refresh network path. Unify with checkTokenValidity: local
+    // JWT expiry is a fail-fast, then an online userOnlineDetect verdict
+    // decides. Only a definite invalid verdict clears the session — a network
+    // failure propagates from checkTokenValidity so a transient blip doesn't
+    // sign the user out.
     if (userName.isEmpty || orgPassword.isEmpty) {
       final authMethod = await _storage.readHutAuthMethod();
       if (authMethod == kHutAuthMethodSms) {
-        final token = await getToken();
-        if (isHutJwtExpired(token)) {
+        final isValid = await checkTokenValidity();
+        if (!isValid) {
           await _storage.clearHutSessionState();
           _token['idToken'] = '';
           return false;

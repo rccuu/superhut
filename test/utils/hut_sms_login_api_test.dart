@@ -53,7 +53,30 @@ void main() {
     expect(await storage.readHutMobile(), '13800138000');
     // 验证码登录不写密码凭据
     expect(await storage.readHutUsername(), isEmpty);
+    // Non-JWT idToken carries no `sub` → no hutAccount is persisted.
+    expect(await storage.readHutAccount(), isEmpty);
   });
+
+  test(
+    'completeSmsLoginFromResponseData persists hutAccount from the JWT sub',
+    () async {
+      final futureExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
+      final token = _buildJwt({'sub': '20260001', 'exp': futureExp});
+      final api = HutUserApi();
+      final result = await api.completeSmsLoginFromResponseData(
+        responseData: {
+          'code': 0,
+          'data': {'idToken': token, 'refreshToken': 'ref', 'ticket': ''},
+        },
+        mobile: '13800138000',
+        deviceId: 'abcdefghijklmnopqrstuvwx',
+      );
+
+      expect(result.success, isTrue);
+      expect(await storage.readHutToken(), token);
+      expect(await storage.readHutAccount(), '20260001');
+    },
+  );
 
   test(
     'completeSmsLoginFromResponseData stores a JWT idToken verbatim, not decoded',
@@ -91,25 +114,74 @@ void main() {
   });
 
   test(
-    'checkTokenValidity trusts a fresh SMS token without calling userOnlineDetect',
+    'checkTokenValidity asks the online validator for a fresh SMS token using hutAccount',
     () async {
-      // SMS/passwordless sessions persist no hutUsername. The official client
-      // does not re-validate a freshly minted SMS token via userOnlineDetect,
-      // and doing so made the CAS bootstrap throw "智慧工大登录状态已失效" right
-      // after a successful SMS login. A fresh token (valid JWT exp) must be
-      // trusted locally — this must not hit the network, which would fail the
-      // test with no overrides if it did.
-      final api = HutUserApi();
-      final freshExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
+      // SMS sessions persist hutAccount (the JWT `sub`) so userOnlineDetect has
+      // an account to validate against — mirroring the official client. A fresh,
+      // unexpired token clears the local fail-fast gate and reaches the online
+      // validator with the persisted account.
+      final futureExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
+      final token = _buildJwt({'sub': '20260001', 'exp': futureExp});
       await storage.saveHutSession(
-        token: _buildJwt({'exp': freshExp}),
+        token: token,
         refreshToken: '',
-        deviceId: 'abcdefghijklmnopqrstuvwx',
+        deviceId: 'sms-device',
       );
-      await storage.saveHutMobile('13800138000');
       await storage.saveHutAuthMethod(kHutAuthMethodSms);
+      await storage.saveHutAccount('20260001');
+
+      String? seenToken;
+      String? seenAccount;
+      String? seenDeviceId;
+      final api = HutUserApi(
+        onlineTokenValidator: ({
+          required token,
+          required account,
+          required deviceId,
+        }) async {
+          seenToken = token;
+          seenAccount = account;
+          seenDeviceId = deviceId;
+          return true;
+        },
+      );
 
       expect(await api.checkTokenValidity(), isTrue);
+      expect(seenToken, token);
+      expect(seenAccount, '20260001');
+      expect(seenDeviceId, 'sms-device');
+    },
+  );
+
+  test(
+    'checkTokenValidity migrates a legacy SMS session by extracting sub',
+    () async {
+      // A session persisted before hutAccount/hutAuthMethod existed: no stored
+      // account, no marker, no username — inferred SMS, and hutAccount is
+      // bootstrapped from the JWT `sub` before the online check.
+      final futureExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
+      final token = _buildJwt({'sub': 'legacy-account', 'exp': futureExp});
+      await storage.saveHutSession(
+        token: token,
+        refreshToken: '',
+        deviceId: 'legacy-device',
+      );
+
+      String? seenAccount;
+      final api = HutUserApi(
+        onlineTokenValidator: ({
+          required token,
+          required account,
+          required deviceId,
+        }) async {
+          seenAccount = account;
+          return false;
+        },
+      );
+
+      expect(await api.checkTokenValidity(), isFalse);
+      expect(seenAccount, 'legacy-account');
+      expect(await storage.readHutAccount(), 'legacy-account');
     },
   );
 
@@ -171,15 +243,23 @@ void main() {
 
   group('refreshToken SMS branch', () {
     test('returns true and keeps state for a valid SMS token', () async {
-      final api = HutUserApi();
-      final freshExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
+      final futureExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
+      final token = _buildJwt({'sub': '20260001', 'exp': futureExp});
       await storage.saveHutSession(
-        token: _buildJwt({'exp': freshExp}),
+        token: token,
         refreshToken: 'ref',
         deviceId: 'abcdefghijklmnopqrstuvwx',
       );
       await storage.saveHutMobile('13800138000');
       await storage.saveHutAuthMethod(kHutAuthMethodSms);
+
+      final api = HutUserApi(
+        onlineTokenValidator: ({
+          required token,
+          required account,
+          required deviceId,
+        }) async => true,
+      );
 
       expect(await api.refreshToken(), isTrue);
       expect(await storage.readHutToken(), isNotEmpty);

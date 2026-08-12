@@ -226,28 +226,6 @@ void main() {
     expect(normalizeHutMobile(' 138 0013 8000 '), '13800138000');
   });
 
-  test(
-    'resolveHutOnlineDetectUsername falls back to mobile when username empty',
-    () {
-      // SMS sessions never save hutUsername/hutPassword. onlineDetect rejects an
-      // empty username with code -1 "请求不合法（username error）" which made
-      // checkTokenValidity return false even for a freshly minted SMS idToken —
-      // the root cause of the post-login "智慧工大登录状态已失效" screen.
-      expect(resolveHutOnlineDetectUsername('', '13800138000'), '13800138000');
-    },
-  );
-
-  test('resolveHutOnlineDetectUsername prefers stored username', () {
-    expect(
-      resolveHutOnlineDetectUsername('2023xxxx', '13800138000'),
-      '2023xxxx',
-    );
-  });
-
-  test('resolveHutOnlineDetectUsername returns empty when both missing', () {
-    expect(resolveHutOnlineDetectUsername('', ''), '');
-  });
-
   group('isHutJwtExpired', () {
     test('returns false for a JWT whose exp is in the future', () {
       final futureExp = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + 3600;
@@ -289,6 +267,32 @@ void main() {
     test('returns true when exp is non-numeric', () {
       final token = _buildJwt({'exp': 'soon'});
       expect(isHutJwtExpired(token), isTrue);
+    });
+  });
+
+  group('extractHutJwtSubject', () {
+    test('returns the trimmed account from sub', () {
+      final token = _buildJwt({'sub': ' 20260001 '});
+      expect(extractHutJwtSubject(token), '20260001');
+    });
+
+    test('returns null when sub is absent', () {
+      final token = _buildJwt({'exp': 9999999999});
+      expect(extractHutJwtSubject(token), isNull);
+    });
+
+    test('returns null when sub is empty', () {
+      final token = _buildJwt({'sub': '   '});
+      expect(extractHutJwtSubject(token), isNull);
+    });
+
+    test('returns null for a non-JWT string', () {
+      expect(extractHutJwtSubject('not-a-jwt'), isNull);
+      expect(extractHutJwtSubject(''), isNull);
+    });
+
+    test('returns null when the payload is not valid base64/JSON', () {
+      expect(extractHutJwtSubject('header.!!!.sig'), isNull);
     });
   });
 }

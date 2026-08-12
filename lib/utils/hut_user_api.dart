@@ -65,25 +65,6 @@ String buildHutSmsLoginPath({
 
 String normalizeHutMobile(String mobile) => mobile.trim().replaceAll(' ', '');
 
-/// Chooses the `username` query value for `userOnlineDetect`.
-///
-/// Password/SMS HUT sessions are both identified by a token-bearing session,
-/// but only password login persists `hutUsername`. SMS login persists
-/// `hutMobile` instead. mycas rejects an empty username with
-/// `{"code":-1,"message":"请求不合法","error":{"error":"请求不合法（username error）"}}`,
-/// which made [checkTokenValidity] falsely invalidate an otherwise-valid fresh
-/// SMS idToken — the root cause of the post-login
-/// "智慧工大登录状态已失效，请重新登录后再试" screen.
-///
-/// Falls back to the bound mobile so SMS sessions keep a non-empty username.
-String resolveHutOnlineDetectUsername(String username, String mobile) {
-  final user = username.trim();
-  if (user.isNotEmpty) {
-    return user;
-  }
-  return mobile.trim();
-}
-
 /// Persisted auth method marker (SharedPreferences key `hutAuthMethod`).
 ///
 /// Distinguishes password vs SMS sessions explicitly so [checkTokenValidity]
@@ -135,6 +116,30 @@ bool isHutJwtExpired(String token, {Duration clockSkew = Duration.zero}) {
   final expMillis = (expSeconds * 1000).toInt();
   final nowMillis = DateTime.now().millisecondsSinceEpoch;
   return expMillis <= nowMillis + clockSkew.inMilliseconds;
+}
+
+/// Extracts the stable account identifier used by mycas from a JWT `sub`.
+///
+/// The official app stores the raw SMS token unchanged, then decodes only its
+/// claims and persists `sub` separately so `userOnlineDetect` has an account
+/// to validate against. Returns `null` when [token] is not a 3-segment JWT
+/// with a non-empty `sub` claim.
+String? extractHutJwtSubject(String token) {
+  final parts = token.split('.');
+  if (parts.length != 3) {
+    return null;
+  }
+  try {
+    final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+    final decoded = jsonDecode(payload);
+    if (decoded is! Map) {
+      return null;
+    }
+    final subject = decoded['sub']?.toString().trim() ?? '';
+    return subject.isEmpty ? null : subject;
+  } catch (_) {
+    return null;
+  }
 }
 
 bool isPlausibleHutMobile(String mobile) {
@@ -399,10 +404,20 @@ HutAuthResult hutAuthResultFromTransportError({
   return const HutAuthResult(success: false, message: '网络异常，请稍后重试');
 }
 
+/// Verdict of an online mycas `userOnlineDetect` check, injected for tests.
+typedef HutOnlineTokenValidator =
+    Future<bool> Function({
+      required String token,
+      required String account,
+      required String deviceId,
+    });
+
 abstract class _HutUserApiCore {
   AppAuthStorage get _storage;
   RequestManager get _request;
   Map<String, dynamic> get _token;
+
+  HutOnlineTokenValidator? get _onlineTokenValidator;
 
   Future<bool> userLogin({required String username, required String password});
 
@@ -419,6 +434,12 @@ abstract class _HutUserApiCore {
 
 class HutUserApi extends _HutUserApiCore
     with _HutAuthMixin, _HutSessionMixin, _HutWaterMixin, _HutPortalMixin {
+  HutUserApi({HutOnlineTokenValidator? onlineTokenValidator})
+    : _onlineTokenValidator = onlineTokenValidator;
+
+  @override
+  final HutOnlineTokenValidator? _onlineTokenValidator;
+
   @override
   final AppAuthStorage _storage = AppAuthStorage.instance;
 
