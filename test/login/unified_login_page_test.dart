@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/login/hut/sms_command.dart';
@@ -10,7 +11,7 @@ import 'package:superhut/utils/hut_user_api.dart';
 import '../support/secure_storage_mock.dart';
 
 Future<void> switchToPassword(WidgetTester tester) async {
-  await tester.tap(find.text('使用密码登录'));
+  await tester.tap(find.text('密码登录'));
   await tester.pump();
 }
 
@@ -23,6 +24,29 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     SecureStorageMock.reset();
+  });
+
+  testWidgets('simplified layout keeps only the title and a clear mode switch', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: UnifiedLoginPage()),
+    );
+    await tester.pump();
+
+    expect(find.text('工大盒子'), findsOneWidget);
+    expect(
+      find.text('登录后可按需同步课表；如果你只是想用慧生活798，也可以先不登录。'),
+      findsNothing,
+    );
+    expect(find.text('支持智慧工大和教务系统账号登录'), findsNothing);
+    expect(find.text('登录'), findsNothing);
+    expect(find.byType(SvgPicture), findsNothing);
+
+    // 默认验证码登录，且两种方式都明确标注
+    expect(find.widgetWithText(FilledButton, '获取验证码'), findsOneWidget);
+    expect(find.text('验证码登录'), findsOneWidget);
+    expect(find.text('密码登录'), findsOneWidget);
   });
 
   testWidgets('guest continuation ignores duplicate taps while navigating', (
@@ -365,15 +389,15 @@ void main() {
     );
     await tester.pump();
 
-    // 默认验证码 → 切密码
+    // 默认验证码 → 切密码：分段按钮明确标出两种方式
     await switchToPassword(tester);
     expect(find.byType(TextField), findsNWidgets(2));
-    expect(find.text('返回验证码登录'), findsOneWidget);
+    expect(find.text('验证码登录'), findsOneWidget);
+    expect(find.text('密码登录'), findsOneWidget);
 
     // 切回验证码
-    await tester.tap(find.text('返回验证码登录'));
+    await tester.tap(find.text('验证码登录'));
     await tester.pump();
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('使用密码登录'), findsOneWidget);
   });
 }

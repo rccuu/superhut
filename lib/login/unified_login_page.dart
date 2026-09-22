@@ -1,9 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:superhut/core/services/app_logger.dart';
-import 'package:superhut/generated/assets.dart';
 import 'package:superhut/home/home_route.dart';
 import 'package:superhut/login/hut/sms_command.dart';
 import 'package:superhut/login/hut_cas_login_page.dart';
@@ -333,24 +331,32 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
     }
   }
 
-  Widget _buildModeSwitchLink() {
+  Widget _buildModeSwitch() {
     if (!_smsModeEnabled) {
       return const SizedBox.shrink();
     }
-    final isPassword = _mode == _UnifiedLoginMode.password;
-    return Center(
-      child: TextButton(
-        onPressed: _isLoading
-            ? null
-            : () {
-                _clearInlineFeedback();
-                setState(() {
-                  _mode = isPassword
-                      ? _UnifiedLoginMode.sms
-                      : _UnifiedLoginMode.password;
-                });
-              },
-        child: Text(isPassword ? '返回验证码登录' : '使用密码登录'),
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<_UnifiedLoginMode>(
+        showSelectedIcon: false,
+        segments: const [
+          ButtonSegment(
+            value: _UnifiedLoginMode.sms,
+            label: Text('验证码登录'),
+          ),
+          ButtonSegment(
+            value: _UnifiedLoginMode.password,
+            label: Text('密码登录'),
+          ),
+        ],
+        selected: {_mode},
+        onSelectionChanged:
+            _isLoading
+                ? null
+                : (selection) {
+                  _clearInlineFeedback();
+                  setState(() => _mode = selection.first);
+                },
       ),
     );
   }
@@ -778,23 +784,11 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '工大盒子',
-                            style: theme.textTheme.headlineLarge?.copyWith(
-                              letterSpacing: -1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '登录后可按需同步课表；如果你只是想用慧生活798，也可以先不登录。',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
+                      child: Text(
+                        '工大盒子',
+                        style: theme.textTheme.headlineLarge?.copyWith(
+                          letterSpacing: -1.0,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -807,42 +801,8 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '登录',
-                                      style: theme.textTheme.headlineMedium,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '支持智慧工大和教务系统账号登录',
-                                      style: theme.textTheme.bodyMedium
-                                          ?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              useLiteLayout
-                                  ? GlassIconBadge(
-                                    icon: Icons.login_rounded,
-                                    tint: colorScheme.primary,
-                                    size: 56,
-                                  )
-                                  : SvgPicture.asset(
-                                    Assets.illustrationLogin,
-                                    width: 92,
-                                  ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
+                          _buildModeSwitch(),
+                          const SizedBox(height: 18),
                           _buildLoginFields(theme),
                           const SizedBox(height: 18),
                           ValueListenableBuilder<bool>(
@@ -886,15 +846,6 @@ class _UnifiedLoginPageState extends State<UnifiedLoginPage> {
                                 ],
                               );
                             },
-                          ),
-                          const SizedBox(height: 12),
-                          _buildModeSwitchLink(),
-                          const SizedBox(height: 14),
-                          Text(
-                            '如智慧工大不可用，将自动切换到教务系统官方页面。课表同步改为在课表页手动触发。',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
                           ),
                         ],
                       ),
