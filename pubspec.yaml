@@ -41,7 +41,6 @@ dependencies:
   webview_flutter_wkwebview: ^3.18.2
   google_nav_bar: ^5.0.7
   ionicons: ^0.2.2
-  responsive_framework: ^1.5.1
   shared_preferences: ^2.5.2
   dio: ^5.8.0+1
   enhanced_future_builder: ^2.0.0

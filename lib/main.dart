@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
-import 'package:responsive_framework/responsive_framework.dart';
 import 'package:superhut/pages/score/jump_to_score_page.dart';
 import 'core/ui/app_page_route.dart';
 import 'core/ui/app_loading_indicator.dart';
@@ -511,16 +510,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 ? 0
                 : 1,
       ),
-      builder: (context, child) {
-        return ResponsiveBreakpoints.builder(
-          breakpoints: [
-            const Breakpoint(start: 0, end: 800, name: MOBILE),
-            const Breakpoint(start: 801, end: 1920, name: DESKTOP),
-            const Breakpoint(start: 1921, end: double.infinity, name: '4K'),
-          ],
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
     );
   }
 }
