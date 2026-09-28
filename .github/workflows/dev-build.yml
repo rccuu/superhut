@@ -1,0 +1,88 @@
+name: Dev Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "要构建的安装包类型"
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - android
+          - ios
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-build-${{ github.ref }}
+  cancel-in-progress: true
+
+run-name: "Dev Build · ${{ inputs.platform }} · ${{ github.ref_name }}"
+
+jobs:
+  android:
+    name: "Android APK (arm64-v8a)"
+    if: inputs.platform == 'both' || inputs.platform == 'android'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.9"
+          channel: stable
+
+      - name: Build Android APK (arm64-v8a)
+        run: bash scripts/build_android_release.sh
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: superhut-android-apk
+          path: releases/superhut-*-arm64-v8a-*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    name: "iOS IPA (unsigned + TrollStore)"
+    if: inputs.platform == 'both' || inputs.platform == 'ios'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.9"
+          channel: stable
+
+      - name: Build iOS unsigned IPA
+        run: bash scripts/build_ios_quick.sh
+
+      - name: Install ldid
+        run: |
+          if ! command -v ldid >/dev/null 2>&1; then
+            brew install ldid
+          fi
+
+      - name: Build iOS TrollStore TIPA
+        run: |
+          UNSIGNED_IPA="$(ls -t releases/superhut-*-unsigned-*.ipa | head -n 1)"
+          bash scripts/build_ios_trollstore.sh "$UNSIGNED_IPA"
+
+      - name: Upload IPA and TIPA artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: superhut-ios-packages
+          path: |
+            releases/superhut-*-unsigned-*.ipa
+            releases/superhut-*-trollstore-*.tipa
+          if-no-files-found: error
+          retention-days: 30
