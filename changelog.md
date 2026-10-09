@@ -11,6 +11,24 @@
 - 整理口径：按 `git log --first-parent --reverse a123ed99fda436af7eef7f1ce7ca8f55750b60c5^..347de3918e66fecd12b58dea6ca3baf0e0d23ddc` 的主线历史整理，共 14 次主线提交。
 - 说明：`a123ed9` 是合并提交，本文记录这次合并落到主线后的结果，不把它带入的更早分支提交 `4bd0ca9` / `54bab78` / `03ba842` 再重复展开；后续新提交按追加记录维护。
 
+## v1.6.7
+
+## 2026-10-09 · chore(release): prepare v1.6.7
+- 版本号提升到 `1.6.7+20`，用于发布登录入口统一、短信会话在线吊销校验、依赖与死代码清理，以及手动 dev-build 工作流。
+- 所有登录入口统一收口到 `UnifiedLoginPage`：旧版 HUT 独立登录页（`lib/login/hut/view.dart`、`lib/login/hut/command.dart`）整体删除，慧生活798、喝水页等原先各自跳登录的地方也改成走同一个入口，不再存在第二套登录壳。
+- 统一登录页布局精简：去掉副标题、卡片内「登录」标题、两段说明文字和插画；模式切换从没有标签的文字链接改成 `验证码登录 / 密码登录` 分段按钮，默认落在验证码登录。
+- 密码登录改为次级入口，带行内错误提示，需要 MFA 时正确跳转；同时修复了 `needMfa` 在 `await` 之后调用 `setState` 可能触发的异常。
+- 短信两步登录成为统一登录页默认路径，获取验证码倒计时、提交中、成功/失败都改成行内反馈，不再只靠弹窗。
+- 登录成功后支持 `returnToCaller`：从功能页等位置点登录进来会回到原来的页面，而不是固定跳首页。
+- 新增 `HutSmsLoginCommand.reset`，用户在短信登录页更换手机号时命令状态被重置，避免上一个号码的倒计时或结果串到新号码上。
+- 短信登录现在会把 `hutAccount`（JWT sub）一并持久化。`checkTokenValidity` 改成两级判定：先解本地 JWT `exp` 做 fail-fast，再走在线 `userOnlineDetect`（account=`hutAccount`）拿吊销结论；网络异常向上传播，`refreshToken` 不再因为一次网络抖动就清掉会话。
+- `refreshToken` 的短信分支委托给 `checkTokenValidity`，只有拿到明确「失效」结论时才清会话状态；`_ensureHutPortalLogin` 容忍传播上来的网络错误，门户列表降级为空而不是让页面崩掉。
+- 清理依赖与死代码：移除 `responsive_framework`（`MyApp` 里的 `ResponsiveBreakpoints` 已无任何读取方），删除 `lib/utils/pwd.dart`、`lib/login/hut_cas_login_page.dart`、`lib/login/hut_login_system.dart`、`ios/Podfile.lock`，以及仓库里遗留的构建报告 HTML。
+- 新增 `.github/workflows/dev-build.yml`：仅 `workflow_dispatch` 手动触发，带平台输入（both/android/ios），两个 `macos-latest` job 并行执行，产物保留 30 天，不创建 GitHub Release；复用 `release.yml` 已验证的工具链版本与构建脚本，`release.yml` 本身未改动。
+- 本轮改动已通过全量测试与静态检查：`flutter test`（571 项全部通过）、`flutter analyze`（No issues found）。
+- 关键文件：`pubspec.yaml`、`changelog.md`、`lib/login/unified_login_page.dart`、`lib/login/hut/sms_command.dart`、`lib/core/services/app_auth_storage.dart`、`lib/utils/hut_user_api.dart`、`lib/utils/hut_user_api/hut_user_api_auth.dart`、`lib/main.dart`、`.github/workflows/dev-build.yml`
+- 统计：35 files changed, 975 insertions(+), 1915 deletions(-)（`v1.6.6..main` 区间合计）
+
 ## v1.6.6
 
 ## 2026-08-11 · feat(login): HUT SMS passwordless login
