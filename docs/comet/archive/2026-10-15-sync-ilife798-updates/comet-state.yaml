@@ -1,0 +1,562 @@
+schema: comet.native.v4
+name: sync-ilife798-updates
+language: zh-CN
+phase: archive
+status: done
+state_version: 11
+brief: brief.md
+document_constraints_version: 3
+shape_confirmation_hash: 104af51f8cde2e204c480201e75404c0fdd53f1e323b8feb3186f4733638bd58
+spec_changes:
+  - capability: drink-798
+    operation: create
+    source: specs/drink-798/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/sync-ilife798-updates
+  target_branch: main
+  finish: keep
+loop:
+  stage: done
+  goal_cycle: 2
+  iteration: 1
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: A1：点击「开始接水」时，superhut 发往 `https://i.ilife798.com/api/v1/dev/start` 的查询参数恰为
+      `did`、`upgrade=true`、`ptype=0`、`args=`（空串）、`rcp=false`、`cnt=1`，且不含
+      `stype`；有单元测试逐字断言该参数集。
+    result: passed
+    reason:
+      text: drink_api.dart:317-324 参数集恰为 did/upgrade=true/ptype=0/args
+        空串/rcp=false/cnt=1 且无 stype；drink_api_request_test.dart:20-65 逐字断言键集合与完整
+        URL「…?did=dev-9&upgrade=true&ptype=0&args=&rcp=false&cnt=1」，该用例单独运行通过。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "A2：798 的每个请求都携带 `VersionCode: 3.1.8` 与 `User-Agent:
+      Android_ilife798_3.1.8`，不携带
+      `ApplicationType`、`Accept`、`Accept-Encoding`、`Connection`；连接与接收超时均为 15
+      秒；有单元测试断言头集合与超时值。"
+    result: passed
+    reason:
+      text: "drink_api.dart:77-87 仅 VersionCode: 3.1.8 与 User-Agent:
+        Android_ilife798_3.1.8 加 15s 连接/接收超时，Authorization 由 _authOptions
+        按请求注入；drink_api_request_test.dart:141-201 对 5 类请求逐一断言头值、超时，并断言
+        applicationtype/accept/accept-encoding/connection 均不存在。"
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: A3：本地已存有有效 Token 时，冷启动后第一次 798 认证请求（设备列表、`dev/start`）的 `Authorization` 即为该
+      Token，不会出现空值；本地 Token 内容不是 JSON 对象时按未登录处理并清掉坏数据，且不使任何请求抛异常；刚登录保存的新 Token
+      不会被启动时迟到的旧 Token 读取覆盖。有覆盖这三种情形的测试。
+    result: passed
+    reason:
+      text: drink_api.dart:100-107 鉴权前 await _tokenInitialized，:113-135 非 Map Token
+        记录后 prefs.remove 且 catch 不外抛，:253-263 与 :379-384 保存新 Token
+        前等待旧读取；drink_api_token_init_test.dart:23-140 覆盖冷启动首个请求即带旧 Token、坏 Token
+        按未登录清理、:113 证明新 Token 不被迟到旧读覆盖。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: A4：开始接水或结算失败时，提示正文使用服务端 `msg`；服务端返回 `code == -99` 时提示为「登录已过期 /
+      请重新登录后再试」并使用 warning 语义配色，其他失败使用 error 语义配色；服务端未给出 `msg`
+      时分别退回「设备无响应，请检查设备状态」与「结算可能未成功，请检查」。有按返回码分支的测试。
+    result: passed
+    reason:
+      text: drink_result.dart:18 isSessionExpired =>
+        code==-99；drink_failure_prompt.dart:24-38 将 -99
+        映射为「登录已过期：请重新登录后再试」warning、其他失败 error 并透出服务端
+        msg、缺失时退回各自固定文案；function_drink_logic_test.dart:1141-1200 三分支均有断言。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: A5：`acc/login` 请求体恰为 `openCode`（空串）、`authCode`、`un`，不含
+      `cid`；`acc/login/code` 与登录请求都不含 `sign`。登录与发送短信返回区分三种失败并在界面如实呈现：服务端拒绝（显示服务端
+      `msg`）、响应缺少账号信息（提示「登录已被接受，但响应缺少账号信息」，不得显示验证码错误）、网络或解析异常（标题为「登录异常」，展示 8
+      秒）。有覆盖三类路径的测试。
+    result: passed
+    reason:
+      text: drink_api.dart:206-210 请求体恰为 openCode 空串/authCode/un（无 cid、无
+        sign），:234-237 缺账号信息给出「登录已被接受，但响应缺少账号信息，请反馈此问题」；command.dart:229-233
+        code 为 null 时展示 8 秒并标题「登录异常」；drink_api_request_test.dart:81-111/:362-431
+        与 drink_login_command_test.dart:147-241
+        覆盖服务端拒绝、形状异常、网络异常三路径，且断言文案不含「验证码错误」。
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: A6：798 登录页只有一个渐变：高度 168 的顶部品牌带，起始色为品牌蓝不透明、终止色 alpha 为 0 且其纯色等于主题
+      `scaffoldBackgroundColor`；页面不再绘制卡片层，深浅两种模式下都不存在 `#0099CC`
+      的实色或渐变终止色，`Scaffold.backgroundColor` 保持为 null。图形验证码图片显示为 104×52、与验证码输入框在同一
+      `Row` 内且两者垂直中心相差小于 4 像素，点击图片即重新拉取（刷新次数
+      1→2），页面上不存在「看不清？点击刷新」按钮。验证码输入框使用数字键盘、仅数字过滤器、`maxLength` 为 6，输入 `a1b2c` 后得到
+      `12`。
+    result: passed
+    reason:
+      text: "login/view.dart:154-167 页面唯一渐变，bandHeight=168、尾色 scaffoldColor alpha
+        0；drink_login_page_test.dart:282-319 断言渐变恰 1 个、尾色纯色等于
+        scaffoldBackgroundColor、高度 168，:321-342 验证码 104×52 与输入框垂直中心差
+        <4px，:185-199 点击刷新 1→2，:29 无「刷新」文案按钮，:344-384 无 #0099CC 且
+        Scaffold.backgroundColor 为 null，:261-280 数字键盘+仅数字+maxLength 6（输入 a1b2c 得
+        12）。起始色为品牌蓝 alpha 0.16 与 drink_798 login_page.dart:36 一致，brief
+        该句「不透明」用词不准，见 risks。"
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: A7：手机号+图形验证码面板与短信验证码面板位于同一路由页面内：提交手机号后面板就地切换为短信码并保留已输入手机号，面板内提供返回上一步的入口且返回时重新拉取图形验证码；`loginpart2.dart`
+      不再存在。798 登录页的输入框与主按钮使用 `lib/core/widgets/app_form_fields.dart`
+      的共享组件，其中主按钮在加载态禁用并显示进度指示，输入框圆角在正常/启用/聚焦三态一致且不显示计数器文字。
+    result: passed
+    reason:
+      text: command.dart:12,29-34,97-100 以 ValueNotifier<DrinkLoginStep>
+        在同一页切换面板，view.dart:176-197 就地渲染；drink_login_page_test.dart:202-233
+        断言不压新路由并保留手机号，:236-259 返回时重拉验证码（1→2）；loginpart2.dart 与
+        login/widgets/login_widgets.dart
+        已删除且全仓无引用；app_form_fields.dart:83,95-106 counterText 置空且三态圆角 16
+        一致，:160-186 主按钮加载态 onPressed=null
+        并显示进度指示，drink_login_page_test.dart:386-423 断言共享指标。
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: A8：798 首页使用页面私有 token，浅色模式取值与 drink_798 一致（页面底 `#E4EEF8`、卡片 `#FFFFFF`、选中
+      `#FFFFFF`、tint `#DCEBF9`、顶部带 `#C5E0F7`、发丝线 `0x4D7E96AE`、强调渐变
+      `#0277BD`→`#00619E`）。页面背景是三个终止点不全等的命名渐变，空闲态终止色 `t = 1.0` 与
+      `Scaffold.backgroundColor` 相同；卡片填充相对其真实背景至少 1.15:1 亮度分离且至少两个通道（亮度差 +
+      描边或阴影）可辨；深浅两种模式下正文对比度 ≥ 4.5:1、两个标题 ≥ 3.0:1，且浅色的 `#00D4FF`
+      不出现在任何渐变终止色中。主操作按钮外层绘制渐变、内层 `FilledButton` 背景透明并显式设置禁用底色与
+      `overlayColor`，禁用时不响应点击且不调用接口。
+    result: passed
+    reason:
+      text: "drink_home_tokens.dart:28-73,146-168 与 drink_798
+        home_page.dart:50-101,104-200
+        逐项比对一致（#E4EEF8/#FFFFFF/#DCEBF9/#C5E0F7/0x4D7E96AE/#0277BD→#00619E
+        及深色六项与命名渐变公式）；drink_home_ui_test.dart:51-105 三终止点互不相等且 t=1.0 等于
+        Scaffold.backgroundColor，:107-161 表面分离 ≥1.15:1 且两通道，:163-217 正文
+        ≥4.5:1、两标题 ≥3.0:1，:316-338 #00D4FF 永不出现在任何已绘制渐变，:340-378 外层渐变 + 内层透明
+        FilledButton（widgets.dart:873-887 显式
+        disabledBackgroundColor/overlayColor），:381-419 禁用态点击不产生 startDrink 请求。"
+      truncated: false
+  - id: A9
+    source: brief.md
+    text: A9：设备行在选中时具有品牌色 1.6px 描边、勾选标记与抬升阴影，未选中时三者皆无；把饱和度归零后选中态仍可通过至少两个通道区分。
+    result: passed
+    reason:
+      text: drink_page_widgets.dart:609-630 选中为 brandInk 1.6px 描边 + :587-591 勾选标记 +
+        alpha 0.22/blur 14 抬升阴影；drink_home_ui_test.dart:243-280 断言宽度 1.6、描边对比
+        ≥3.0、标记存在，未选中为 1.0px hairline、marker findsNothing。未选中仍保留 1px 发丝边框与静止阴影，与
+        drink_798 home_page.dart:634-641 相同，brief「三者皆无」按选中专属表达成立，见 risks。
+      truncated: false
+  - id: A10
+    source: brief.md
+    text: A10：首页可在列表与网格（两列）两种布局间切换，选择持久化到 `device_list_layout`
+      并在下次进入时恢复；进入排序模式后使用拖拽手柄重排，重排结果写入 `device_order`，下次进入时按 `applyDeviceOrder`
+      规则恢复（已知名按保存顺序在前，未知名保持原有相对顺序，保存中已不存在的 id 忽略），且重排与恢复后选中设备仍是同一台设备。
+    result: passed
+    reason:
+      text: logic.dart:355-366 与 :88-91 持久化/恢复 device_list_layout，:382-419
+        reorderDevices 写入 device_order 并按 id 重定位选中，:241-245 经
+        drink_device.dart:25-51 的 applyDrinkDeviceOrder（已知名在前、未知名保序、失效 id
+        忽略）；function_drink_logic_test.dart:723-802/:866/:936/:988 与
+        drink_home_ui_test.dart:469-541（grid
+        crossAxisCount==2、ReorderableListView + 2 个拖拽手柄 + 提示条）覆盖，抽样用例单独运行通过。
+      truncated: false
+  - id: A11
+    source: brief.md
+    text: A11：正在接水时切换设备或进入/退出排序模式都不改变状态，并提示「正在接水中，请先结算」；此时点击主按钮执行结算而非开始。
+    result: passed
+    reason:
+      text: logic.dart:337-343 与 :369-379 在 drinkStatus 为真时不改状态并回
+        _refuseWhileDrinking(:436-442「提示：正在接水中，请先结算」)；function_drink_logic_test.dart:1095/1115/1252
+        覆盖切换设备、进出排序与文案，drink_home_ui_test.dart:421-467 断言接水态主按钮变结算且
+        endDrinkRequests==['tap-1']。
+      truncated: false
+  - id: A12
+    source: brief.md
+    text: A12：每台设备可通过编辑入口写入备注并持久化到
+      `device_note_<id>`，写入后列表项与当前设备卡片立即显示该备注，重新进入页面后仍存在。
+    result: passed
+    reason:
+      text: logic.dart:264-282 saveDeviceNote 写入/清除 device_note_<id> 后刷新
+        deviceList，:247-261 重载读回，:285-292 deviceTitle 拼接备注，view.dart:428/:463
+        当前设备卡片与列表项同源显示；function_drink_page_test.dart:613「note dialog writes and
+        clears device_note_<id」与 :663 长按同入口、function_drink_logic_test.dart:1069
+        重载恢复并忽略空备注，抽样单独运行通过。
+      truncated: false
+  - id: A13
+    source: brief.md
+    text: A13：连续触发刷新时只有一次在途请求，且刷新期间新增设备所需的后续重载不会被丢弃；设备列表接口失败时给出可重试提示而不清空已有列表。
+    result: passed
+    reason:
+      text: logic.dart:135-160 在途复用同一 Future 并置 _reloadQueued 完成后补跑一次，:198
+        登录过期分支显式不补跑，:228-237
+        失败只提示不清空列表；function_drink_logic_test.dart:27/:69/:108/:1299 与
+        function_drink_page_test.dart:95 覆盖单在途、补跑不丢新设备、失败保留设备，抽样单独运行通过。
+      truncated: false
+  - id: A14
+    source: brief.md
+    text: A14：798 之外的页面与全局主题文件未被修改；`flutter analyze` 无告警，`flutter test`
+      全部通过（含因首页与登录页重构而更新的既有测试）。
+    result: passed
+    reason:
+      text: 'git status --porcelain 与 git diff HEAD --stat 全量核对：仅
+        lib/pages/drink/**、新增 lib/core/widgets/app_form_fields.dart 与
+        test/pages/drink/**、test/core/ui/performance_boundaries_test.dart；pubspec.yaml、lib/core/theme/**、lib/main.dart
+        与 798 之外页面零命中；798 代码内无
+        sign/crypto/drink_api_signer/loginWithToken/stype，无
+        loginpart2/login_widgets 残留；grep -rn "skip:" test/ 无输出；flutter analyze →
+        No issues found!，flutter test → 00:16 +663: All tests passed!。'
+      truncated: false
+builder_handoff:
+  candidate_id: 57f0116b-10d3-40a2-9054-d6ee5a94b6c9
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:50785292-440b-4afd-b6f9-714764199e0e
+  iteration: 1
+  summary:
+    text: 按已确认 brief 完成 drink_798（HEAD 8e778ec）到 superhut 的 798 能力同步。接口层：dev/start
+      参数集改为 did/upgrade/ptype/args/rcp/cnt（去掉 stype），请求头收敛为 VersionCode 3.1.8 +
+      User-Agent Android_ilife798_3.1.8、超时 15s，认证请求先 await Token 初始化并对损坏 Token
+      容错，返回统一为 DrinkResult 以透出 code/msg（-99 视为登录态过期），acc/login 去掉 cid，签名代码与 sign
+      参数按决定整体不移植。登录页重做为单页内联面板（手机号与短信码面板就地切换、168 品牌带、验证码 104×52 点击刷新、仅数字过滤
+      maxLength 6），删除 loginpart2.dart 与页面私有登录壳层，输入框与主按钮改用新建的
+      lib/core/widgets/app_form_fields.dart。首页按 drink_798 页面私有 token
+      重做分层表面与配色（深浅两套、命名渐变走 AppAnimatedContainer 以保留减少动态策略），主按钮改为外层渐变加透明
+      FilledButton，新增列表/网格双布局、长按拖拽排序与顺序持久化、设备备注与接水中守卫、刷新去重补跑；保留既有 dispose
+      守卫、请求去重、轮询代际与单一登录跳转，扫码、删除、下拉刷新、设备管理抽屉入口行为不变。自检修复了移植引入的真实缺陷：正文不能用
+      SliverFillRemaining(hasScrollBody:false) 包裹含 Expanded 内联列表的 Column（会触发
+      RenderShrinkWrappingViewport 不支持固有尺寸），改为
+      RefreshIndicator→Padding→Column，首页用例全部真实执行。另修复备注对话框 controller
+      释放后被使用、备注写入后不重绘、深色模式硬编码浅色 glyph、endDrink 遗留空操作提示。当场重跑：flutter analyze → No
+      issues found!；flutter test → All tests passed!（663 例，基线 571，test/ 下无
+      skip:true 残留）。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+    - A9
+    - A10
+    - A11
+    - A12
+    - A13
+    - A14
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: drink_api.dart `startDrink` 只发 did/upgrade/ptype/args/rcp/cnt，stype
+        已删除；drink_api_request_test.dart「dev/start carries exactly the official
+        query parameters」逐字断言参数集，并另有「dev/end carries only the device id」保护结算请求。
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: "Dio BaseOptions 固定 headers {VersionCode: 3.1.8, User-Agent:
+        Android_ilife798_3.1.8} 与 connect/receiveTimeout 15s，历史头
+        ApplicationType/Accept/Accept-Encoding/Connection 不再出现；「every request
+        sends the two official headers and 15s timeouts」对每个端点断言头集合与超时。"
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: "`_authOptions()` 先 `await _tokenInitialized`；`_initToken()` 对非 Map JSON
+        记录并删除坏值且不抛；`_saveLoginToken` 保存前等待旧读取完成。drink_api_token_init_test.dart 7
+        例覆盖冷启动首个请求即带旧 Token、坏 Token 按未登录清理、刚保存的新 Token 不被迟到读取覆盖、无凭据时发送空 Token。"
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: 接口返回统一为
+        DrinkResult（success/code/message/isSessionExpired），drinkFailurePrompt 把
+        -99 映射为 warning 语义「登录已过期/请重新登录后再试」、其他失败 error 语义并透出服务端
+        msg、缺失时退回各自固定文案。证据：drink_api_request_test.dart 的 code/-99/空 msg/非整数
+        code/非 JSON body 5 例，function_drink_logic_test.dart「startDrink/endDrink
+        failure explains session, server reason and fallback」。
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: acc/login 体恰为 openCode(空串)/authCode/un 无 cid，登录与短信请求均无
+        sign（签名代码整体未移植）。userLogin 三分支失败：服务端拒绝透出
+        msg、响应缺账号信息给出「登录已被接受，但响应缺少账号信息，请反馈此问题」、网络或解析异常标题为「登录异常」且 code 为 null 时展示
+        8 秒。证据：drink_api_request_test.dart 参数与形状 6
+        例、drink_login_command_test.dart 6 例失败路径、performance 测试断言源码无 sign。
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: 登录页仅一个渐变：高度 168 品牌带，起始 DrinkBrand.primary 不透明、终止 scaffoldBackgroundColor
+        alpha 0；不绘卡片层，Scaffold.backgroundColor 为 null；验证码 104×52 与输入框同
+        Row、CrossAxisAlignment.center，点击刷新，无「看不清」按钮；数字键盘 +
+        [FilteringTextInputFormatter.digitsOnly] + maxLength
+        6。证据：drink_login_page_test.dart「the brand band is the only gradient in
+        either brightness」「the captcha image is 104x52 and centered on its
+        field」(实测中心差 <4px)「the page paints no legacy cyan in either
+        brightness」「the scaffold leaves its background to the theme」「the captcha
+        field is numeric, digits-only and capped at six」「tapping the captcha
+        image refetches it」。
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: command.dart 用 ValueNotifier<DrinkLoginStep> 在同一页内切换手机号/短信面板并保留
+        submittedPhone，返回上一步重拉图形验证码；loginpart2.dart 与
+        login/widgets/login_widgets.dart 已删除。输入框与主按钮改用
+        lib/core/widgets/app_form_fields.dart 共享组件（圆角 16 三态一致、counterText
+        置空、主按钮加载态禁用并显示 AppLoadingIndicator）。证据：drink_login_page_test.dart「the
+        phone panel starts as the only panel」「a successful send switches the
+        panel in place」「the back button returns to the phone panel with a new
+        captcha」「the shared field metrics come from the app form
+        widgets」，drink_login_command_test.dart「dispose releases the step and
+        submitted-phone notifiers」。
+    - id: A8
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: "drink_home_tokens.dart 逐值照搬 drink_798 页面私有 token（浅色页面底 #E4EEF8、卡片
+        #FFFFFF、tint #DCEBF9、顶部带 #C5E0F7、发丝线 0x4D7E96AE、强调渐变
+        #0277BD→#00619E）与深色一套；背景与状态卡使用 AppAnimatedContainer 命名渐变。主按钮外层
+        DecoratedBox 渐变 + 透明 FilledButton + 显式 disabledBackgroundColor 与
+        overlayColor。证据：drink_home_ui_test.dart 内置 WCAG 亮度工具，对深浅两模式断言「page
+        background is a named gradient ending exactly on the body colour」「status
+        card and device tiles separate from the surface under them」(≥1.15:1
+        且两通道)「body text and headings keep their contrast floors」(≥4.5:1 /
+        ≥3.0:1)「labels stay readable against what is really painted under
+        them」「settle fill and accent stops clear 4.5:1 with white」「no painted
+        gradient on the page ever stops at the old cyan」「primary action paints
+        its gradient outside a transparent button」「primary action is dead
+        without a device and never starts a drink」。"
+    - id: A9
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: _DrinkDeviceTile 选中时描边 brandInk 1.6px + drinkDeviceCheckMarkerKey 勾选标记 +
+        抬升阴影，未选中为 hairline 1px
+        且无标记无阴影，灰度下仍靠描边宽度与阴影两通道区分。证据：drink_home_ui_test.dart「selected tile
+        carries the 1.6px brand border and the check marker
+        ($mode)」，function_drink_page_test.dart「inline device list selects the
+        tapped tile」。
+    - id: A10
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: state.layoutMode/isReordering +
+        logic.setLayoutMode/toggleReorderMode/reorderDevices/_saveDeviceOrder 与
+        _withSavedOrder；DrinkDeviceList 在 ListView/两列
+        GridView/ReorderableListView(拖拽手柄) 间切换，持久化 device_list_layout 与
+        device_order，applyDrinkDeviceOrder 实现「已知名按保存顺序在前、未知名保持相对顺序、失效 id 忽略」，重排按
+        id 保持选中。证据：function_drink_logic_test.dart 的 applyDrinkDeviceOrder 5 例 +
+        「reorderDevices reorders, keeps selection by id and persists
+        order」「saved order round-trips through a reload」「selection survives a
+        reload that shuffles the server order」「setLayoutMode persists valid
+        modes」「initialize restores the saved layout」「initialize ignores a saved
+        layout that is not list or grid」，drink_home_ui_test.dart「layout toggle
+        swaps grid for list, persists and reordering takes
+        over」，function_drink_page_test.dart「section header toggles layout and
+        hands the list to reordering」。
+    - id: A11
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: _refuseWhileDrinking() 在 drinkStatus 为真时拒绝 setChoiceDevice 与
+        toggleReorderMode 的状态变更并提示「提示：正在接水中，请先结算」(info)；DrinkActionButton
+        在接水中切为结算。证据：function_drink_logic_test.dart「setChoiceDevice refuses to
+        switch devices while drinking」「toggleReorderMode refuses while drinking
+        and no-ops when empty」「switching devices while drinking shows the
+        refusal prompt」「entering reorder mode while drinking shows the refusal
+        prompt」，drink_home_ui_test.dart「drinking turns the primary action into
+        the settle button」，function_drink_page_test.dart「primary action starts
+        drinking and then settles」。
+    - id: A12
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: deviceNotes 从 device_note_<id> 读入，saveDeviceNote 写入/清除后调用
+        deviceList.refresh() 使标题立即重绘，deviceTitle
+        拼接备注；编辑入口仅出现在空闲未选中行，长按同一入口；DrinkNoteEditorDialog 为 StatefulWidget 自持
+        controller。证据：function_drink_logic_test.dart「saveDeviceNote writes and
+        clears the note shown by deviceTitle」「reload restores saved notes and
+        ignores empty ones」，function_drink_page_test.dart「device list exposes
+        the note editor only on idle tiles」「note dialog writes and clears
+        device_note_<id>」「long press opens the same note editor」。
+    - id: A13
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: getDeviceList 返回在途 Future 并以 _reloadQueued 在结束后补跑一次（Account
+        失败分支不清队列以免空转）；列表失败只提示不清空。证据：function_drink_logic_test.dart「concurrent
+        device refreshes send one request while in flight and replay
+        ...」「replayed reload surfaces a device added during the in-flight
+        refresh」「account failure does not replay the queued reload」「device list
+        failure keeps the loaded devices for retry」「device refresh drops late
+        result after controller closes」，function_drink_page_test.dart「app bar
+        refresh keeps a single refreshing load in flight」「scan add device
+        ignores duplicate taps while add is pending」。
+    - id: A14
+      status: implemented-with-evidence
+      evidence:
+        - flutter test
+      note: 改动只落在 lib/pages/drink/**、lib/core/widgets/app_form_fields.dart 与
+        test/pages/drink/**、test/core/ui/performance_boundaries_test.dart；lib/core/theme、AppTheme、pubspec.yaml
+        与 798 之外页面在 git status 中零修改，无新依赖。自检中另修复了移植引入的真实布局缺陷：正文不能用
+        SliverFillRemaining(hasScrollBody:false) 包裹含 Expanded 内联列表的 Column（会触发
+        RenderShrinkWrappingViewport 不支持固有尺寸），改为
+        RefreshIndicator→Padding→Column，因此 798 首页与登录页的全部用例现在都真实执行，test/ 下已无任何
+        skip:true。证据：当场重跑 `flutter analyze` → No issues found!，`flutter test` →
+        All tests passed! 共 663 例（基线 571）。
+  checks:
+    - name:
+        text: flutter analyze
+        truncated: false
+      result: passed
+      note:
+        text: No issues found! (ran in 2.6s)，无告警、无 error。
+        truncated: false
+    - name:
+        text: flutter test
+        truncated: false
+      result: passed
+      note:
+        text: All tests passed! 663 例全部实际执行（drink 相关 125 例 + performance_boundaries 93
+          例），test/ 下无 skip:true 残留。
+        truncated: false
+    - name:
+        text: 范围自查
+        truncated: false
+      result: passed
+      note:
+        text: git status 仅
+          lib/pages/drink/**、lib/core/widgets/、test/pages/drink/**、test/core/ui/performance_boundaries_test.dart
+          与 docs/comet 产物；lib/core/theme、AppTheme、pubspec.yaml 与 798 之外页面零修改。
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 真机登录与真实接水无法在本环境复现：接口层证据为可注入 HTTP 替身断言的 URL、查询参数、请求体、头与超时，加上 drink_798
+        已用同一形态实测通过；未声称已对真实服务端验证，需用户在设备上完成最终确认。
+      truncated: false
+    - text: 首页与登录页视觉结论以 widget 测试的像素/对比度断言为证据（品牌带唯一渐变、验证码 104×52 与中心差
+        <4px、命名渐变终止点、≥1.15:1 表面分离、≥4.5:1 正文与 ≥3.0:1 标题），未经真机截图人工确认。
+      truncated: false
+    - text: 接水中「自动结算依赖状态轮询」沿用既有实现与既有代际测试，本环境无法用真实设备验证轮询与自动结算的实际时序。
+      truncated: false
+    - text: 签名能力按用户决定与 drink_798 实测结论（服务端不校验 sign，带 sign 反而验签失败）刻意不移植，因此若服务端策略日后变化需要单独
+        change 处理。
+      truncated: false
+    - text: 本次不改动 Git 历史：worktree 分支 comet/sync-ilife798-updates 上尚无提交，提交、合并、推送或 PR
+        均需用户单独授权。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-15T07:10:47.399Z
+blockers: []
+verification:
+  candidate_id: 57f0116b-10d3-40a2-9054-d6ee5a94b6c9
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:221c4a2e-17a2-45f7-adb9-42ce3bb1c87b
+  iteration: 1
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: analyze
+      name:
+        text: flutter analyze
+        truncated: false
+      argv_display:
+        - text: analyze
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 6209
+    - id: test
+      name:
+        text: flutter test
+        truncated: false
+      argv_display:
+        - text: test
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 25179
+  summary:
+    text: 独立只读验收：flutter analyze 无告警、flutter test 663 例全绿且无 skip；A1-A14
+      全部以自身读取到的源码位置与真实测试断言取证通过，接口层与 drink_798 HEAD 8e778ec 实测形态逐字对齐，改动严格限于 798
+      范围，既有健壮性机制与共享性能入口均未回退。两处 brief 措辞（A6 起始色不透明、A9 未选中三者皆无）与 drink_798
+      源码不符，实现按「配色忠实照搬」的决定取源码值，已记入 risks 供用户裁定。
+    truncated: false
+  risks:
+    - text: "brief A6 原文「起始色为品牌蓝不透明」与 drink_798 login_page.dart:36 的
+        colorScheme.primary.withValues(alpha: 0.16)
+        不符；实现与测试忠于参考源码（用户决定为配色忠实照搬），因此按源码取值判定通过，brief 该句措辞需在归档说明中记录为文字偏差。"
+      truncated: false
+    - text: brief A9 原文「未选中时三者皆无」：未选中行仍保留 1px hairline 边框与 ink@0.06/blur 8 的静止阴影，与
+        drink_798 home_page.dart:634-641 完全一致；按「1.6px
+        品牌描边、勾选标记、抬升阴影」三项选中专属表达判定成立。
+      truncated: false
+    - text: A9 的「去饱和后仍至少两通道可辨」没有专门测试（drink_798 亦无）：现有证据为结构性通道（描边 1.6 vs 1.0、勾选标记有/无、阴影
+        0.22/blur14 vs 0.06/blur8）加实测亮度对比 ≥3.0，未做去饱和演算。
+      truncated: false
+    - text: A4 的 warning/error 语义配色只由 drink_failure_prompt.dart:29/:36
+        源码取证，测试仅断言文案文本；若语义类型被误改不会被现有测试发现。
+      truncated: false
+    - text: 真机登录与真实接水在本环境无法复现（brief 已知限制）：A1/A2/A5 以可注入 HTTP 替身断言的参数集、头集合、超时与返回码分支，加上
+        drink_798 已用同一形态实测通过为依据；需用户在设备上完成最终确认。
+      truncated: false
+    - text: 页面底色来源在两页不同：首页 idleBackground 尾点取 drink_home_tokens.dart:146-151 的私有
+        token，登录页尾点取主题 scaffoldBackgroundColor（login/view.dart:162）；若日后 superhut
+        调整主题底色，登录页自动跟随而首页不会，需同步维护。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-15T07:49:16.383Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native Shape artifacts changed
+      truncated: false
+    completed_at: 2026-10-15T05:14:54.665Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 独立只读验收：flutter analyze 无告警、flutter test 663 例全绿且无 skip；A1-A14
+        全部以自身读取到的源码位置与真实测试断言取证通过，接口层与 drink_798 HEAD 8e778ec 实测形态逐字对齐，改动严格限于 798
+        范围，既有健壮性机制与共享性能入口均未回退。两处 brief 措辞（A6 起始色不透明、A9 未选中三者皆无）与 drink_798
+        源码不符，实现按「配色忠实照搬」的决定取源码值，已记入 risks 供用户裁定。
+      truncated: false
+    completed_at: 2026-10-15T07:49:16.383Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-15T03:00:20.930Z
