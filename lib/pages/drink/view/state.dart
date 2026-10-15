@@ -19,6 +19,15 @@ class FunctionDrinkState {
   // 喝水按钮状态
   RxBool drinkStatus = false.obs;
 
+  /// 设备列表布局：'list' 单列紧凑，'grid' 双列
+  RxString layoutMode = 'list'.obs;
+
+  /// 是否处于拖拽排序模式
+  RxBool isReordering = false.obs;
+
+  /// 设备本地备注，键为设备 id
+  RxMap<String, String> deviceNotes = <String, String>{}.obs;
+
   // 设备状态检测
   Timer? deviceStatusTimer;
 

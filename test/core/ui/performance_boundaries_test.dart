@@ -165,6 +165,18 @@ void main() {
         reason: '页面层应通过 ${entry.value} 统一减少动态/轻量策略。',
       );
     }
+
+    final drinkWidgets =
+        File(
+          'lib/pages/drink/view/widgets/drink_page_widgets.dart',
+        ).readAsStringSync();
+    expect(
+      RegExp(r'\bAppAnimatedContainer\s*\(').allMatches(drinkWidgets).length,
+      2,
+      reason:
+          '798 首页的状态卡与全屏背景这两处命名渐变过渡必须走共享控件，'
+          '这样轻量模式与减少动效才能把它们降级为静态绘制。',
+    );
   });
 
   test('app loading indicator skips repaint boundary when static', () {
@@ -211,41 +223,96 @@ void main() {
     );
   });
 
-  test('drink full screen background does not animate gradient repaint', () {
+  test('drink full screen background keeps one keyed gradient transition', () {
     final drinkView = File('lib/pages/drink/view/view.dart').readAsStringSync();
     final drinkWidgets =
         File(
           'lib/pages/drink/view/widgets/drink_page_widgets.dart',
         ).readAsStringSync();
+    final homeTokens =
+        File('lib/pages/drink/core/drink_home_tokens.dart').readAsStringSync();
     final backgroundClass = RegExp(
       r'class DrinkBackground extends StatelessWidget[\s\S]*?\nclass DrinkLoadingState',
     ).firstMatch(drinkWidgets)?.group(0);
     final backgroundLayer = RegExp(
       r'Positioned\.fill\(\s*child: Obx\(\s*\(\) => DrinkBackground\(\s*drinkStatus: logic\.state\.drinkStatus\.value\s*\),\s*\),\s*\),',
     ).firstMatch(drinkView)?.group(0);
+    final idleGradientGetter = RegExp(
+      r'LinearGradient get idleBackground =>[\s\S]*?\n  \);',
+    ).firstMatch(homeTokens)?.group(0);
+    final activeGradientGetter = RegExp(
+      r'LinearGradient get activeBackground =>[\s\S]*?\n  \);',
+    ).firstMatch(homeTokens)?.group(0);
 
     expect(backgroundClass, isNotNull);
+    // 空闲渐变是页面锚点，接水态只在其上叠一层前景；两层都终止于页面本体色，
+    // 所以页面层只引用命名渐变，不再内联十六进制、alpha 分支或第三套渐变。
     expect(
       backgroundClass,
-      contains('return DecoratedBox(decoration: decoration);'),
+      contains('decoration: BoxDecoration(gradient: palette.idleBackground)'),
     );
     expect(
       backgroundClass,
-      isNot(contains('AppAnimatedContainer')),
-      reason: '饮水页全屏渐变背景不应参与长时长隐式动画，避免状态变化时整屏重绘。',
+      contains('BoxDecoration(gradient: palette.activeBackground)'),
     );
-    expect(backgroundClass, isNot(contains('Duration(milliseconds: 800)')));
+    expect(backgroundClass, contains('key: drinkBackgroundKey,'));
+    expect(backgroundClass, isNot(contains('LinearGradient(')));
+    expect(backgroundClass, isNot(contains('0xFF')));
+    expect(backgroundClass, isNot(contains('withValues(')));
+
+    // 全屏表面的过渡只此一次、时长固定；不得升级成逐帧驱动的整屏重绘。
+    expect(
+      backgroundClass,
+      contains('duration: const Duration(milliseconds: 800)'),
+    );
+    expect(backgroundClass, contains('return AppAnimatedContainer('));
+    expect(backgroundClass, isNot(contains('AnimatedBuilder')));
+    expect(backgroundClass, isNot(contains('AnimationController')));
+    expect(
+      RegExp(r'Duration\(milliseconds:').allMatches(backgroundClass!).length,
+      1,
+      reason: '全屏背景只允许一段过渡时长，多段会让接水状态切换持续重绘整屏。',
+    );
+
+    // 气泡层继续由共享 AmbientBubbleField 承担，页面 widget 文件里不得再起第二条动画驱动。
+    expect(drinkWidgets, isNot(contains('class DrinkBubbleAnimation')));
+    expect(drinkWidgets, isNot(contains('AnimationController')));
+    expect(drinkWidgets, isNot(contains('AnimatedBuilder')));
+    expect(drinkWidgets, isNot(contains('TickerProviderStateMixin')));
+    expect(drinkWidgets, isNot(contains('.repeat(')));
+
     expect(backgroundLayer, isNotNull);
     expect(
       backgroundLayer,
       isNot(contains('RepaintBoundary(')),
-      reason: '饮水页静态渐变背景不应额外建 repaint 边界；气泡动画由 AmbientBubbleField 自身隔离。',
+      reason: '饮水页背景过渡不应再额外建 repaint 边界；气泡动画由 AmbientBubbleField 自身隔离。',
     );
     expect(
       drinkView,
       contains('child: RepaintBoundary(\n              child: Obx(() {'),
       reason: '饮水页前景内容层仍应与气泡动画层隔离。',
     );
+    expect(
+      'RepaintBoundary('.allMatches(drinkView).length,
+      1,
+      reason: '饮水页正文整体只包一层 repaint 边界，多包会把背景过渡也拖进分层成本。',
+    );
+
+    // 命名渐变的终止色必须等于页面本体色：背景与 Scaffold 底色不同源就会露出第二层灰。
+    expect(idleGradientGetter, isNotNull);
+    expect(idleGradientGetter, contains('stops: const [0.0, 0.42, 1.0]'));
+    expect(
+      idleGradientGetter,
+      contains('colors: [bandTop, Color.lerp(bandTop, page, 0.55)!, page]'),
+    );
+    expect(activeGradientGetter, isNotNull);
+    expect(activeGradientGetter, contains('stops: const [0.0, 0.5, 1.0]'));
+    expect(
+      RegExp(r'\n      page,\n').hasMatch(activeGradientGetter!),
+      isTrue,
+      reason: '接水态前景的最后一层终止色应就是页面本体色。',
+    );
+    expect(drinkView, contains('backgroundColor: palette.page,'));
   });
 
   test('hot water full screen background avoids extra repaint boundary', () {
@@ -281,23 +348,51 @@ void main() {
     );
   });
 
-  test('drink status header avoids implicit container animation', () {
+  test('drink status header keeps one short keyed implicit transition', () {
     final drinkWidgets =
         File(
           'lib/pages/drink/view/widgets/drink_page_widgets.dart',
         ).readAsStringSync();
     final statusHeaderClass = RegExp(
-      r'class DrinkStatusHeader extends StatelessWidget \{[\s\S]*?\n\}\n\nclass DrinkCurrentDeviceCard',
+      r'class DrinkStatusHeader extends StatelessWidget \{[\s\S]*?\n\}\n\nclass DrinkEmptyDeviceCard',
     ).firstMatch(drinkWidgets)?.group(0);
 
     expect(statusHeaderClass, isNotNull);
-    expect(statusHeaderClass, contains('return Container('));
+    expect(statusHeaderClass, contains('return AppAnimatedContainer('));
+    expect(statusHeaderClass, contains('key: drinkStatusCardKey,'));
+    // 整卡带渐变与阴影，隐式过渡必须锁在 320ms 这一档短时长，且只允许一段；
+    // 阴影强度继续跟 AppGlassPerformanceScope 的 lite 判定，不能再造第二套门控。
     expect(
       statusHeaderClass,
-      isNot(contains('AppAnimatedContainer(')),
-      reason: '饮水状态卡片包含整卡渐变和阴影，状态切换应直接落到最终样式，避免隐式动画重绘整张卡片。',
+      contains('duration: const Duration(milliseconds: 320)'),
     );
-    expect(statusHeaderClass, isNot(contains('AnimatedContainer(')));
+    expect(
+      statusHeaderClass,
+      contains('AppGlassPerformanceScope.isLiteOf(context)'),
+    );
+    expect(statusHeaderClass, contains('useLiteEffects ? 0.20 : 0.30'));
+    expect(statusHeaderClass, contains('useLiteEffects ? 0.04 : 0.06'));
+    expect(statusHeaderClass, contains('blurRadius: useLiteEffects ? 12 : 20'));
+    expect(
+      RegExp(r'Duration\(milliseconds:').allMatches(statusHeaderClass!).length,
+      1,
+      reason: '状态卡只允许一段过渡时长，多段会让状态切换连续重绘整张卡片。',
+    );
+    expect(
+      RegExp(r'\bAnimatedContainer\s*\(').allMatches(statusHeaderClass).length,
+      0,
+      reason:
+          '状态卡的过渡必须走 AppAnimatedContainer，裸 AnimatedContainer '
+          '不会随轻量模式与减少动效降级。',
+    );
+    expect(statusHeaderClass, isNot(contains('AnimationController')));
+    expect(statusHeaderClass, isNot(contains('AnimatedBuilder')));
+    expect(statusHeaderClass, isNot(contains('0xFF')));
+    expect(
+      statusHeaderClass,
+      contains('child: AppLinearProgressIndicator('),
+      reason: '接水态进度条应继续走共享控件，而不是在状态卡里自造动画。',
+    );
   });
 
   test('ambient bubble field avoids unused painter work while animating', () {
@@ -2932,22 +3027,23 @@ void main() {
         File('lib/pages/drink/login/command.dart').readAsStringSync();
     final loginView =
         File('lib/pages/drink/login/view.dart').readAsStringSync();
-    final smsLoginView =
-        File('lib/pages/drink/login/loginpart2.dart').readAsStringSync();
     final resetMethod = RegExp(
-      r'void _reset\(\) \{[\s\S]*?\n  Future<Uint8List> getImageCaptcha',
+      r'void _reset\(\) \{[\s\S]*?\n  \}',
     ).firstMatch(command)?.group(0);
     final captchaMethod = RegExp(
-      r'Future<Uint8List> getImageCaptcha\(\) \{[\s\S]*?\n  void to2Login',
+      r'Future<Uint8List> getImageCaptcha\(\) \{[\s\S]*?\n  Future<Uint8List> _runImageCaptchaLoad',
     ).firstMatch(command)?.group(0);
     final captchaRunnerMethod = RegExp(
       r'Future<Uint8List> _runImageCaptchaLoad\(\{[\s\S]*?\n  Future<Uint8List> _loadImageCaptcha',
     ).firstMatch(command)?.group(0);
     final loadCaptchaMethod = RegExp(
-      r'Future<Uint8List> _loadImageCaptcha\(\{[\s\S]*?\n  void to2Login',
+      r'Future<Uint8List> _loadImageCaptcha\(\{[\s\S]*?\n  /// 返回上一步',
     ).firstMatch(command)?.group(0);
-    final toSmsLoginMethod = RegExp(
-      r'void to2Login\(BuildContext context, String phoneNumber, String imageCode\) \{[\s\S]*?\n  Future<void> sendMessageCode',
+    final stepSwitchMethod = RegExp(
+      r'Future<void> _sendMessageCode\([\s\S]*?\n  Future<void> login\(',
+    ).firstMatch(command)?.group(0);
+    final stepBackMethod = RegExp(
+      r'void resetToFirstStep\(\) \{[\s\S]*?\n  /// 丢弃当前图形验证码状态',
     ).firstMatch(command)?.group(0);
     final sendMessageCodeMethod = RegExp(
       r'Future<void> sendMessageCode\([\s\S]*?\n  Future<void> _sendMessageCode',
@@ -2961,8 +3057,14 @@ void main() {
     final loginRunnerMethod = RegExp(
       r'Future<void> _runLoginSubmit\([\s\S]*?\n  Future<void> _login',
     ).firstMatch(command)?.group(0);
-    final captchaBuilderSection = RegExp(
-      r'EnhancedFutureBuilder\([\s\S]*?\n              \),',
+    final captchaRowClass = RegExp(
+      r'class _DrinkCaptchaRow extends StatelessWidget \{[\s\S]*?\nclass _DrinkCaptchaRefreshGlyph',
+    ).firstMatch(loginView)?.group(0);
+    final captchaGlyphClass = RegExp(
+      r'class _DrinkCaptchaRefreshGlyph extends StatelessWidget \{[\s\S]*?\nclass _DrinkSmsCodeForm',
+    ).firstMatch(loginView)?.group(0);
+    final phoneFormClass = RegExp(
+      r'class _DrinkPhoneForm extends StatelessWidget \{[\s\S]*?\nclass _DrinkCaptchaRow',
     ).firstMatch(loginView)?.group(0);
     final pageLoadCaptchaMethod = RegExp(
       r'Future<Uint8List> _loadCaptcha\(\) async \{[\s\S]*?\n  void _refreshCaptcha',
@@ -2970,15 +3072,24 @@ void main() {
     final refreshCaptchaMethod = RegExp(
       r'void _refreshCaptcha\(\) \{[\s\S]*?\n  Future<void> _sendMessageCode',
     ).firstMatch(loginView)?.group(0);
+    final pageSendMessageMethod = RegExp(
+      r'Future<void> _sendMessageCode\(\) async \{[\s\S]*?\n  Future<void> _submitLogin',
+    ).firstMatch(loginView)?.group(0);
+    final submitLoginMethod = RegExp(
+      r'Future<void> _submitLogin\(\) async \{[\s\S]*?\n  void _backToPhoneStep',
+    ).firstMatch(loginView)?.group(0);
+    final backToPhoneStepMethod = RegExp(
+      r'void _backToPhoneStep\(\) \{[\s\S]*?\n  void _setSending',
+    ).firstMatch(loginView)?.group(0);
     final firstStepLoginState = RegExp(
       r'class _DrinkLoginPageState extends State<DrinkLoginPage> \{[\s\S]*?\n\}',
     ).firstMatch(loginView)?.group(0);
     final setSendingMethod = RegExp(
-      r'void _setSending\(bool isSending\) \{[\s\S]*?\n  \}',
+      r'void _setSending\(ValueNotifier<bool> notifier, bool value\) \{[\s\S]*?\n  \}',
     ).firstMatch(loginView)?.group(0);
-    final smsLoginState = RegExp(
-      r'class _DrinkLoginPage2State extends State<DrinkLoginPage2> \{[\s\S]*?\n\}',
-    ).firstMatch(smsLoginView)?.group(0);
+    final smsFormClass = RegExp(
+      r'class _DrinkSmsCodeForm extends StatelessWidget \{[\s\S]*?\nclass _DrinkBackButton',
+    ).firstMatch(loginView)?.group(0);
 
     expect(
       command,
@@ -2991,6 +3102,12 @@ void main() {
       reason: '饮水登录命令应是页面级实例，避免页面销毁或刷新污染其他流程。',
     );
     expect(command, contains('int _captchaGeneration = 0;'));
+    expect(
+      command,
+      contains('final ValueNotifier<DrinkLoginStep> step ='),
+      reason: '步骤应是命令实例字段，两步面板才能共用同一份实例状态。',
+    );
+    expect(command, isNot(contains('static ValueNotifier<DrinkLoginStep>')));
     expect(resetMethod, isNotNull);
     expect(
       resetMethod,
@@ -3029,11 +3146,25 @@ void main() {
       contains('if (captchaGeneration == _captchaGeneration)'),
       reason: '旧验证码请求返回后不应把新一轮验证码状态标记为已消费。',
     );
-    expect(toSmsLoginMethod, isNotNull);
+    expect(stepSwitchMethod, isNotNull);
     expect(
-      toSmsLoginMethod,
-      contains('command: this,'),
-      reason: '短信验证页应复用第一步登录命令，避免验证码上下文、防重状态和测试注入断开。',
+      stepSwitchMethod,
+      contains('submittedPhone.value = phoneNumber;'),
+      reason: '手机号面板应把已提交号码交给同一份命令，而不是靠第二条路由传参。',
+    );
+    expect(
+      stepSwitchMethod,
+      contains('step.value = DrinkLoginStep.sms;'),
+      reason: '短信码步骤应就地切换同一份登录命令，避免验证码上下文、防重状态和测试注入断开。',
+    );
+    expect(stepSwitchMethod, isNot(contains('DrinkLoginPage2')));
+    expect(stepSwitchMethod, isNot(contains('Navigator.push')));
+    expect(stepBackMethod, isNotNull);
+    expect(stepBackMethod, contains('resetCaptcha();'));
+    expect(
+      stepBackMethod,
+      contains('step.value = DrinkLoginStep.phone;'),
+      reason: '返回上一步必须退回手机号面板并丢弃旧验证码，一次性凭据不能复用。',
     );
     expect(sendMessageCodeMethod, isNotNull);
     expect(
@@ -3070,23 +3201,29 @@ void main() {
     );
     expect(loginRunnerMethod, contains('_loginSubmit = null;'));
     expect(loginRunnerMethod, isNot(contains('.whenComplete(')));
-    expect(captchaBuilderSection, isNotNull);
+    expect(captchaRowClass, isNotNull);
     expect(
-      captchaBuilderSection,
+      captchaRowClass,
+      contains('valueListenable: captchaFutureNotifier'),
+      reason: '验证码图块应监听页面持有的 Future，刷新时只重建这一小块。',
+    );
+    expect(
+      captchaRowClass,
       contains('future: captchaFuture'),
       reason: '饮水登录页应使用页面持有的验证码 Future，避免 build 期间重复请求。',
     );
     expect(
-      captchaBuilderSection,
+      captchaRowClass,
       contains('rememberFutureResult: false'),
       reason:
           '验证码刷新时应使用新的 _captchaFuture，不应让 EnhancedFutureBuilder 缓存旧 Future。',
     );
     expect(
-      captchaBuilderSection,
+      captchaRowClass,
       contains('whenError:'),
       reason: '验证码加载失败应显示受控重试占位，不能回退到一直 loading 或展示异常。',
     );
+    expect(captchaRowClass, contains('onTap: onRefreshCaptcha'));
     expect(pageLoadCaptchaMethod, isNotNull);
     expect(pageLoadCaptchaMethod, contains('_isCaptchaLoading = true;'));
     expect(pageLoadCaptchaMethod, contains('try {'));
@@ -3110,10 +3247,51 @@ void main() {
     );
     expect(
       refreshCaptchaMethod,
+      contains('if (_isCaptchaLoading)'),
+      reason: '重取验证码期间应就地去重，替代旧短信验证页单独的返回 pending 标志。',
+    );
+    expect(
+      refreshCaptchaMethod,
       isNot(contains('setState(')),
       reason: '刷新验证码不应触发整页 setState。',
     );
-    expect(loginView, contains("isLoading ? '正在加载验证码' : '验证码加载失败，点击重试'"));
+    expect(
+      captchaRowClass,
+      contains('whenNotDone: AppLoadingIndicator('),
+      reason: '验证码加载中应显示共享占位指示，而不是残留旧文案分支。',
+    );
+    expect(
+      captchaRowClass,
+      contains('(_) => const _DrinkCaptchaRefreshGlyph()'),
+      reason: '验证码空图与加载失败都应回落到可点击重试的受控占位。',
+    );
+    expect(captchaGlyphClass, isNotNull);
+    expect(captchaGlyphClass, contains('Icons.refresh_rounded'));
+    expect(
+      loginView,
+      isNot(contains('DrinkLoginInputField')),
+      reason: '输入框与字段标签已收敛到共享 AppTextField/AppFieldLabel。',
+    );
+    expect(
+      loginView,
+      isNot(contains('DrinkLoginFieldLabel')),
+      reason: '登录页不应再起私有字段标签控件，否则共享表单的样式纪律会失守。',
+    );
+    expect(loginView, isNot(contains('DrinkLoginPage2')));
+    expect(loginView, isNot(contains('DrinkLoginShell')));
+    expect(
+      'DrinkLoginCommand()'.allMatches(loginView).length,
+      1,
+      reason: '两步面板必须共用同一份页面级登录命令，第二份实例会切断验证码上下文与防重状态。',
+    );
+    expect(loginView, contains('valueListenable: _command.step'));
+    expect(loginView, contains('DrinkLoginStep.phone => _DrinkPhoneForm('));
+    expect(loginView, contains('DrinkLoginStep.sms => _DrinkSmsCodeForm('));
+    expect(
+      loginView,
+      isNot(contains('setState(')),
+      reason: '两步面板都靠 ValueNotifier 局部刷新，登录页不应保留整页 setState。',
+    );
 
     expect(firstStepLoginState, isNotNull);
     expect(
@@ -3130,7 +3308,8 @@ void main() {
     expect(firstStepLoginState, contains('_captchaFutureNotifier.dispose();'));
     expect(
       firstStepLoginState,
-      contains('valueListenable: _captchaFutureNotifier'),
+      contains('captchaFutureNotifier: _captchaFutureNotifier,'),
+      reason: '页面只把持有的 Future notifier 交给验证码面板，自己不在 build 里取图。',
     );
     expect(
       firstStepLoginState,
@@ -3140,16 +3319,23 @@ void main() {
       reason: '饮水登录首步发送验证码 pending 态只影响发送按钮，不应 setState 重建整页。',
     );
     expect(firstStepLoginState, contains('_isSending.dispose();'));
-    expect(firstStepLoginState, contains('if (_isSending.value)'));
+    expect(pageSendMessageMethod, isNotNull);
+    expect(pageSendMessageMethod, contains('if (_isSending.value)'));
     expect(
       firstStepLoginState,
-      contains('valueListenable: _isSending'),
+      contains('isSending: _isSending,'),
+      reason: '发送态由页面持有、按面板下发，两步各自监听自己的 notifier。',
+    );
+    expect(
+      phoneFormClass,
+      contains('valueListenable: isSending'),
       reason: '发送验证码按钮应通过 ValueListenableBuilder 局部刷新 loading/禁用状态。',
     );
+    expect(phoneFormClass, contains('loading: isSending'));
     expect(setSendingMethod, isNotNull);
     expect(
       setSendingMethod,
-      contains('!mounted || _isSending.value == isSending'),
+      contains('!mounted || notifier.value == value'),
       reason: '发送态不变或页面已卸载时不应通知按钮重建。',
     );
     expect(
@@ -3163,41 +3349,70 @@ void main() {
       reason: '饮水登录首步的验证码刷新和发送态都应局部通知，不应整页 setState。',
     );
 
-    expect(smsLoginState, isNotNull);
+    expect(smsFormClass, isNotNull);
     expect(
-      smsLoginState,
+      firstStepLoginState,
       contains(
         'final ValueNotifier<bool> _isSubmitting = ValueNotifier<bool>(false);',
       ),
       reason: '短信登录提交态只影响提交按钮，不应 setState 重建整页短信验证内容。',
     );
     expect(
-      smsLoginState,
-      contains(
-        'final ValueNotifier<bool> _isReturningForCode = ValueNotifier<bool>(false);',
-      ),
-      reason: '返回重取验证码的 pending 态只影响返回按钮，不应 setState 重建整页。',
-    );
-    expect(smsLoginState, contains('_isSubmitting.dispose();'));
-    expect(smsLoginState, contains('_isReturningForCode.dispose();'));
-    expect(smsLoginState, contains('if (_isSubmitting.value)'));
-    expect(smsLoginState, contains('if (_isReturningForCode.value)'));
-    expect(
-      smsLoginState,
-      contains('!mounted || _isSubmitting.value == isSubmitting'),
-      reason: '短信提交态不变或页面已卸载时不应通知按钮重建。',
+      firstStepLoginState,
+      contains('_command = widget.command ?? DrinkLoginCommand();'),
+      reason: '登录命令由页面自身持有，注入实例与自建实例走同一条释放路径。',
     );
     expect(
-      smsLoginState,
-      contains('!mounted || _isReturningForCode.value == isReturningForCode'),
-      reason: '返回验证码 pending 态不变或页面已卸载时不应通知按钮重建。',
+      firstStepLoginState,
+      contains('_ownsCommand = widget.command == null;'),
+      reason: '只有页面自建的命令才归它释放，避免注入实例被登录页 dispose 连带销毁。',
     );
-    expect(smsLoginState, contains('valueListenable: _isSubmitting'));
-    expect(smsLoginState, contains('valueListenable: _isReturningForCode'));
     expect(
-      smsLoginState,
+      firstStepLoginState,
+      contains('if (_ownsCommand) {\n      _command.dispose();\n    }'),
+      reason: '页面销毁时应释放自己创建的命令，连带回收 step 与手机号两个 notifier。',
+    );
+    expect(firstStepLoginState, contains('_phoneController.dispose();'));
+    expect(firstStepLoginState, contains('_captchaController.dispose();'));
+    expect(firstStepLoginState, contains('_smsCodeController.dispose();'));
+    expect(
+      firstStepLoginState,
+      isNot(contains('Get.put')),
+      reason: '登录状态不应注册成全局控制器，否则两步面板会跨页共享。',
+    );
+    expect(firstStepLoginState, contains('_isSubmitting.dispose();'));
+    expect(firstStepLoginState, contains('if (_isSubmitting.value)'));
+    expect(
+      submitLoginMethod,
+      isNotNull,
+      reason: '提交短信码应有独立的 pending 分支，供提交按钮局部禁用。',
+    );
+    expect(submitLoginMethod, contains('_setSending(_isSubmitting, true);'));
+    expect(submitLoginMethod, contains('_setSending(_isSubmitting, false);'));
+    expect(
+      firstStepLoginState,
+      contains('if (_isSubmitting.value)'),
+      reason: '提交态不变或页面已卸载时不应通知按钮重建。',
+    );
+    expect(smsFormClass, contains('valueListenable: isSubmitting'));
+    expect(smsFormClass, contains('loading: isSubmitting'));
+    expect(
+      smsFormClass,
       isNot(contains('setState(')),
-      reason: '短信验证页按钮 pending 态应局部刷新，不应整页 setState。',
+      reason: '短信码面板按钮 pending 态应局部刷新，不应整页 setState。',
+    );
+    expect(backToPhoneStepMethod, isNotNull);
+    expect(backToPhoneStepMethod, contains('_command.resetToFirstStep();'));
+    expect(backToPhoneStepMethod, contains('_refreshCaptcha();'));
+    expect(
+      backToPhoneStepMethod,
+      isNot(contains('await ')),
+      reason: '返回手机号面板是同步换步，不需要旧短信页那条返回 pending 标志。',
+    );
+    expect(
+      backToPhoneStepMethod,
+      isNot(contains('setState(')),
+      reason: '返回上一步只换面板与重取验证码，不应整页 setState。',
     );
   });
 
@@ -3216,11 +3431,8 @@ void main() {
     final deviceListMethod = RegExp(
       r'Future<List<Map>> deviceList\(\) async \{[\s\S]*?\n  /// 收藏或取消收藏设备',
     ).firstMatch(drinkApi)?.group(0);
-    final showDeviceSelectionMethod = RegExp(
-      r'void _showDeviceSelectionDialog\(\) \{[\s\S]*?\n  Future<void> _confirmDeleteDevice',
-    ).firstMatch(drinkView)?.group(0);
-    final trackDeviceSelectionMethod = RegExp(
-      r'Future<void> _trackDeviceSelectionSheet\(Future<void> sheet\) async \{[\s\S]*?\n  Future<void> _confirmDeleteDevice',
+    final drinkBodyMethod = RegExp(
+      r'Widget _buildDrinkBody\(BuildContext context\) \{[\s\S]*?\n  \}\n\n  /// 编辑设备备注',
     ).firstMatch(drinkView)?.group(0);
     final showDeviceManagementMethod = RegExp(
       r'void _showDeviceManagementSheet\(\) \{[\s\S]*?\n  Future<bool> _scanQRCodeAndAddDevice',
@@ -3234,8 +3446,14 @@ void main() {
     final deviceCodeFromQrResultMethod = RegExp(
       r'String _deviceCodeFromQrResult\(String result\) \{[\s\S]*?\n  Future<String\?> _openQrScanner',
     ).firstMatch(drinkView)?.group(0);
-    final deviceSelectionSheetClass = RegExp(
-      r'class DrinkDeviceSelectionSheet extends StatelessWidget \{[\s\S]*?\nclass DrinkDeviceManagementSheet',
+    final deviceListClass = RegExp(
+      r'class DrinkDeviceList extends StatelessWidget \{[\s\S]*?\nclass _DrinkDeviceTile',
+    ).firstMatch(drinkWidgets)?.group(0);
+    final reorderListClass = RegExp(
+      r'class _DrinkReorderList extends StatelessWidget \{[\s\S]*?\nclass _DrinkInfoBadge',
+    ).firstMatch(drinkWidgets)?.group(0);
+    final actionButtonClass = RegExp(
+      r'class DrinkActionButton extends StatelessWidget \{[\s\S]*?\n\}\n\nclass DrinkBottomSheetScaffold',
     ).firstMatch(drinkWidgets)?.group(0);
     final deviceManagementSheetClass = RegExp(
       r'class DrinkDeviceManagementSheet extends StatelessWidget \{[\s\S]*?\nclass DrinkQrCodeScannerPage',
@@ -3271,11 +3489,27 @@ void main() {
     expect(initTokenMethod, isNotNull);
     expect(
       initTokenMethod,
-      contains('for (final entry in map.entries)'),
+      contains('for (final entry in decoded.entries)'),
       reason: '饮水 token 本地初始化在启动路径执行，应直接遍历 entries，避免 forEach 闭包分配。',
     );
-    expect(initTokenMethod, contains('_token[entry.key] = entry.value;'));
+    expect(
+      initTokenMethod,
+      contains('_token[entry.key.toString()] = entry.value;'),
+      reason: '解码结果是 dynamic Map，键要先转成 String 再写入，避免启动路径抛类型异常。',
+    );
     expect(initTokenMethod, isNot(contains('.forEach(')));
+    expect(initTokenMethod, contains('if (decoded is! Map)'));
+    expect(
+      initTokenMethod,
+      contains('await prefs.remove("drink798UsrApiToken");'),
+      reason: '本地 token 内容不是 JSON 对象时应按未登录处理并清掉坏数据。',
+    );
+    expect(drinkApi, contains('Future<void>? _tokenInitialized;'));
+    expect(
+      drinkApi,
+      contains('await _tokenInitialized;'),
+      reason: '鉴权请求应等本地 token 读取完成，避免冷启动第一次请求带上空 Authorization。',
+    );
 
     expect(checkLoginMethod, isNotNull);
     expect(
@@ -3338,9 +3572,10 @@ void main() {
     expect(selectedDeviceMethod, contains('if (device is! Map)'));
     expect(
       selectedDeviceMethod,
-      contains("final id = device['id']?.toString();"),
+      contains('final id = drinkDeviceId(device);'),
+      reason: '设备 id 取值应收敛到共享工具，页面与列表两处不能各写一套字段路径。',
     );
-    expect(selectedDeviceMethod, contains('id == null || id.isEmpty'));
+    expect(selectedDeviceMethod, contains('if (id.isEmpty)'));
 
     expect(startDrinkMethod, isNotNull);
     expect(startDrinkMethod, contains('final deviceId = _selectedDeviceId();'));
@@ -3412,45 +3647,60 @@ void main() {
     );
     expect(removeDeviceMethod, isNot(contains('removeWhere')));
 
-    expect(showDeviceSelectionMethod, isNotNull);
+    expect(drinkBodyMethod, isNotNull);
     expect(
-      showDeviceSelectionMethod,
-      contains('_isDeviceSelectionSheetOpen = true;'),
+      drinkBodyMethod,
+      contains('devices: state.deviceList,'),
+      reason: '饮水设备列表应直接复用响应式设备列表，避免 Obx 重建时复制整表。',
     );
     expect(
-      showDeviceSelectionMethod,
-      contains('final devices = logic.state.deviceList;'),
-      reason: '饮水设备选择弹层应直接复用响应式设备列表，避免 Obx 重建时复制整表。',
+      drinkBodyMethod,
+      isNot(contains('List<dynamic>.from(')),
+      reason: '正文设备区不应为一次 rebuild 复制整表。',
+    );
+    expect(drinkBodyMethod, contains('DrinkDeviceSectionHeader('));
+    expect(drinkBodyMethod, contains('DrinkDeviceList('));
+    expect(drinkBodyMethod, contains('DrinkEmptyDeviceCard('));
+    // 设备选择弹层已并入正文列表，重新引入第三块弹层会多出一条选中路径。
+    expect(drinkBodyMethod, isNot(contains('DrinkCurrentDeviceCard')));
+    expect(drinkBodyMethod, isNot(contains('DrinkDeviceSelectionSheet')));
+    expect(drinkView, isNot(contains('_showDeviceSelectionDialog')));
+    expect(drinkView, isNot(contains('_trackDeviceSelectionSheet')));
+    // 列表区靠 Expanded 拿到有界高度，正文再单独包一层 repaint 边界。
+    expect(drinkBodyMethod, isNot(contains('Spacer()')));
+    expect(
+      drinkBodyMethod,
+      contains('Expanded(\n          child: Obx(() {'),
+      reason: '设备列表应占据剩余高度并整体包在 Obx 内，替代旧的 Spacer 加弹层选择。',
     );
     expect(
-      showDeviceSelectionMethod,
-      contains('final deviceCount = devices.length;'),
+      'Obx('.allMatches(drinkBodyMethod!).length,
+      5,
+      reason: '状态卡、段落头、设备列表、主按钮与提示文案这五处响应式读取各自单独包在 Obx 里。',
     );
-    expect(showDeviceSelectionMethod, contains('deviceCount: deviceCount,'));
+
+    expect(deviceListClass, isNotNull);
+    expect(deviceListClass, contains('return ListView.builder('));
+    expect(deviceListClass, contains('return GridView.builder('));
+    expect(deviceListClass, contains('itemCount: devices.length'));
+    expect(deviceListClass, contains('final device = devices[index];'));
     expect(
-      showDeviceSelectionMethod,
-      isNot(contains('List<dynamic>.from(logic.state.deviceList)')),
+      deviceListClass,
+      isNot(contains('Column(')),
+      reason: '设备列表必须逐项惰性构建，不能预先展开成 Column 子项。',
     );
+    expect(deviceListClass, isNot(contains('devices.map(')));
+    expect(deviceListClass, isNot(contains('for (final device in devices)')));
+
+    expect(reorderListClass, isNotNull);
+    expect(reorderListClass, contains('ReorderableListView.builder('));
+    expect(reorderListClass, contains('itemCount: devices.length'));
+    expect(reorderListClass, contains('buildDefaultDragHandles: false'));
     expect(
-      showDeviceSelectionMethod,
-      contains('unawaited(_trackDeviceSelectionSheet(sheet));'),
-      reason: '设备选择弹层关闭后的打开标记清理应集中到 async helper。',
+      reorderListClass,
+      isNot(contains('children: devices.map(')),
+      reason: '排序列表同样要用索引构建器，避免每帧物化整表子项。',
     );
-    expect(
-      showDeviceSelectionMethod,
-      isNot(contains('sheet.whenComplete')),
-      reason: '设备选择弹层打开标记不应通过 whenComplete 回调链清理。',
-    );
-    expect(trackDeviceSelectionMethod, isNotNull);
-    expect(trackDeviceSelectionMethod, contains('try {'));
-    expect(trackDeviceSelectionMethod, contains('await sheet;'));
-    expect(trackDeviceSelectionMethod, contains('} finally {'));
-    expect(
-      trackDeviceSelectionMethod,
-      contains('_isDeviceSelectionSheetOpen = false;'),
-      reason: '设备选择弹层无论正常关闭还是异常完成，都必须释放打开标记。',
-    );
-    expect(trackDeviceSelectionMethod, isNot(contains('.whenComplete(')));
 
     expect(showDeviceManagementMethod, isNotNull);
     expect(
@@ -3593,29 +3843,30 @@ void main() {
       reason: '不应乐观翻转本地状态，否则可能与真实相机状态不一致。',
     );
 
-    expect(deviceSelectionSheetClass, isNotNull);
-    expect(deviceSelectionSheetClass, contains('required this.deviceCount'));
-    expect(deviceSelectionSheetClass, contains('final int deviceCount;'));
+    // 设备选择弹层已被正文列表与主按钮取代；主按钮自身的绘制纪律接管这一区段。
+    expect(actionButtonClass, isNotNull);
+    expect(actionButtonClass, contains('return DecoratedBox('));
+    expect(actionButtonClass, contains('key: drinkPrimaryActionKey,'));
+    expect(actionButtonClass, contains('decoration: decoration,'));
     expect(
-      deviceSelectionSheetClass,
-      contains('final listHeight = min(maxListHeight, deviceCount * 92.0);'),
-    );
-    expect(deviceSelectionSheetClass, contains("badge: '\$deviceCount 台'"));
-    expect(deviceSelectionSheetClass, contains('if (deviceCount == 0)'));
-    expect(deviceSelectionSheetClass, contains('itemCount: deviceCount'));
-    expect(
-      deviceSelectionSheetClass,
-      contains('addRepaintBoundaries: false'),
-      reason: '饮水设备选择弹层是小型静态列表，不应为每个设备项自动创建 repaint 边界。',
+      actionButtonClass,
+      contains('backgroundColor: Colors.transparent,'),
+      reason: '主按钮内层必须留透明底，渐变只由外层 DecoratedBox 画一次。',
     );
     expect(
-      deviceSelectionSheetClass,
-      contains('final device = devices[index] as Map;'),
+      actionButtonClass,
+      contains('disabledBackgroundColor: Colors.transparent,'),
+      reason: '不设禁用底色时 Material 会回落一层 onSurface 遮罩，盖掉外层表面并额外重绘。',
     );
+    expect(actionButtonClass, contains('onPressed: enabled ? onTap : null'));
+    expect(actionButtonClass, contains('elevation: 0'));
+    expect(actionButtonClass, contains('shadowColor: Colors.transparent'));
     expect(
-      deviceSelectionSheetClass,
-      isNot(contains('Map<String, dynamic>.from(')),
+      actionButtonClass,
+      isNot(contains('AnimatedContainer')),
+      reason: '主按钮在三个表面态之间切换应保持静态，不引入整钮隐式动画。',
     );
+    expect(actionButtonClass, isNot(contains('0xFF')));
 
     expect(deviceManagementSheetClass, isNotNull);
     expect(deviceManagementSheetClass, contains('required this.deviceCount'));

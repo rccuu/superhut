@@ -9,6 +9,8 @@ import '../../../core/ui/app_bottom_sheet.dart';
 import '../../../core/ui/app_loading_indicator.dart';
 import '../../../core/ui/app_page_route.dart';
 import '../../../core/ui/app_snack_bar.dart';
+import '../core/drink_device.dart';
+import '../core/drink_home_tokens.dart';
 import 'logic.dart';
 import 'widgets/drink_page_widgets.dart';
 
@@ -44,7 +46,6 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
   late final FunctionDrinkLogic logic;
   late final bool _ownsLogic;
   bool _isAddingDevice = false;
-  bool _isDeviceSelectionSheetOpen = false;
   bool _isDeviceManagementSheetOpen = false;
   bool _isDeleteConfirmationOpen = false;
 
@@ -112,46 +113,6 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
       backgroundColor: Colors.transparent,
       builder: builder,
     );
-  }
-
-  void _showDeviceSelectionDialog() {
-    if (_isDeviceSelectionSheetOpen) {
-      return;
-    }
-
-    _isDeviceSelectionSheetOpen = true;
-    final sheet = _showDrinkSheet<void>(
-      builder:
-          (sheetContext) => Obx(() {
-            final devices = logic.state.deviceList;
-            final deviceCount = devices.length;
-
-            return DrinkDeviceSelectionSheet(
-              devices: devices,
-              deviceCount: deviceCount,
-              selectedIndex: logic.state.choiceDevice.value,
-              formatDeviceName: logic.formatDeviceName,
-              onSelectDevice: (index) {
-                if (logic.state.drinkStatus.value) {
-                  Navigator.of(sheetContext).pop();
-                  return;
-                }
-
-                logic.setChoiceDevice(index);
-                Navigator.of(sheetContext).pop();
-              },
-            );
-          }),
-    );
-    unawaited(_trackDeviceSelectionSheet(sheet));
-  }
-
-  Future<void> _trackDeviceSelectionSheet(Future<void> sheet) async {
-    try {
-      await sheet;
-    } finally {
-      _isDeviceSelectionSheetOpen = false;
-    }
   }
 
   Future<void> _confirmDeleteDevice(String deviceName, String deviceId) async {
@@ -352,9 +313,12 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
   @override
   Widget build(BuildContext context) {
     final bool canPop = Navigator.of(context).canPop();
+    final palette = DrinkHomePalette.of(context);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      // 本体色由页面自己给定，不用全局 scaffoldBackgroundColor：
+      // 加载态、overscroll 发光和抽屉底衬都跟着走，才不会露出第二层灰。
+      backgroundColor: palette.page,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         leading:
@@ -364,24 +328,25 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainerHigh
-                          .withValues(alpha: 0.92),
+                      color: palette.card.withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: palette.hairline),
                     ),
                     child: IconButton(
                       tooltip: '返回',
                       onPressed: () => Navigator.maybePop(context),
-                      icon: const Icon(Icons.arrow_back_rounded),
+                      icon: Icon(Icons.arrow_back_rounded, color: palette.ink),
                     ),
                   ),
                 )
                 : null,
-        title: const Text('慧生活798'),
-        titleTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          color: Theme.of(context).colorScheme.onSurface,
-          letterSpacing: -0.3,
+        title: Text(
+          '慧生活798',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: palette.ink,
+          ),
         ),
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -397,7 +362,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
             return IconButton(
               tooltip: '刷新设备',
               onPressed: () => logic.getDeviceList(showRefreshing: true),
-              icon: const Icon(Icons.refresh_rounded),
+              icon: Icon(Icons.refresh_rounded, color: palette.ink),
             );
           }),
         ],
@@ -418,116 +383,14 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
                 }
 
                 return RefreshIndicator(
+                  color: palette.brandInk,
                   onRefresh: () => logic.getDeviceList(showRefreshing: true),
-                  child: CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    slivers: [
-                      SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Obx(() {
-                                final state = logic.state;
-                                final selectedIndex = state.choiceDevice.value;
-                                final hasDevice =
-                                    state.deviceList.isNotEmpty &&
-                                    selectedIndex >= 0 &&
-                                    selectedIndex < state.deviceList.length;
-                                final deviceName =
-                                    hasDevice
-                                        ? logic.formatDeviceName(
-                                          state
-                                              .deviceList[selectedIndex]['name']
-                                              .toString(),
-                                        )
-                                        : null;
-
-                                return DrinkStatusHeader(
-                                  drinkStatus: state.drinkStatus.value,
-                                  deviceCount: state.deviceList.length,
-                                  deviceName: deviceName,
-                                );
-                              }),
-                              const SizedBox(height: 18),
-                              Obx(() {
-                                final state = logic.state;
-                                final selectedIndex = state.choiceDevice.value;
-                                final hasDevice =
-                                    state.deviceList.isNotEmpty &&
-                                    selectedIndex >= 0 &&
-                                    selectedIndex < state.deviceList.length;
-                                final deviceName =
-                                    hasDevice
-                                        ? logic.formatDeviceName(
-                                          state
-                                              .deviceList[selectedIndex]['name']
-                                              .toString(),
-                                        )
-                                        : '';
-
-                                if (!hasDevice) {
-                                  return DrinkEmptyDeviceCard(
-                                    onAddDevice: _scanQRCodeAndAddDevice,
-                                  );
-                                }
-
-                                return DrinkCurrentDeviceCard(
-                                  deviceName: deviceName,
-                                  deviceCount: state.deviceList.length,
-                                  onTap: _showDeviceSelectionDialog,
-                                );
-                              }),
-                              const SizedBox(height: 14),
-                              DrinkQuickActions(
-                                onManageDevices: _showDeviceManagementSheet,
-                                onAddDevice: _scanQRCodeAndAddDevice,
-                              ),
-                              const Spacer(),
-                              Obx(() {
-                                final state = logic.state;
-                                final selectedIndex = state.choiceDevice.value;
-                                final hasDevice =
-                                    state.deviceList.isNotEmpty &&
-                                    selectedIndex >= 0 &&
-                                    selectedIndex < state.deviceList.length;
-
-                                return DrinkActionButton(
-                                  drinkStatus: state.drinkStatus.value,
-                                  enabled: hasDevice,
-                                  onTap: _handleDrinkToggle,
-                                );
-                              }),
-                              const SizedBox(height: 14),
-                              Obx(() {
-                                final state = logic.state;
-                                final selectedIndex = state.choiceDevice.value;
-                                final hasDevice =
-                                    state.deviceList.isNotEmpty &&
-                                    selectedIndex >= 0 &&
-                                    selectedIndex < state.deviceList.length;
-
-                                return Text(
-                                  hasDevice
-                                      ? '设备可切换，开始用水后会自动检测状态。'
-                                      : '添加设备后即可开始用水。',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color:
-                                        Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  // 正文自己就是带 Expanded 内联列表的 Column，不能再套一层
+                  // SliverFillRemaining(hasScrollBody: false)：那会向子树索取固有
+                  // 高度，而收缩包裹的视口不支持固有尺寸，布局直接断言失败。
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+                    child: _buildDrinkBody(context),
                   ),
                 );
               }),
@@ -537,12 +400,130 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
             child: Obx(
               () => AmbientBubbleField.drink(
                 isActive: logic.state.drinkStatus.value,
-                color: Theme.of(context).colorScheme.primary,
+                // 气泡跟页面强调色走，不用宿主主题的 primary。
+                color: DrinkHomeT.accentStart,
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildDrinkBody(BuildContext context) {
+    final palette = DrinkHomePalette.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Obx(() {
+          final state = logic.state;
+          return DrinkStatusHeader(
+            drinkStatus: state.drinkStatus.value,
+            deviceCount: state.deviceList.length,
+            deviceName:
+                state.deviceList.isNotEmpty &&
+                        state.choiceDevice.value >= 0 &&
+                        state.choiceDevice.value < state.deviceList.length
+                    ? logic.deviceTitle(
+                      state.deviceList[state.choiceDevice.value],
+                    )
+                    : null,
+          );
+        }),
+        const SizedBox(height: 14),
+        DrinkQuickActions(
+          onManageDevices: _showDeviceManagementSheet,
+          onAddDevice: _scanQRCodeAndAddDevice,
+        ),
+        const SizedBox(height: 16),
+        Obx(
+          () => DrinkDeviceSectionHeader(
+            isGrid: logic.state.layoutMode.value == 'grid',
+            isReordering: logic.state.isReordering.value,
+            onToggleLayout: () {
+              final isGrid = logic.state.layoutMode.value == 'grid';
+              logic.setLayoutMode(isGrid ? 'list' : 'grid');
+            },
+            onToggleReorder: logic.toggleReorderMode,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: Obx(() {
+            final state = logic.state;
+            if (state.deviceList.isEmpty) {
+              return DrinkEmptyDeviceCard(onAddDevice: _scanQRCodeAndAddDevice);
+            }
+
+            // 标题在这里算好：条目由 ListView 惰性构建， itemBuilder 里读
+            // deviceNotes 不会登记进这个 Obx，改完备注就不会重画。
+            final Map<String, String> titles = {
+              for (final device in state.deviceList)
+                drinkDeviceId(device): logic.deviceTitle(device),
+            };
+
+            return DrinkDeviceList(
+              devices: state.deviceList,
+              selectedIndex: state.choiceDevice.value,
+              isGrid: state.layoutMode.value == 'grid',
+              isReordering: state.isReordering.value,
+              deviceKeyOf: drinkDeviceId,
+              titleOf: (device) => titles[drinkDeviceId(device)] ?? '',
+              onSelect: logic.setChoiceDevice,
+              onEditNote: _editDeviceNote,
+              onReorder: logic.reorderDevices,
+            );
+          }),
+        ),
+        const SizedBox(height: 10),
+        Obx(() {
+          final state = logic.state;
+          final bool hasDevice =
+              state.deviceList.isNotEmpty &&
+              state.choiceDevice.value >= 0 &&
+              state.choiceDevice.value < state.deviceList.length;
+
+          return DrinkActionButton(
+            drinkStatus: state.drinkStatus.value,
+            enabled: hasDevice,
+            onTap: _handleDrinkToggle,
+          );
+        }),
+        const SizedBox(height: 12),
+        Obx(() {
+          final bool hasDevice = logic.state.deviceList.isNotEmpty;
+
+          return Text(
+            hasDevice ? '设备可切换，开始用水后会自动检测状态。' : '添加设备后即可开始用水。',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: palette.inkSecondary),
+          );
+        }),
+      ],
+    );
+  }
+
+  /// 编辑设备备注。备注只存在本机，清空即删除。
+  ///
+  /// 输入框的控制器交给对话框自己持有：路由退场的最后一帧仍会读它。
+  Future<void> _editDeviceNote(dynamic device) async {
+    final String deviceId = drinkDeviceId(device);
+    if (deviceId.isEmpty) {
+      return;
+    }
+
+    final String? saved = await showDialog<String>(
+      context: context,
+      builder:
+          (dialogContext) => DrinkNoteEditorDialog(
+            title: logic.formatDeviceName(drinkDeviceName(device)),
+            initialNote: logic.state.deviceNotes[deviceId] ?? '',
+          ),
+    );
+
+    if (saved != null) {
+      await logic.saveDeviceNote(deviceId, saved);
+    }
   }
 }

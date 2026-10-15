@@ -58,6 +58,7 @@ docs/*
 !docs/plans/
 !docs/requirements/
 !docs/trust-and-privacy.md
+!docs/comet/
 outputs/
 .serena
 docs/plans
