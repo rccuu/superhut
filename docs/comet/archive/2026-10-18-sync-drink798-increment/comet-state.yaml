@@ -1,0 +1,290 @@
+schema: comet.native.v4
+name: sync-drink798-increment
+language: zh-CN
+phase: archive
+status: done
+state_version: 8
+brief: brief.md
+document_constraints_version: 3
+shape_confirmation_hash: e4d9beef7f1e621383b95257b9a820025094470ec3b32f2d11496f690735798e
+spec_changes:
+  - capability: drink-798
+    operation: modify
+    source: specs/drink-798/spec.md
+workspace:
+  isolation: current
+  change_branch: main
+  target_branch: main
+  finish: null
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 1
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: A1：点击「开始接水」成功路径下，发往 `/api/v1/dev/start` 的查询参数中 `ptype` 为 `91`；其余参数仍为
+      `did`、`upgrade=true`、`args=`（空串）、`rcp=false`、`cnt=1`，无 `stype`、无
+      `sign`；有单元测试逐字断言。
+    result: passed
+    reason:
+      text: drink_api_request_test.dart 逐字断言 dev/start URL 与参数集：ptype=91、六键、无
+        stype/sign
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: A2：钱包支付（`ptype=91`）返回失败且失败码非 `-99` 时，自动以 `ptype=21` 再发一次
+      `dev/start`；第二次成功则进入接水态并只重试一次（出现 `[91, 21]` 两次请求）；`code == -99`
+      时不重试（只有一次请求）；有按分支断言请求序列的测试。
+    result: passed
+    reason:
+      text: 回退序列 [91,21] 恰一次；-99 只发一次；回退再拒无第三次，三条分支测试齐备
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: A3：点击开始时的设备状态预检按三态分支：`device.status == 0`（离线）不发开始请求并提示设备离线；`gene.status ==
+      98`（禁用）不发开始请求并提示联系管理员；链路在线但 `gene.status` 既非 99 也非
+      98（占用中）不发开始请求、同步进入可结算态并开始状态轮询；状态查询本身失败（网络异常）时不拦截，仍发开始请求；有覆盖四条分支的测试。
+    result: passed
+    reason:
+      text: 离线/禁用/占用三分支均断言 startCalls==0，占用进可结算态并轮询；预检失败不拦截断言 startCalls==1
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: A4：`GET /ui/app/dev/status` 的查询参数恰为 `did` 与 `more=false`，不含 `promo`、不含
+      `sign`；响应按 `device.status` 与 `device.gene.status` 解析为离线 / 禁用 / 空闲 /
+      运行中四类判定；有单元测试断言参数集与三类响应解析。
+    result: passed
+    reason:
+      text: deviceStatus 参数恰为 did+more=false 无 promo/sign；四类状态解析有测试
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: A5：`GET /dev/end` 的查询参数为 `did` 与 `rcp=false`；`GET /dev/favo` 的 `remove` 以
+      `1`（取消收藏）/`0`（收藏）上线；有单元测试断言两个请求的线上形状。
+    result: passed
+    reason:
+      text: dev/end 恰 did+rcp=false；favo remove 上线 1/0
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: A6：扫码添加设备时，二维码末段先经 `GET /qr/use?id=<末段>` 换取真实设备 ID：解析出设备 ID 时以该 ID
+      收藏；响应无设备或请求失败时回退二维码末段收藏；二维码末段为空时不发起任何请求；有覆盖三条路径的测试。
+    result: passed
+    reason:
+      text: 首轮报告的缺线已修复（abec023）：新增 FunctionDrinkLogic.addDeviceByQrCode 且 view.dart
+        扫码链路改走该链路；三条新测试覆盖换 ID 成功/空解析回退/空码零请求；performance_boundaries 形状断言更新后全绿
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: A7：状态轮询自开始起 30 分钟后自动停止，不再发起状态查询；既有代际丢弃、连续空闲计数与结算即停轮询的行为不变；有单元测试断言轮询停止。
+    result: passed
+    reason:
+      text: debugPollStartedAtOverride 拨回 31 分钟断言轮询停止；既有代际/结算停轮询测试仍通过
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: A8：798 之外的页面与全局主题文件未被修改；`flutter analyze` 无告警，`flutter test`
+      全部通过（含按新接口形状更新的既有测试）。
+    result: passed
+    reason:
+      text: git show --name-only 仅 lib/pages/drink/** 与 test/**（runtime 修复提交含
+        test/core/ui/performance_boundaries_test.dart，仍属测试边界；798
+        产品代码之外无修改）；flutter analyze 无问题；flutter test 全量通过
+      truncated: false
+builder_handoff:
+  candidate_id: ab1106b1-73c6-4b9e-a6be-220009b77e3a
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:fa399fc6-89c8-46be-b343-59209c9d2250
+  iteration: 1
+  summary:
+    text: 同步 drink_798 7380c52 的 798 增量到 superhut：ptype 改钱包 91 缺省（新增常量
+      walletPaymentType/alipayPaymentType，startDrink 增加 ptype 可注入参数）；控制器在服务端拒绝且非
+      -99 时以支付宝 21 回退一次；开始前 deviceStatus
+      预检（离线/禁用分别拦截提示，占用中同步进可结算态并立即轮询，预检失败不拦截）；新增 DrinkDeviceStatus 模型与
+      deviceStatus/resolveQrDevice 接口（qr/use 换设备 ID，失败回退二维码末段，空编号不发请求）；dev/end 带
+      rcp=false；dev/favo remove 上线 1/0；dev/status 形状 did+more=false 去
+      promo；isAvailableDevice 改走三态映射；状态轮询加 30 分钟上限（pollCeiling 注入 +
+      debugPollStartedAtOverride
+      测试拨针，与既有代际计数叠加）。改动文件：lib/pages/drink/api/drink_api.dart、新增
+      lib/pages/drink/api/drink_device_status.dart、lib/pages/drink/view/logic.dart、test/pages/drink/
+      四个测试文件更新与新增。实现已提交 8d5ad4c。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - "test/pages/drink/drink_api_request_test.dart: dev/start 逐字断言 ptype=91
+          与完整 URL"
+        - "test/pages/drink/function_drink_logic_test.dart: startDrink defaults
+          to wallet payment"
+      note: 缺省 91，显式传 21 时按传参发送；URL 断言 ptype=91&args=&rcp=false&cnt=1
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - "function_drink_logic_test.dart: a wallet rejection falls back to
+          alipay once and succeeds — startDrinkPtypes [91,21]"
+        - a session-expired start error does not retry — 只发 91 一次
+        - an alipay fallback rejection surfaces without a third request — 恰好两次
+      note: 回退仅一次，-99 不回退；回退成功进入接水态
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - an offline device is blocked by the precheck — startCalls 0
+        - a disabled device is blocked — startCalls 0
+        - a busy device enters settle state and polls — startCalls 0 且
+          drinkStatus true 后随空闲自动收起
+        - a failed precheck does not block the start request — startCalls 1
+      note: 预检失败（success:false 或 code 非 0）不拦截；离线/禁用/占用三分支各有独立测试
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - "drink_api_request_test.dart: deviceStatus sends did and more=false
+          without promo — 参数集恰为 {did, more}"
+        - deviceStatus parses offline, disabled, busy and available — 四类解析
+        - isAvailableDevice maps the three states
+      note: 无 promo、无 sign；gene.status 98 禁用、99 空闲、其他运行中
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - "drink_api_request_test.dart: dev/end carries the device id and
+          rcp=false"
+        - favoDevice sends remove as 1/0 on the wire
+      note: dev/end 参数恰为 did+rcp；favo remove 0/1 分别对应收藏/取消
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - "drink_api_request_test.dart: resolveQrDevice exchanges the qr tail —
+          命中 qr/use 且参数恰为 id"
+        - falls back to empty when nothing resolves — 无设备/拒绝/形状异常三例
+        - refuses an empty id without sending a request
+      note: 控制器侧 view.dart 在扫码链路先 resolveQrDevice 再 favoDevice，空解析回退末段
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - "function_drink_logic_test.dart: status polling stops after the 30
+          minute ceiling — debugPollStartedAtOverride 拨回 31 分钟后轮询停"
+      note: pollCeiling 可注入，默认 30 分钟；到点静默停止且不再发请求；代际/结算即停等既有行为有原测试守护仍通过
+    - id: A8
+      status: implemented-with-evidence
+      evidence:
+        - "flutter analyze: No issues found"
+        - "flutter test（全仓库）: All tests passed"
+        - "flutter test test/pages/drink/: +56 logic / 157 drink 总数"
+      note: 798 之外页面与全局主题未修改（git diff 仅 lib/pages/drink/** 与 test/pages/drink/**）
+  checks:
+    - name:
+        text: flutter analyze
+        truncated: false
+      result: passed
+      note:
+        text: No issues found! (ran in 6.2s)
+        truncated: false
+    - name:
+        text: flutter test
+        truncated: false
+      result: passed
+      note:
+        text: 全仓库 All tests passed；drink 模块 logic 56 项 + api 24 项 + 页面/UI 测试全绿
+        truncated: false
+    - name:
+        text: flutter test test/pages/drink/
+        truncated: false
+      result: passed
+      note:
+        text: All tests passed
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 真机钱包余额不足→支付宝回退的实际服务端行为无法在本环境复现，依据为请求序列测试与 drink_798 上游实测（61c5e076）
+      truncated: false
+    - text: qr/use 的真实服务端响应形状以 drink_798 吸收的上游实现为准，未能本机实测
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-18T10:12:54.244Z
+blockers: []
+verification:
+  candidate_id: ab1106b1-73c6-4b9e-a6be-220009b77e3a
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:1be69331-f54f-4425-86ec-eea03d51893f
+  iteration: 1
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: flutter-analyze
+      name:
+        text: flutter analyze
+        truncated: false
+      argv_display:
+        - text: analyze
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 5907
+    - id: flutter-test
+      name:
+        text: flutter test
+        truncated: false
+      argv_display:
+        - text: test
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 21250
+  summary:
+    text: 8/8 验收项通过：A1-A5、A7、A8 在候选 8d5ad4c 首轮即通过；A6 经修复提交 abec023
+      补齐扫码链路接线并有测试。flutter analyze 无问题，全量 flutter test 通过（Runtime 回执 +684 全绿）。
+    truncated: false
+  risks:
+    - text: 真机钱包不足→支付宝回退与 qr/use 真实服务端行为未在本环境验证，依据为请求序列测试与 drink_798 上游实测（brief
+        已声明为已知限制）
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-18T10:56:36.071Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 8/8 验收项通过：A1-A5、A7、A8 在候选 8d5ad4c 首轮即通过；A6 经修复提交 abec023
+        补齐扫码链路接线并有测试。flutter analyze 无问题，全量 flutter test 通过（Runtime 回执 +684 全绿）。
+      truncated: false
+    completed_at: 2026-10-18T10:56:36.071Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-18T08:55:32.537Z
