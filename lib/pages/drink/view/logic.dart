@@ -320,6 +320,32 @@ class FunctionDrinkLogic extends GetxController {
     }
   }
 
+  /// 扫码添加设备：二维码末段先经 `qr/use` 换取真实设备 ID，再收藏。
+  ///
+  /// 解析出设备 ID 时以该 ID 收藏；`qr/use` 无法解析（响应无设备、服务端
+  /// 拒绝或网络异常）时回退二维码末段收藏，尽量保持添加能力；末段为空
+  /// 时既不解析也不收藏，直接按失败处理。
+  Future<bool> addDeviceByQrCode(String rawCode) async {
+    final int slashIndex = rawCode.lastIndexOf('/');
+    final String tail = slashIndex == -1 ? rawCode : rawCode.substring(
+      slashIndex + 1,
+    );
+    if (tail.isEmpty) {
+      return false;
+    }
+
+    String deviceId = tail;
+    try {
+      final String resolved = await drinkApi.resolveQrDevice(qrId: tail);
+      if (resolved.isNotEmpty) {
+        deviceId = resolved;
+      }
+    } catch (_) {
+      // 解析失败回退二维码末段收藏。
+    }
+    return favoDevice(deviceId, false);
+  }
+
   /// 格式化设备名称
   String formatDeviceName(String name) {
     StringBuffer? buffer;

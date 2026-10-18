@@ -264,8 +264,7 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
         return false;
       }
 
-      final String enc = _deviceCodeFromQrResult(result);
-      final bool isFavo = await logic.favoDevice(enc, false);
+      final bool isFavo = await logic.addDeviceByQrCode(result);
       _showResultSnackBar(
         success: isFavo,
         successMessage: '设备添加成功',
@@ -286,14 +285,6 @@ class _FunctionDrinkPageState extends State<FunctionDrinkPage> {
     } finally {
       _isAddingDevice = false;
     }
-  }
-
-  String _deviceCodeFromQrResult(String result) {
-    final slashIndex = result.lastIndexOf('/');
-    if (slashIndex == -1) {
-      return result;
-    }
-    return result.substring(slashIndex + 1);
   }
 
   Future<String?> _openQrScanner(BuildContext context) {

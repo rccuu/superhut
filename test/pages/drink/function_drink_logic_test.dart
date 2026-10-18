@@ -604,6 +604,49 @@ void main() {
     },
   );
 
+  test('addDeviceByQrCode resolves via qr/use then favorites by device id',
+      () async {
+    // A6：qr/use 换出 dev-42 → 以 dev-42 收藏（而非二维码末段 abc）。
+    final api = _FakeDrinkApi(availabilityResults: const [])
+      ..resolveQrResponse = 'dev-42';
+    final logic = FunctionDrinkLogic(drinkApi: api);
+    addTearDown(logic.onClose);
+
+    final ok = await logic.addDeviceByQrCode('https://i.ilife798.com/d/abc');
+
+    expect(ok, isTrue);
+    expect(api.resolveQrCalls, 1);
+    expect(api.resolveQrRequests, ['abc'], reason: '送 qr/use 的是二维码末段');
+    expect(api.favoRequestKeys, ['favo:dev-42'],
+        reason: '收藏用换出来的设备 ID');
+  });
+
+  test('addDeviceByQrCode falls back to the qr tail when qr/use yields nothing',
+      () async {
+    // A6：qr/use 未能解析（空串）→ 回退末段收藏。
+    final api = _FakeDrinkApi(availabilityResults: const [])
+      ..resolveQrResponse = '';
+    final logic = FunctionDrinkLogic(drinkApi: api);
+    addTearDown(logic.onClose);
+
+    final ok = await logic.addDeviceByQrCode('abc');
+
+    expect(ok, isTrue);
+    expect(api.favoRequestKeys, ['favo:abc']);
+  });
+
+  test('addDeviceByQrCode ignores an empty code without any request', () async {
+    // A6：末段为空 → 不解析也不收藏。
+    final api = _FakeDrinkApi(availabilityResults: const []);
+    final logic = FunctionDrinkLogic(drinkApi: api);
+    addTearDown(logic.onClose);
+
+    expect(await logic.addDeviceByQrCode(''), isFalse);
+    expect(await logic.addDeviceByQrCode('https://host/'), isFalse);
+    expect(api.resolveQrCalls, 0);
+    expect(api.favoDeviceCalls, 0);
+  });
+
   test('concurrent endDrink calls share a single in-flight request', () async {
     final endCompleter = Completer<DrinkResult>();
     final api = _FakeDrinkApi(

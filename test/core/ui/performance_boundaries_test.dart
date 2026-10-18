@@ -3441,10 +3441,7 @@ void main() {
       r'Future<void> _trackDeviceManagementSheet\(Future<void> sheet\) async \{[\s\S]*?\n  Future<bool> _scanQRCodeAndAddDevice',
     ).firstMatch(drinkView)?.group(0);
     final scanQrCodeAndAddDeviceMethod = RegExp(
-      r'Future<bool> _scanQRCodeAndAddDevice\(\) async \{[\s\S]*?\n  String _deviceCodeFromQrResult',
-    ).firstMatch(drinkView)?.group(0);
-    final deviceCodeFromQrResultMethod = RegExp(
-      r'String _deviceCodeFromQrResult\(String result\) \{[\s\S]*?\n  Future<String\?> _openQrScanner',
+      r'Future<bool> _scanQRCodeAndAddDevice\(\) async \{[\s\S]*?\n  Future<String\?> _openQrScanner',
     ).firstMatch(drinkView)?.group(0);
     final deviceListClass = RegExp(
       r'class DrinkDeviceList extends StatelessWidget \{[\s\S]*?\nclass _DrinkDeviceTile',
@@ -3754,22 +3751,14 @@ void main() {
     expect(scanQrCodeAndAddDeviceMethod, isNotNull);
     expect(
       scanQrCodeAndAddDeviceMethod,
-      contains('final String enc = _deviceCodeFromQrResult(result);'),
-      reason: '扫码添加设备应集中提取设备码，避免在异步流程中散落字符串处理。',
+      isNot(contains(".split('/')")),
+      reason: '扫码添加设备不应在异步流程中散落 split 字符串处理。',
     );
-    expect(scanQrCodeAndAddDeviceMethod, isNot(contains(".split('/')")));
-    expect(deviceCodeFromQrResultMethod, isNotNull);
     expect(
-      deviceCodeFromQrResultMethod,
-      contains("final slashIndex = result.lastIndexOf('/');"),
-      reason: '二维码结果通常是 URL，应从尾部定位最后一个斜杠，避免 split 物化所有路径段。',
+      scanQrCodeAndAddDeviceMethod,
+      contains('await logic.addDeviceByQrCode(result);'),
+      reason: '扫码添加设备应走控制器的 qr/use 解析链路（换真实设备 ID），不再直接收藏二维码末段。',
     );
-    expect(deviceCodeFromQrResultMethod, contains('return result;'));
-    expect(
-      deviceCodeFromQrResultMethod,
-      contains('return result.substring(slashIndex + 1);'),
-    );
-    expect(deviceCodeFromQrResultMethod, isNot(contains('.split(')));
 
     expect(qrScannerPageClass, isNotNull);
     expect(
