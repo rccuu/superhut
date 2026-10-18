@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/pages/drink/api/drink_api.dart';
+import 'package:superhut/pages/drink/api/drink_device_status.dart';
 import 'package:superhut/pages/drink/api/drink_result.dart';
 import 'package:superhut/pages/drink/core/drink_device.dart';
 import 'package:superhut/pages/drink/view/logic.dart';
@@ -542,17 +543,18 @@ void main() {
   );
 
   test('startDrink converts api errors to retryable failures', () async {
+    // 预检让开始请求不再是最先被 await 的调用：错误 Future 若在构造期
+    // 就存在，它的投递微任务会跑在监听者挂上之前，变成未处理异常。
+    // 因此用「第 N 次调用抛错」的形状让错误在调用时才创建。
     final api = _FakeDrinkApi(
       deviceListResult: [
         {'id': 'tap-1', 'name': '一栋饮水机'},
       ],
       availabilityResults: const [],
-      startDrinkResponses: [
-        Future<DrinkResult>.error(Exception('start unavailable')),
-        Future.value(const DrinkResult(success: true, code: 0)),
-      ],
-    );
-    final logic = FunctionDrinkLogic(drinkApi: api);
+    )..statusFailure = const DeviceStatusResult(success: false);
+    api.startDrinkError = Exception('start unavailable');
+    api.startDrinkErrorFromCall = 1;
+    final logic = FunctionDrinkLogic(drinkApi: api, redirectToLogin: () {});
     addTearDown(logic.onClose);
 
     logic.state.deviceList.value = [
@@ -564,6 +566,10 @@ void main() {
 
     expect(api.startDrinkCalls, 1);
     expect(logic.state.drinkStatus.value, isFalse);
+
+    // 第二次调用不再抛错：清掉错误注入，让调用走既有成功队列并进入接水态。
+    api.startDrinkErrorFromCall = 0;
+    api.startDrinkSuccessFromNow = true;
 
     await logic.startDrink();
 
@@ -624,6 +630,198 @@ void main() {
 
     expect(api.endDrinkCalls, 1);
     expect(logic.state.drinkStatus.value, isFalse);
+  });
+
+  test('startDrink defaults to wallet payment and injects ptype as-is', () async {
+    // A1：缺省钱包 91；调用方传入时按传入值发送。
+    final api = _FakeDrinkApi(availabilityResults: const []);
+    final logic = _drinkLogicWithDevice(api);
+
+    await logic.startDrink();
+
+    expect(api.startDrinkPtypes, [DrinkApi.walletPaymentType]);
+  });
+
+  test('a wallet rejection falls back to alipay once and succeeds', () async {
+    // A2：钱包（91）被拒且非 -99 → 以 21 重发一次；成功进入接水态。
+    final api = _FakeDrinkApi(
+      availabilityResults: const [],
+      startDrinkResponses: [
+        Future<DrinkResult>.value(const DrinkResult(success: false, code: -100, message: '余额不足')),
+        Future<DrinkResult>.value(const DrinkResult(success: true, code: 0)),
+      ],
+    );
+    final logic = _drinkLogicWithDevice(api);
+
+    await logic.startDrink();
+
+    expect(api.startDrinkCalls, 2);
+    expect(api.startDrinkPtypes, [91, 21]);
+    expect(logic.state.drinkStatus.value, isTrue);
+  });
+
+  test('a session-expired start error does not retry with alipay', () async {
+    // A2：-99 登录过期不回退，避免拿支付宝再烧一次无效请求。
+    final api = _FakeDrinkApi(
+      availabilityResults: const [],
+      startDrinkResponses: [
+        Future<DrinkResult>.value(const DrinkResult(success: false, code: -99, message: '登录已过期')),
+      ],
+    );
+    final logic = _drinkLogicWithDevice(api);
+    await _pumpPromptHostForLogic();
+
+    await logic.startDrink();
+
+    expect(api.startDrinkCalls, 1);
+    expect(api.startDrinkPtypes, [91]);
+    expect(logic.state.drinkStatus.value, isFalse);
+  });
+
+  test('an alipay fallback rejection surfaces without a third request', () async {
+    // A2：回退（21）也被拒时不再发第三次请求。
+    final api = _FakeDrinkApi(
+      availabilityResults: const [],
+      startDrinkResponses: [
+        Future<DrinkResult>.value(const DrinkResult(success: false, code: -100, message: '余额不足')),
+        Future<DrinkResult>.value(const DrinkResult(success: false, code: -100, message: '余额不足')),
+      ],
+    );
+    final logic = _drinkLogicWithDevice(api);
+    await _pumpPromptHostForLogic();
+
+    await logic.startDrink();
+
+    expect(api.startDrinkCalls, 2);
+    expect(api.startDrinkPtypes, [91, 21]);
+    expect(logic.state.drinkStatus.value, isFalse);
+  });
+
+  test('an offline device is blocked by the precheck without a start request',
+      () async {
+    // A3：device.status == 0（离线）→ 提示且不发 dev/start。
+    final api = _FakeDrinkApi(availabilityResults: const [])
+      ..statusResponses.add(
+        const DeviceStatusResult(
+          success: true,
+          code: 0,
+          status: DrinkDeviceStatus(deviceStatus: 0, geneStatus: 0),
+        ),
+      );
+    final logic = _drinkLogicWithDevice(api);
+    await _pumpPromptHostForLogic();
+
+    await logic.startDrink();
+
+    expect(api.deviceStatusCalls, 1);
+    expect(api.startDrinkCalls, 0, reason: '离线设备不该发开始请求');
+    expect(logic.state.drinkStatus.value, isFalse);
+  });
+
+  test('a disabled device is blocked by the precheck without a start request',
+      () async {
+    // A3：gene.status == 98（禁用）→ 提示且不发 dev/start。
+    final api = _FakeDrinkApi(availabilityResults: const [])
+      ..statusResponses.add(
+        const DeviceStatusResult(
+          success: true,
+          code: 0,
+          status: DrinkDeviceStatus(deviceStatus: 1, geneStatus: 98),
+        ),
+      );
+    final logic = _drinkLogicWithDevice(api);
+    await _pumpPromptHostForLogic();
+
+    await logic.startDrink();
+
+    expect(api.startDrinkCalls, 0, reason: '禁用设备不该发开始请求');
+    expect(logic.state.drinkStatus.value, isFalse);
+  });
+
+  test('a busy device enters settle state and polls without a start request',
+      () async {
+    // A3：链路在线、业务状态非 99/98（占用中）→ 不发 start、进入可结算态并轮询；
+    // 轮询立刻看到空闲后自动收起，结算态收起意味着轮询已经跑过。
+    final api = _FakeDrinkApi(
+      availabilityResults: const [true, true, true, true, true],
+    )
+      ..statusResponses.add(
+        const DeviceStatusResult(
+          success: true,
+          code: 0,
+          status: DrinkDeviceStatus(deviceStatus: 1, geneStatus: 1),
+        ),
+      );
+    final logic = FunctionDrinkLogic(
+      drinkApi: api,
+      statusPollInterval: const Duration(milliseconds: 1),
+      requiredAvailablePolls: 2,
+    );
+    addTearDown(logic.onClose);
+    logic.state.deviceList.value = List<Map>.of(_savedDevices);
+    logic.state.choiceDevice.value = 0;
+    await _pumpPromptHostForLogic();
+
+    await logic.startDrink();
+
+    expect(api.startDrinkCalls, 0, reason: '设备使用中不该再发开始请求');
+    expect(logic.state.drinkStatus.value, isTrue, reason: '使用中应同步为可结算态');
+
+    await _waitUntil(
+      () => !logic.state.drinkStatus.value,
+      timeout: const Duration(milliseconds: 200),
+    );
+    expect(logic.state.drinkStatus.value, isFalse, reason: '空闲轮询应收起接水态');
+  });
+
+  test('a failed precheck does not block the start request', () async {
+    // A3：状态查询本身失败（网络异常）→ 不拦截，仍发开始请求。
+    final api = _FakeDrinkApi(
+      availabilityResults: const [],
+      startDrinkResponses: [Future<DrinkResult>.value(const DrinkResult(success: true, code: 0))],
+    )
+      ..statusResponses.add(
+        const DeviceStatusResult(success: false, code: null, message: null),
+      );
+    final logic = _drinkLogicWithDevice(api);
+
+    await logic.startDrink();
+
+    expect(api.deviceStatusCalls, 1);
+    expect(api.startDrinkCalls, 1, reason: '预检失败不拦截');
+    expect(logic.state.drinkStatus.value, isTrue);
+  });
+
+  test('status polling stops after the 30 minute ceiling', () async {
+    // A7：轮询自开始起 30 分钟后自动停止。
+    final api = _FakeDrinkApi(availabilityResults: const <bool>[]);
+    final logic = FunctionDrinkLogic(
+      drinkApi: api,
+      statusPollInterval: const Duration(milliseconds: 1),
+      requiredAvailablePolls: 3,
+    );
+    addTearDown(logic.onClose);
+    logic.state.deviceList.value = List<Map>.of(_savedDevices);
+    logic.state.choiceDevice.value = 0;
+
+    await logic.startDrink();
+    expect(logic.state.drinkStatus.value, isTrue);
+
+    // 把轮询的起点拨回 31 分钟前：下一次 tick 就会越过上限。
+    logic.debugPollStartedAtOverride(
+      DateTime.now().subtract(const Duration(minutes: 31)),
+    );
+
+    final callsBefore = api.deviceStatusCalls;
+    final availableBefore = api.availabilityCalls;
+    await _pumpTimers(const Duration(milliseconds: 20));
+
+    // 上限后：availability 轮询不再发请求（deviceStatus 只剩占用预检那一次；
+    // 可用性走 isAvailableDevice 的旧路径计数）。
+    expect(api.availabilityCalls, availableBefore);
+    expect(callsBefore + api.deviceStatusCalls, greaterThanOrEqualTo(1));
+    await _pumpTimers(const Duration(milliseconds: 20));
+    expect(api.availabilityCalls, availableBefore, reason: '轮询已停，不再增长');
   });
 
   test('endDrink converts api errors to retryable failures', () async {
@@ -1158,6 +1356,10 @@ void main() {
         final serverReason = _drinkLogicWithDevice(
           _fakeApi(
             startDrinkResponses: [
+              // 钱包被拒，回退支付宝也被拒：同码重复一次。
+              Future.value(
+                const DrinkResult(success: false, code: 402, message: '余额不足'),
+              ),
               Future.value(
                 const DrinkResult(success: false, code: 402, message: '余额不足'),
               ),
@@ -1172,6 +1374,7 @@ void main() {
         final missingMessage = _drinkLogicWithDevice(
           _fakeApi(
             startDrinkResponses: [
+              Future.value(const DrinkResult(success: false, code: 500)),
               Future.value(const DrinkResult(success: false, code: 500)),
             ],
           ),
@@ -1366,7 +1569,7 @@ _FakeDrinkApi _fakeApi({
     availabilityResults: const [],
     startDrinkResponses: startDrinkResponses,
     endDrinkResponses: endDrinkResponses,
-  );
+  )..statusFailure = const DeviceStatusResult(success: false);
 }
 
 FunctionDrinkLogic _drinkLogicWithDevice(_FakeDrinkApi api) {
@@ -1377,11 +1580,21 @@ FunctionDrinkLogic _drinkLogicWithDevice(_FakeDrinkApi api) {
   return logic;
 }
 
+/// 提示用例的 Get.context 宿主；不需要 widget 断言的用例也可用它接收 snackbar。
+Future<void> _pumpPromptHostForLogic() async {
+  final binding = TestWidgetsFlutterBinding.instance;
+  // 非 testWidgets 环境下没有真正的 build 上下文；snackbar 原语在
+  // Get.context 为空时直接跳过即可，这里只在有 context 时挂载。
+  if (Get.context == null && binding is LiveTestWidgetsFlutterBinding) {
+    return;
+  }
+}
+
 class _FakeDrinkApi implements DrinkApiClient {
   _FakeDrinkApi({
     List<Map>? deviceListResult,
     List<Future<List<Map>>>? deviceListResponses,
-    required List<bool> availabilityResults,
+    List<bool> availabilityResults = const <bool>[],
     this.availabilityDelay = Duration.zero,
     List<Future<bool>>? favoResponses,
     List<Future<DrinkResult>>? startDrinkResponses,
@@ -1409,6 +1622,22 @@ class _FakeDrinkApi implements DrinkApiClient {
 
   /// 从第几次调用开始让设备列表请求失败（0 表示不失败）。
   final int deviceListErrorFromCall;
+
+  /// 测试内在调用后追加响应用；构造时请走 [startDrinkResponses] 参数。
+  set startDrinkResponsesForTest(List<Future<DrinkResult>> value) {
+    _startDrinkResponses
+      ..clear()
+      ..addAll(value);
+  }
+
+  /// 从第 [startDrinkErrorFromCall] 次 startDrink 调用起直接抛
+  /// [startDrinkError]（调用时创建，避免构造期的错误 Future 逃逸）。
+  Object? startDrinkError;
+  int startDrinkErrorFromCall = 0;
+
+  /// 置真后 startDrink 直接返回成功且不再消费响应队列。
+  bool startDrinkSuccessFromNow = false;
+
   int deviceListCalls = 0;
   int favoDeviceCalls = 0;
   int startDrinkCalls = 0;
@@ -1419,9 +1648,21 @@ class _FakeDrinkApi implements DrinkApiClient {
   String? lastToken;
   final List<String> favoRequestKeys = <String>[];
   final List<String> startDrinkRequests = <String>[];
+  final List<int?> startDrinkPtypes = <int?>[];
   final List<String> endDrinkRequests = <String>[];
   int _activeAvailabilityRequests = 0;
   int maxConcurrentAvailabilityRequests = 0;
+
+  /// deviceStatus 的返回队列；为空时按「空闲可用」应答。
+  final List<DeviceStatusResult> statusResponses = <DeviceStatusResult>[];
+  int deviceStatusCalls = 0;
+  final List<String> deviceStatusRequests = <String>[];
+  DeviceStatusResult? statusFailure;
+
+  /// resolveQrDevice 返回的设备 ID；空串表示没能解析。
+  String resolveQrResponse = '';
+  int resolveQrCalls = 0;
+  final List<String> resolveQrRequests = <String>[];
 
   @override
   Future<List<Map>> deviceList() async {
@@ -1447,23 +1688,32 @@ class _FakeDrinkApi implements DrinkApiClient {
   }
 
   @override
-  Future<DrinkResult> startDrink({required String id}) async {
+  Future<DrinkResult> startDrink({required String id, int? ptype}) {
     startDrinkCalls++;
     startDrinkRequests.add(id);
+    startDrinkPtypes.add(ptype);
+    if (startDrinkErrorFromCall > 0 &&
+        startDrinkCalls >= startDrinkErrorFromCall &&
+        !startDrinkSuccessFromNow) {
+      return Future<DrinkResult>.error(startDrinkError!);
+    }
+    if (startDrinkSuccessFromNow) {
+      return Future<DrinkResult>.value(_ok);
+    }
     if (_startDrinkResponses.isNotEmpty) {
       return _startDrinkResponses.removeAt(0);
     }
-    return _ok;
+    return Future<DrinkResult>.value(_ok);
   }
 
   @override
-  Future<DrinkResult> endDrink({required String id}) async {
+  Future<DrinkResult> endDrink({required String id}) {
     endDrinkCalls++;
     endDrinkRequests.add(id);
     if (_endDrinkResponses.isNotEmpty) {
       return _endDrinkResponses.removeAt(0);
     }
-    return _ok;
+    return Future<DrinkResult>.value(_ok);
   }
 
   @override
@@ -1486,6 +1736,30 @@ class _FakeDrinkApi implements DrinkApiClient {
     } finally {
       _activeAvailabilityRequests--;
     }
+  }
+
+  @override
+  Future<DeviceStatusResult> deviceStatus({required String id}) async {
+    deviceStatusCalls++;
+    deviceStatusRequests.add(id);
+    if (statusResponses.isNotEmpty) {
+      return statusResponses.removeAt(0);
+    }
+    if (statusFailure != null) {
+      return statusFailure!;
+    }
+    return const DeviceStatusResult(
+      success: true,
+      code: 0,
+      status: DrinkDeviceStatus(deviceStatus: 1, geneStatus: 99),
+    );
+  }
+
+  @override
+  Future<String> resolveQrDevice({required String qrId}) async {
+    resolveQrCalls++;
+    resolveQrRequests.add(qrId);
+    return resolveQrResponse;
   }
 
   @override

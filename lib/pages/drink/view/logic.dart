@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/pages/drink/login/view.dart';
@@ -7,6 +8,7 @@ import 'package:superhut/pages/drink/login/view.dart';
 import '../../../core/services/app_logger.dart';
 import '../../../core/ui/app_snack_bar.dart';
 import '../api/drink_api.dart';
+import '../api/drink_device_status.dart';
 import '../api/drink_result.dart';
 import '../core/drink_device.dart';
 import '../core/drink_failure_prompt.dart';
@@ -22,6 +24,7 @@ class FunctionDrinkLogic extends GetxController {
     DrinkApiClient? drinkApi,
     this.statusPollInterval = const Duration(seconds: 2),
     int requiredAvailablePolls = 3,
+    this.pollCeiling = const Duration(minutes: 30),
     void Function()? redirectToLogin,
   }) : drinkApi = drinkApi ?? DrinkApi(),
        requiredAvailablePolls = requiredAvailablePolls.clamp(1, 10).toInt(),
@@ -32,7 +35,14 @@ class FunctionDrinkLogic extends GetxController {
   final DrinkApiClient drinkApi;
   final Duration statusPollInterval;
   final int requiredAvailablePolls;
+
+  /// 状态轮询上限：自开始起经过该时长后自动停止，防止异常情况下
+  /// 定时器长期驻留。与代际计数叠加，不替换。
+  final Duration pollCeiling;
   final void Function() _redirectToLogin;
+
+  /// 轮询起点。仅供测试拨动（`debugPollStartedAtOverride`），生产代码为 null。
+  DateTime? _debugPollStartedAtOverride;
   int _drinkStatusPollGeneration = 0;
   Future<void>? _deviceListLoad;
   final Map<String, Future<bool>> _favoDeviceLoads = <String, Future<bool>>{};
@@ -463,6 +473,7 @@ class FunctionDrinkLogic extends GetxController {
     required String deviceId,
     required int generation,
     required int availablePolls,
+    DateTime? startedAt,
   }) {
     if (generation != _drinkStatusPollGeneration || !state.drinkStatus.value) {
       return;
@@ -475,6 +486,7 @@ class FunctionDrinkLogic extends GetxController {
           deviceId: deviceId,
           generation: generation,
           availablePolls: availablePolls,
+          startedAt: startedAt,
         ),
       );
     });
@@ -484,8 +496,17 @@ class FunctionDrinkLogic extends GetxController {
     required String deviceId,
     required int generation,
     required int availablePolls,
+    DateTime? startedAt,
   }) async {
     if (generation != _drinkStatusPollGeneration || !state.drinkStatus.value) {
+      return;
+    }
+
+    // 轮询上限：自开始起超过 [pollCeiling] 后静默停止，不弹提示。
+    final DateTime pollStart =
+        startedAt ?? _debugPollStartedAtOverride ?? DateTime.now();
+    if (DateTime.now().difference(pollStart) >= pollCeiling) {
+      _cancelDeviceStatusPolling();
       return;
     }
 
@@ -507,17 +528,28 @@ class FunctionDrinkLogic extends GetxController {
         deviceId: deviceId,
         generation: generation,
         availablePolls: nextAvailablePolls,
+        startedAt: startedAt,
       );
     } catch (_) {
       _scheduleDeviceStatusPolling(
         deviceId: deviceId,
         generation: generation,
         availablePolls: availablePolls,
+        startedAt: startedAt,
       );
     }
   }
 
+  /// 测试专用：拨动轮询起点，模拟「轮询已经跑了很久」。
+  @visibleForTesting
+  void debugPollStartedAtOverride(DateTime? value) {
+    _debugPollStartedAtOverride = value;
+  }
+
   /// 开始喝水
+  ///
+  /// 流程：设备状态预检（离线/禁用拦截、占用中转结算态）→ 钱包支付
+  /// （91）→ 被拒且非登录过期时回退支付宝（21）一次。
   Future<void> startDrink() async {
     if (_drinkOperationInFlight || _isDisposed) {
       return;
@@ -531,9 +563,66 @@ class FunctionDrinkLogic extends GetxController {
         return;
       }
 
-      final DrinkResult result = await drinkApi.startDrink(id: deviceId);
+      // 预检：状态查询本身失败时不拦截（开始请求自己会暴露错误）。
+      final DeviceStatusResult precheck = await drinkApi.deviceStatus(
+        id: deviceId,
+      );
       if (_isDisposed) {
         return;
+      }
+      if (precheck.success && precheck.status != null) {
+        final DrinkDeviceStatus status = precheck.status!;
+        if (status.isOffline) {
+          _showErrorSnackBar('设备离线', '设备当前不在线，请稍后再试');
+          return;
+        }
+        if (status.isDisabled) {
+          _showErrorSnackBar('设备禁用', '设备已被禁用，请联系管理员');
+          return;
+        }
+        if (!status.isAvailable) {
+          // 设备正在运行（可能之前开过水）：同步为可结算状态并开始轮询，
+          // 用户点结算即可结束那一单；不再重发开始请求。
+          _cancelDeviceStatusPolling();
+          state.drinkStatus.value = true;
+          _showPrompt(
+            const DrinkPrompt(
+              title: '设备使用中',
+              message: '设备正在使用中，可点击结算结束本次使用',
+              type: AppSnackBarType.info,
+            ),
+          );
+          final generation = _drinkStatusPollGeneration;
+          _scheduleDeviceStatusPolling(
+            deviceId: deviceId,
+            generation: generation,
+            availablePolls: 0,
+            startedAt: DateTime.now(),
+          );
+          return;
+        }
+      }
+
+      final DrinkResult walletResult = await drinkApi.startDrink(
+        id: deviceId,
+        ptype: DrinkApi.walletPaymentType,
+      );
+      if (_isDisposed) {
+        return;
+      }
+      // 服务端拒绝且非登录过期时回退支付宝免密（21）再试一次；
+      // 请求抛错则直接按失败呈现，回退只针对明确拒绝。
+      DrinkResult result = walletResult;
+      if (!walletResult.success &&
+          !walletResult.isSessionExpired &&
+          walletResult.code != null) {
+        result = await drinkApi.startDrink(
+          id: deviceId,
+          ptype: DrinkApi.alipayPaymentType,
+        );
+        if (_isDisposed) {
+          return;
+        }
       }
 
       if (result.success) {
@@ -546,6 +635,7 @@ class FunctionDrinkLogic extends GetxController {
           deviceId: deviceId,
           generation: generation,
           availablePolls: 0,
+          startedAt: DateTime.now(),
         );
       } else {
         // 透出服务端原因，登录态过期单独引导重新登录。

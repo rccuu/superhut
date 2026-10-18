@@ -39,7 +39,8 @@ void main() {
     });
     expect(request.queryParameters['did'], 'dev-9');
     expect(request.queryParameters['upgrade'], isTrue);
-    expect(request.queryParameters['ptype'], 0);
+    // A1：ptype 缺省钱包支付 91；旧静态值 0 的支付语义未确证，不再使用。
+    expect(request.queryParameters['ptype'], 91);
     // 饮水设备的 args 是空串；官方只在洗衣机、吹风机、触碰开锁上填 JSON。
     expect(request.queryParameters['args'], '');
     expect(request.queryParameters['rcp'], isFalse);
@@ -60,11 +61,20 @@ void main() {
     expect(
       request.uri.toString(),
       'https://i.ilife798.com/api/v1/dev/start'
-      '?did=dev-9&upgrade=true&ptype=0&args=&rcp=false&cnt=1',
+      '?did=dev-9&upgrade=true&ptype=91&args=&rcp=false&cnt=1',
     );
   });
 
-  test('dev/end carries only the device id', () async {
+  test('startDrink sends an explicitly injected ptype as-is', () async {
+    final adapter = _RecordingAdapter((_) => _json(_ok()));
+    final api = _apiWithAdapter(adapter);
+
+    await api.startDrink(id: 'dev-9', ptype: DrinkApi.alipayPaymentType);
+
+    expect(adapter.requests.single.queryParameters['ptype'], 21);
+  });
+
+  test('dev/end carries the device id and rcp=false', () async {
     final adapter = _RecordingAdapter((_) => _json(_ok()));
     final api = _apiWithAdapter(adapter);
 
@@ -73,9 +83,204 @@ void main() {
     final request = adapter.requests.single;
     expect(request.method, 'GET');
     expect(request.uri.path, '/api/v1/dev/end');
-    expect(request.queryParameters.keys.toSet(), <String>{'did'});
+    expect(request.queryParameters.keys.toSet(), <String>{'did', 'rcp'});
     expect(request.queryParameters['did'], 'dev-9');
+    expect(request.queryParameters['rcp'], isFalse);
     expect(request.queryParameters.containsKey('sign'), isFalse);
+  });
+
+  test('favoDevice sends remove as 1/0 on the wire', () async {
+    final adapter = _RecordingAdapter((_) => _json(_ok()));
+    final api = _apiWithAdapter(adapter);
+
+    await api.favoDevice(id: 'dev-9', isUnFavo: false);
+    await api.favoDevice(id: 'dev-9', isUnFavo: true);
+
+    expect(adapter.requests, hasLength(2));
+    expect(adapter.requests[0].queryParameters['remove'], 0);
+    expect(adapter.requests[1].queryParameters['remove'], 1);
+  });
+
+  test('deviceStatus sends did and more=false without promo', () async {
+    final adapter = _RecordingAdapter(
+      (_) => _json(<String, dynamic>{
+        'code': 0,
+        'data': <String, dynamic>{
+          'device': <String, dynamic>{
+            'status': 1,
+            'gene': <String, dynamic>{'status': 99},
+          },
+        },
+      }),
+    );
+    final api = _apiWithAdapter(adapter);
+
+    final result = await api.deviceStatus(id: 'dev-9');
+
+    final request = adapter.requests.single;
+    expect(request.uri.path, '/api/v1/ui/app/dev/status');
+    expect(request.queryParameters.keys.toSet(), <String>{'did', 'more'});
+    expect(request.queryParameters['did'], 'dev-9');
+    expect(request.queryParameters['more'], isFalse);
+    expect(request.queryParameters.containsKey('promo'), isFalse);
+    expect(request.queryParameters.containsKey('sign'), isFalse);
+    expect(result.success, isTrue);
+    expect(result.status, isNotNull);
+    expect(result.status!.isAvailable, isTrue);
+  });
+
+  test('deviceStatus parses offline, disabled, busy and available', () async {
+    final offline = await _apiWithAdapter(
+      _RecordingAdapter(
+        (_) => _json(<String, dynamic>{
+          'code': 0,
+          'data': <String, dynamic>{
+            'device': <String, dynamic>{
+              'status': 0,
+              'gene': <String, dynamic>{'status': 0},
+            },
+          },
+        }),
+      ),
+    ).deviceStatus(id: 'dev-9');
+    expect(offline.status!.isOffline, isTrue);
+    expect(offline.status!.isAvailable, isFalse);
+
+    final disabled = await _apiWithAdapter(
+      _RecordingAdapter(
+        (_) => _json(<String, dynamic>{
+          'code': 0,
+          'data': <String, dynamic>{
+            'device': <String, dynamic>{
+              'status': 1,
+              'gene': <String, dynamic>{'status': 98},
+            },
+          },
+        }),
+      ),
+    ).deviceStatus(id: 'dev-9');
+    expect(disabled.status!.isDisabled, isTrue);
+    expect(disabled.status!.isAvailable, isFalse);
+
+    final available = await _apiWithAdapter(
+      _RecordingAdapter(
+        (_) => _json(<String, dynamic>{
+          'code': 0,
+          'data': <String, dynamic>{
+            'device': <String, dynamic>{
+              'status': 1,
+              'gene': <String, dynamic>{'status': 99},
+            },
+          },
+        }),
+      ),
+    ).deviceStatus(id: 'dev-9');
+    expect(available.status!.isAvailable, isTrue);
+
+    final busy = await _apiWithAdapter(
+      _RecordingAdapter(
+        (_) => _json(<String, dynamic>{
+          'code': 0,
+          'data': <String, dynamic>{
+            'device': <String, dynamic>{
+              'status': 1,
+              'gene': <String, dynamic>{'status': 1},
+            },
+          },
+        }),
+      ),
+    ).deviceStatus(id: 'dev-9');
+    expect(busy.status!.isAvailable, isFalse);
+    expect(busy.status!.isOffline, isFalse);
+    expect(busy.status!.isDisabled, isFalse);
+  });
+  test('deviceStatus surfaces the server rejection as code and message', () async {
+    final api = _apiWithAdapter(
+      _RecordingAdapter(
+        (_) => _json(<String, dynamic>{'code': -99, 'msg': '登录已过期'}),
+      ),
+    );
+
+    final result = await api.deviceStatus(id: 'dev-9');
+
+    expect(result.success, isFalse);
+    expect(result.code, -99);
+    expect(result.message, '登录已过期');
+    expect(result.isSessionExpired, isTrue);
+  });
+
+  test('isAvailableDevice maps the three states through deviceStatus', () async {
+    Future<bool> availabilityOf(int deviceStatus, int geneStatus) async {
+      final api = _apiWithAdapter(
+        _RecordingAdapter(
+          (_) => _json(<String, dynamic>{
+            'code': 0,
+            'data': <String, dynamic>{
+              'device': <String, dynamic>{
+                'status': deviceStatus,
+                'gene': <String, dynamic>{'status': geneStatus},
+              },
+            },
+          }),
+        ),
+      );
+      return api.isAvailableDevice(id: 'dev-9');
+    }
+
+    expect(await availabilityOf(1, 99), isTrue);
+    expect(await availabilityOf(0, 0), isFalse);
+    expect(await availabilityOf(1, 98), isFalse);
+  });
+
+  test('resolveQrDevice exchanges the qr tail for a device id', () async {
+    final adapter = _RecordingAdapter(
+      (_) => _json(<String, dynamic>{
+        'code': 0,
+        'data': <String, dynamic>{
+          'dev': <String, dynamic>{'id': 'dev-42'},
+        },
+      }),
+    );
+    final api = _apiWithAdapter(adapter);
+
+    final id = await api.resolveQrDevice(qrId: 'abc');
+
+    expect(id, 'dev-42');
+    final request = adapter.requests.single;
+    expect(request.uri.path, '/api/v1/qr/use');
+    expect(request.queryParameters.keys.toSet(), <String>{'id'});
+    expect(request.queryParameters['id'], 'abc');
+    expect(request.queryParameters.containsKey('sign'), isFalse);
+  });
+
+  test('resolveQrDevice falls back to empty when nothing resolves', () async {
+    final noDevice = _apiWithAdapter(
+      _RecordingAdapter(
+        (_) => _json(<String, dynamic>{'code': 0, 'data': <String, dynamic>{}}),
+      ),
+    );
+    expect(await noDevice.resolveQrDevice(qrId: 'abc'), '');
+
+    final rejected = _apiWithAdapter(
+      _RecordingAdapter(
+        (_) => _json(<String, dynamic>{'code': 4001, 'msg': '设备不存在'}),
+      ),
+    );
+    expect(await rejected.resolveQrDevice(qrId: 'abc'), '');
+
+    final malformed = _apiWithAdapter(
+      _RecordingAdapter((_) => _json(<String>['unexpected'])),
+    );
+    expect(await malformed.resolveQrDevice(qrId: 'abc'), '');
+  });
+
+  test('resolveQrDevice refuses an empty id without sending a request', () async {
+    final adapter = _RecordingAdapter((_) => _json(_ok()));
+    final api = _apiWithAdapter(adapter);
+
+    expect(await api.resolveQrDevice(qrId: ''), '');
+
+    expect(adapter.requests, isEmpty);
   });
 
   test('acc/login body is exactly openCode, authCode and un', () async {

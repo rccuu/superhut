@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/core/ui/app_animated_container.dart';
 import 'package:superhut/core/ui/app_loading_indicator.dart';
 import 'package:superhut/pages/drink/api/drink_api.dart';
+import 'package:superhut/pages/drink/api/drink_device_status.dart';
 import 'package:superhut/pages/drink/api/drink_result.dart';
 import 'package:superhut/pages/drink/core/drink_device.dart';
 import 'package:superhut/pages/drink/core/drink_home_tokens.dart';
@@ -861,7 +862,7 @@ class _FakeDrinkApi implements DrinkApiClient {
   }
 
   @override
-  Future<DrinkResult> startDrink({required String id}) async {
+  Future<DrinkResult> startDrink({required String id, int? ptype}) async {
     startDrinkRequests.add(id);
     return _ok;
   }
@@ -874,6 +875,17 @@ class _FakeDrinkApi implements DrinkApiClient {
 
   @override
   Future<bool> isAvailableDevice({required String id}) async => false;
+
+  @override
+  Future<DeviceStatusResult> deviceStatus({required String id}) async =>
+      const DeviceStatusResult(
+        success: true,
+        code: 0,
+        status: DrinkDeviceStatus(deviceStatus: 1, geneStatus: 99),
+      );
+
+  @override
+  Future<String> resolveQrDevice({required String qrId}) async => '';
 
   @override
   Future<String> getToken() async => 'token';

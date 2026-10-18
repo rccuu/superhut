@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:superhut/pages/drink/api/drink_device_status.dart';
 import 'package:superhut/pages/drink/api/drink_result.dart';
 
 abstract class DrinkApiClient {
@@ -10,11 +11,15 @@ abstract class DrinkApiClient {
 
   Future<bool> favoDevice({required String id, required bool isUnFavo});
 
-  Future<DrinkResult> startDrink({required String id});
+  Future<DrinkResult> startDrink({required String id, int ptype});
 
   Future<DrinkResult> endDrink({required String id});
 
   Future<bool> isAvailableDevice({required String id});
+
+  Future<DeviceStatusResult> deviceStatus({required String id});
+
+  Future<String> resolveQrDevice({required String qrId});
 
   Future<String> getToken();
 
@@ -64,8 +69,11 @@ class DrinkApi implements DrinkApiClient, DrinkLoginApiClient {
   /// 客户端版本，同时用于 VersionCode 与 User-Agent。与官方 App 一致。
   static const String _clientVersion = '3.1.8';
 
-  /// 支付类型。官方默认值，集中定义便于按实测调整。
-  static const int _paymentType = 0;
+  /// 支付类型。91 为钱包支付（默认），21 为支付宝免密支付；取值经官方
+  /// 客户端运行时实测（上游 cc2562/superhut `61c5e076`）。旧静态值 0 的
+  /// 支付语义未确证，不再使用。
+  static const int walletPaymentType = 91;
+  static const int alipayPaymentType = 21;
 
   /// 接水次数。官方默认值，集中定义便于按实测调整。
   static const int _drinkCount = 1;
@@ -290,12 +298,15 @@ class DrinkApi implements DrinkApiClient, DrinkLoginApiClient {
   }
 
   /// 收藏或取消收藏设备
+  ///
+  /// `remove` 以 `1`/`0` 上线（上游实测形状）；布尔 `true`/`false` 的
+  /// 形式未实测过。
   @override
   Future<bool> favoDevice({required String id, required bool isUnFavo}) async {
     String url = "$_baseUrl/dev/favo";
     Options options = await _authOptions();
 
-    Map<String, dynamic> params = {"did": id, "remove": isUnFavo};
+    Map<String, dynamic> params = {"did": id, "remove": isUnFavo ? 1 : 0};
 
     Response response = await _dio.get(
       url,
@@ -308,16 +319,17 @@ class DrinkApi implements DrinkApiClient, DrinkLoginApiClient {
   /// 开始喝水
   ///
   /// 业务参数与官方一致：did、upgrade、ptype、args、rcp、cnt。
+  /// [ptype] 缺省钱包支付（91）；钱包被拒时由调用方回退支付宝（21）。
   /// args 对饮水设备为空串（官方仅在洗衣机、吹风机、触碰开锁三类设备填 JSON）。
   @override
-  Future<DrinkResult> startDrink({required String id}) async {
+  Future<DrinkResult> startDrink({required String id, int? ptype}) async {
     String url = "$_baseUrl/dev/start";
     Options options = await _authOptions();
 
     Map<String, dynamic> params = {
       "did": id,
       "upgrade": true,
-      "ptype": _paymentType,
+      "ptype": ptype ?? walletPaymentType,
       "args": "",
       "rcp": false,
       "cnt": _drinkCount,
@@ -332,12 +344,14 @@ class DrinkApi implements DrinkApiClient, DrinkLoginApiClient {
   }
 
   /// 结束喝水
+  ///
+  /// `rcp=false` 与官方客户端一致（上游实测形状）。
   @override
   Future<DrinkResult> endDrink({required String id}) async {
     String url = "$_baseUrl/dev/end";
     Options options = await _authOptions();
 
-    Map<String, dynamic> params = {"did": id};
+    Map<String, dynamic> params = {"did": id, "rcp": false};
 
     Response response = await _dio.get(
       url,
@@ -347,20 +361,94 @@ class DrinkApi implements DrinkApiClient, DrinkLoginApiClient {
     return _toResult(response.data);
   }
 
-  /// 检测设备状态
+  /// 检测设备状态（三态），见 [DrinkDeviceStatus]。
+  ///
+  /// 请求形状对齐官方客户端：`did` + `more=false`，不带 `promo`
+  /// （上游实测形状）。
   @override
-  Future<bool> isAvailableDevice({required String id}) async {
+  Future<DeviceStatusResult> deviceStatus({required String id}) async {
     String url = "$_baseUrl/ui/app/dev/status";
     Options options = await _authOptions();
 
-    Map<String, dynamic> params = {"did": id, "more": true, "promo": false};
+    Map<String, dynamic> params = {"did": id, "more": false};
 
-    Response response = await _dio.get(
-      url,
-      queryParameters: params,
-      options: options,
-    );
-    return response.data["data"]["device"]["gene"]["status"] == 99;
+    try {
+      Response response = await _dio.get(
+        url,
+        queryParameters: params,
+        options: options,
+      );
+      final result = response.data;
+      if (result is! Map || result['code'] != 0) {
+        final code = result is Map && result['code'] is int
+            ? result['code'] as int
+            : null;
+        final message = result is Map && result['msg'] is String
+            ? result['msg'] as String
+            : null;
+        return DeviceStatusResult(
+          success: false,
+          code: code,
+          message: _messageOf(message, fallback: null),
+        );
+      }
+      return DeviceStatusResult(
+        success: true,
+        code: 0,
+        status: DrinkDeviceStatus.fromJson(result['data']),
+      );
+    } on DioException catch (e) {
+      return DeviceStatusResult(success: false, message: '网络错误：${e.message}');
+    } catch (_) {
+      return const DeviceStatusResult(success: false);
+    }
+  }
+
+  /// 扫码解析设备：用二维码末段经 `qr/use` 换取真实设备 ID（官方扫码入口
+  /// 走同一接口）。
+  ///
+  /// 返回解析出的设备 ID；无法解析时为空串，调用方可回退二维码末段。
+  /// [qrId] 为空时直接返回空串，不发起请求。
+  @override
+  Future<String> resolveQrDevice({required String qrId}) async {
+    if (qrId.isEmpty) {
+      return '';
+    }
+
+    String url = "$_baseUrl/qr/use";
+    Options options = await _authOptions();
+
+    try {
+      Response response = await _dio.get(
+        url,
+        queryParameters: {"id": qrId},
+        options: options,
+      );
+      final result = response.data;
+      if (result is! Map || result['code'] != 0) {
+        return '';
+      }
+      final dynamic payload = result['data'];
+      final dynamic dev = payload is Map ? payload['dev'] : null;
+      if (dev is! Map) {
+        return '';
+      }
+      return _messageOf(dev['id']?.toString(), fallback: '') ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// 检测设备是否可用（链路在线且业务状态空闲）。
+  ///
+  /// 出错时按「仍在使用」处理（返回 false），避免网络抖动导致提前自动结算。
+  @override
+  Future<bool> isAvailableDevice({required String id}) async {
+    final result = await deviceStatus(id: id);
+    if (!result.success || result.status == null) {
+      return false;
+    }
+    return result.status!.isAvailable;
   }
 
   /// 获取Token
