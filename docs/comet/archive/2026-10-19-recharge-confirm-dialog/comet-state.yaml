@@ -1,0 +1,236 @@
+schema: comet.native.v4
+name: recharge-confirm-dialog
+language: zh-CN
+phase: archive
+status: done
+state_version: 10
+brief: brief.md
+document_constraints_version: 3
+shape_confirmation_hash: 0a16a5718ea0e841775f3696a8ca09d1ea61f14e8e33d22dec0a991199e473b7
+spec_changes:
+  - capability: userpage-recharge-tip
+    operation: create
+    source: specs/userpage-recharge-tip/spec.md
+workspace:
+  isolation: current
+  change_branch: main
+  target_branch: main
+  finish: null
+loop:
+  stage: done
+  goal_cycle: 2
+  iteration: 1
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: "Scenario: 此前未选择「不再提示」时，点击校园卡余额卡片中的「前往充值」，先弹出充值提示框而不直接跳转。"
+    result: passed
+    reason:
+      text: view.dart:401-405 _launchUrl 先 await _shouldShowRechargeTip()（443-454，读
+        user_page_recharge_tip_dismissed，未选默认 true），为真先 showRechargeTipDialog
+        再决定跳转；测试 'recharge tip dialog shows before opening when not dismissed'
+        断言点击后 openCalls==0 且弹框出现。Verifier 独立复跑 flutter test
+        test/home/userpage_test.dart 全部 15 项通过。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "Scenario: 提示框内容完整说明 ①前往支付宝小程序充值 ②登录密码为身份证后 6 位 ③充值入口在小程序左上角、返回键右边
+      ④进入充值页面若出现「出现异常，请联系运维人员」提示没有影响、实际可到账、可先充 1 元试用。"
+    result: passed
+    reason:
+      text: recharge_tip_dialog.dart 标题 L40「前往支付宝小程序充值」覆盖①；L52「登录密码是每个人身份证后 6
+        位。」覆盖②；L54-56「充值入口在小程序的左上角，返回键的右边。」覆盖③；L58-61「出现异常，请联系运维人员…实际测试可以到账…可以先充
+        1 块钱试一下」覆盖④。测试断言四个 find.textContaining（身份证后 6 位/左上角/出现异常，请联系运维人员/先充 1
+        块钱）均 findsOneWidget。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: "Scenario: 点击「知道了」关闭提示框并跳转支付宝小程序；下次点击「前往充值」仍先弹出提示框。"
+    result: passed
+    reason:
+      text: recharge_tip_dialog.dart:71-76「知道了」pop(acknowledged)；view.dart:406-413
+        action!=null 即继续跳转，仅 noMoreTip 写偏好，故 acknowledged 不写偏好下次仍弹框。测试断言点「知道了」后
+        openCalls==1，再次点击「前往充值」弹框重现、openCalls 最终为 2。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: "Scenario: 点击「不再提示」关闭提示框并跳转支付宝小程序；该选择持久保存（应用重启后仍生效），此后点击「前往充值」直接跳转、不再弹框。"
+    result: passed
+    reason:
+      text: recharge_tip_dialog.dart:65-70「不再提示」pop(noMoreTip)；view.dart:409-412 写
+        prefs.setBool(user_page_recharge_tip_dismissed,true) 后仍照常执行 L415-417
+        跳转。测试 'recharge tip no-more-tip choice persists and skips dialog' 断言
+        stored.getBool(...) isTrue，且用同一 mock
+        偏好重建页面实例（模拟重启）后点击直接跳转（openCalls==1、弹框 findsNothing）。偏好每次点击时从
+        SharedPreferences 读取，重启后仍生效。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: "Scenario: 未点击任一按钮、通过点遮罩或系统返回关闭提示框时，不跳转支付宝小程序；下次点击「前往充值」仍先弹出提示框。"
+    result: passed
+    reason:
+      text: 代码级证据（该场景无专门 widget 用例，按验收说明读实现）：showDialog 默认
+        barrierDismissible=true，点遮罩或系统返回均以 null 值完成；view.dart:406-408 `if
+        (action == null || !mounted) return;` 直接返回，不执行跳转、不写偏好，finally
+        仅复位防连点标志；_shouldShowRechargeTip 未被持久化改变，下次点击 A1 同一路径仍先弹框。
+      truncated: false
+builder_handoff:
+  candidate_id: 94256158-3009-4487-b18a-f8319e507107
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:19b07ebb-f247-43fb-86a7-bc13ea193798
+  iteration: 1
+  summary:
+    text: 实现：新增
+      lib/home/userpage/recharge_tip_dialog.dart（充值提示框，标题「前往支付宝小程序充值」，正文含密码/入口位置/异常提示不影响
+      3 行，按钮「不再提示」「知道了」，返回枚举）；修改 lib/home/userpage/view.dart：_launchUrl 在
+      _isOpeningRechargePage 防连点保护下先读偏好 _shouldShowRechargeTip（SharedPreferences
+      key=user_page_recharge_tip_dismissed），未选「不再提示」时弹框——点「不再提示」写偏好且仍跳转、点「知道了」不写偏好仍跳转、遮罩/返回关闭（action
+      null）不跳转不写偏好；已选「不再提示」直接跳转。更新 test/home/userpage_test.dart：既有
+      duplicate-taps / recovers 用例改为预置 dismissed
+      偏好，新增弹框内容与两按钮跳转用例、不再提示持久化用例。开发期检查：flutter analyze 通过（No issues
+      found）；flutter test 全量通过（695 项全绿）。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - test/home/userpage_test.dart 用例 'recharge tip dialog shows before
+          opening when not dismissed' 断言未选不再提示时点击『前往充值』先弹框且 openCalls==0
+        - lib/home/userpage/view.dart _launchUrl 先 _shouldShowRechargeTip 再跳转
+      note: 未选不再提示时先弹框不直接跳转，测试覆盖
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - recharge_tip_dialog.dart 正文 3 行 + 标题
+        - userpage_test 断言 身份证后6位/左上角/出现异常 请联系运维人员/先充1块钱
+      note: 内容完整覆盖4点说明
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - userpage_test 断言点了知道了后 openCalls==1 且下次仍弹框
+      note: 知道了不写偏好，下次仍弹
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - userpage_test 'no-more-tip choice persists' 断言写偏好 true、新实例直接跳转不再弹框
+      note: 不再提示持久化且之后直接跳转
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - view.dart action==null 时 return 不跳转不写偏好
+      note: 遮罩/返回关闭不跳转不写偏好
+  checks:
+    - name:
+        text: flutter analyze
+        truncated: false
+      result: passed
+      note:
+        text: No issues found
+        truncated: false
+    - name:
+        text: flutter test 全量
+        truncated: false
+      result: passed
+      note:
+        text: +695 全部通过
+        truncated: false
+  checks_truncated: false
+  known_limits: []
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-19T01:38:38.874Z
+blockers: []
+verification:
+  candidate_id: 94256158-3009-4487-b18a-f8319e507107
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:626e8048-7caf-46f8-9601-3cb0ebfc1534
+  iteration: 1
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: flutter-analyze
+      name:
+        text: flutter analyze
+        truncated: false
+      argv_display:
+        - text: analyze
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 7281
+    - id: flutter-test-userpage
+      name:
+        text: flutter test userpage
+        truncated: false
+      argv_display:
+        - text: test
+          truncated: false
+        - text: test/home/userpage_test.dart
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 6385
+  summary:
+    text: A1-A5 全部通过：新增 recharge_tip_dialog.dart 与 view.dart
+      确认流完整覆盖提示内容与四种关闭路径，「不再提示」持久化生效，遮罩关闭不跳转；定向测试与 performance_boundaries
+      边界用例独立复跑均通过。
+    truncated: false
+  risks:
+    - text: A5（遮罩/系统返回关闭不跳转）无专门 widget 测试用例，依据 view.dart action==null 分支代码级证据判定（brief
+        测试预期建议项之一，非验收硬性要求，不影响结论）。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-19T01:42:42.035Z
+history:
+  - goal_cycle: 1
+    iteration: 0
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native confirmed acceptance criteria changed
+      truncated: false
+    completed_at: 2026-10-19T01:30:23.935Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: A1-A5 全部通过：新增 recharge_tip_dialog.dart 与 view.dart
+        确认流完整覆盖提示内容与四种关闭路径，「不再提示」持久化生效，遮罩关闭不跳转；定向测试与 performance_boundaries
+        边界用例独立复跑均通过。
+      truncated: false
+    completed_at: 2026-10-19T01:42:42.035Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-19T01:22:29.336Z
