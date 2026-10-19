@@ -1,0 +1,347 @@
+schema: comet.native.v4
+name: course-class-and-inapp-update
+language: zh-CN
+phase: archive
+status: done
+state_version: 12
+brief: brief.md
+document_constraints_version: 3
+shape_confirmation_hash: b9521265b08cd45947836422b4271d93373316e9d70733e120fbba09c52921b5
+spec_changes:
+  - capability: course-class-display
+    operation: create
+    source: specs/course-class-display/spec.md
+  - capability: inapp-update
+    operation: create
+    source: specs/inapp-update/spec.md
+workspace:
+  isolation: current
+  change_branch: main
+  target_branch: main
+  finish: null
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 2
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: "Scenario: 打开带有班级数据的课程详情，详情信息列表出现「班级」条目，内容与教务返回一致，长文本自动换行完整显示，长按可复制。"
+    result: passed
+    reason:
+      text: "代码审查+测试确认：course_table_widgets.dart 详情 sheet
+        在教师行后新增班级行（Ionicons.school_outline），wrapText: true 使 _CourseDetailRow 用
+        maxLines: null、overflow: visible、crossAxisAlignment.start
+        实现多行完整显示不截断；onLongPress 走既有 _copyValue 与其他信息行提示一致；课表格子卡片未加班级。新增 widget
+        测试（course_detail_sheet_test.dart 'shows class name row and fallback
+        text'）验证班级内容展示，flutter test 整体通过。"
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "Scenario: 打开旧课表数据（无班级字段）的课程详情，班级条目显示回退文案（如「暂无班级信息」），其余信息行不受影响。"
+    result: passed
+    reason:
+      text: coursemain.dart Course.fromJson 对 className 采用 json['className'] ?? ''
+        空串回退（默认构造参数同为 ''）；详情 sheet 空值显示「暂无班级信息」；其余信息行未改动。widget 测试断言
+        find.text('暂无班级信息') findsOneWidget，旧构造 Course（未传 className）渲染无异常。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: "Scenario: 「复制课程信息为文本」的结果包含班级一行。"
+    result: passed
+    reason:
+      text: "lib/home/coursetable/view.dart _buildCourseCopyText 在「教师」之后插入
+        '班级：${course.className.isEmpty ? '暂无班级信息' :
+        course.className}'，位于地点行之前，输出含班级行。"
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: "Scenario: Android
+      上更新弹窗点击「下载安装包」后，页面顶部出现下载进度横幅，进度随下载推进；期间可正常切换标签页、使用各功能页面。"
+    result: passed
+    reason:
+      text: "HomeviewPage 在 Stack 顶层 Positioned(top: topInset+10) 挂载
+        AppUpdateDownloadBanner，位于 IndexedStack
+        之外、无全屏阻断层，仅横幅内按钮可点，不阻塞页面交互与切标签；下载由 AppUpdateDownloadService
+        单例执行，dio.downloadUri onReceiveProgress 实时更新 ValueNotifier
+        进度（百分比+进度条）。横幅测试与下载状态测试均通过。真机上进度推进与切标签流畅度未实测，见 risks。"
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: "Scenario: Android
+      下载完成后自动唤起系统安装确认页，用户无需手动查找文件；若未授予「安装未知应用」权限，先引导到系统设置，返回后可继续。"
+    result: passed
+    reason:
+      text: 代码审查通过（真机未实测，见 risks）：AndroidManifest 新增 REQUEST_INSTALL_PACKAGES 与
+        FileProvider（authority com.tune.superhut.updateprovider，@xml/file_paths
+        的 cache-path superhut_update/ 与 getTemporaryDirectory()/superhut_update
+        缓存路径一致）。MainActivity installApk：Android 8+ 先查
+        canRequestPackageInstalls，未授权则跳 ACTION_MANAGE_UNKNOWN_APP_SOURCES 并返回
+        missing-permission；授权路径经 FileProvider content URI 发
+        ACTION_VIEW(application/vnd.android.package-archive)+FLAG_GRANT_READ_URI_PERMISSION
+        唤起系统安装确认页，含 no-installer/failed 等异常分支；Dart 侧 _startPlatformInstall 失败时置
+        failed 状态可重试。
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: "Scenario: iOS 下载完成后弹出系统分享面板分享安装包文件，可交给 TrollStore 导入安装；取消分享不报错。"
+    result: passed
+    reason:
+      text: 代码审查通过（真机未实测，见 risks）：_deliverCompletedFile 在 iOS 分支调用 Share.shareXFiles
+        分享本地安装包（mimeType application/octet-stream，文本注明 TrollStore 导入）；取消分享由
+        share_plus 正常返回不抛错；分享异常时捕获并置 failed 快照，横幅正常结束不崩溃。
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: "Scenario: 下载中点击横幅取消按钮，下载终止、横幅消失，不残留影响下一次下载的半截文件。"
+    result: passed
+    reason:
+      text: cancelDownload 取消 CancelToken 并立即置 idle 快照（isVisible=false
+        横幅消失）；DioException 取消分支同样重置为 idle，不存在取消后横幅残留。半截文件在下一次 startDownload 时先
+        deleteSync 再下载（lib/core/services/app_update_download_service.dart 第
+        184-188 行），不会污染下一次下载；测试 'cancelDownload resets to idle and stops visible
+        banner' 通过。注：取消瞬间半截文件仍留在临时目录、延迟到下次下载前清理，但满足验收语义（不影响下一次下载）。
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: "Scenario: 下载失败时横幅提示失败，可重试或改为打开发布页。"
+    result: passed
+    reason:
+      text: "本轮修复重点已核实：HomeviewPage 第 589-596 行 Positioned 挂载
+        AppUpdateDownloadBanner(onOpenRelease: widget.openUpdateRelease ??
+        _launchUpdateRelease)，注入接线到位；banner 侧 _openUpdateRelease
+        有注入时优先调用注入器，无注入时默认 launchUrl(externalApplication) 兜底，两种路径失败均有错误
+        SnackBar。失败横幅展示「更新包下载失败」+ 重试（复用 update 重新 startDownload）+ 发布页两个操作。新增
+        banner 测试覆盖注入与非注入两条路径且通过。"
+      truncated: false
+  - id: A9
+    source: brief.md
+    text: "Scenario: 同一 tag 的安装包已下载成功后再次触发更新，直接复用本地文件，不重复下载。"
+    result: passed
+    reason:
+      text: 下载成功后 _markDownloadedTag 在 SharedPreferences 记录 tag 与文件名；再次 startDownload
+        时 _resolveReusableFile 命中同 tag 且本地文件存在非空即返回 isReused=true 的 completed
+        快照并直接交付文件，跳过网络下载；tag 不匹配或文件缺失时正常重新下载。下载中取消不写 tag（_markDownloadedTag
+        仅在下载成功路径调用），不会误复用半截文件。
+      truncated: false
+builder_handoff:
+  candidate_id: 25e93baf-38ca-4498-b3de-d4542d241e2c
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:29e8daa6-106b-45f5-8d5e-2ea6c91aa984
+  iteration: 2
+  summary:
+    text: 修复横幅「发布页」按钮接线：HomeviewPage 把 openUpdateRelease（含默认 _launchUpdateRelease
+      回退）注入 AppUpdateDownloadBanner.onOpenRelease；横幅无注入时默认 launchUrl
+      externalApplication 打开发布页。新增 banner 测试（注入 opener 生效、默认回退
+      launchUrl）。A1-A7、A9 不变，A8 由此补全。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+    - A9
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/widgets/course_table_widgets.dart 新增班级行并 wrapText
+      note: 详情 sheet 在教师行后插入 Ionicons.school_outline 班级条目，parse ktmc 到
+        className，长文本自动换行；course_detail_sheet_test 覆盖长班级串显示。
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - Course.fromJson className 默认空串；widgets 空值回退文案
+      note: 旧数据/实验课 className 空时显示「暂无班级信息」；course_detail_sheet_test 覆盖空值回退。
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/view.dart _buildCourseCopyText
+      note: 复制文本在教师与地点之间新增班级行，空值写「暂无班级信息」。
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - AppUpdateDownloadBanner + HomeviewPage 顶层叠加
+      note: 横幅基于 ValueNotifier 状态，下载中显示进度条与百分比，不阻塞下面页面，可正常切换标签。
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - MainActivity installDownloadedApk + FileProvider +
+          REQUEST_INSTALL_PACKAGES
+      note: 下载完成调用 installApk MethodChannel：FileProvider content URI + ACTION_VIEW
+        唤起系统安装确认页；未授权走 openInstallUnknownAppsSettings 引导设置（compileDebugKotlin
+        通过）。
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - app_update_download_service _shareCompletedFile
+      note: iOS 平台下载完成走 Share.shareXFiles 分享面板交付 TrollStore 导入，取消不报错。
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - cancelDownload 终止 CancelToken 并复位状态；重试先删半截文件
+      note: 取消后状态复位 idle 横幅消失；重试前删除未完成文件避免残留。
+    - id: A8
+      status: implemented-with-evidence
+      evidence:
+        - failed 状态+横幅重试/发布页按钮 + HomeviewPage 注入 onOpenRelease + banner 无注入默认
+          launchUrl
+      note: 失败横幅显示失败文案，可选重试（startDownload 复用）或打开 releaseUrl；首页已把 openUpdateRelease
+        注入横幅，未注入时回退系统浏览器。
+    - id: A9
+      status: implemented-with-evidence
+      evidence:
+        - _resolveReusableFile + downloaded tag 持久化
+      note: 同一 tag 已成功下载的文件直接复用免重下，完成态 isReused=true；app_update_download_service_test
+        覆盖快照。
+  checks:
+    - name:
+        text: flutter analyze
+        truncated: false
+      result: passed
+      note:
+        text: No issues found
+        truncated: false
+    - name:
+        text: flutter test (full suite)
+        truncated: false
+      result: passed
+      note:
+        text: 693 tests passed
+        truncated: false
+    - name:
+        text: banner wiring tests
+        truncated: false
+      result: passed
+      note:
+        text: app_update_download_banner_test 2 项通过
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: Android 真实设备安装确认页/未授权设置跳转需真机验收；编译已通过。
+      truncated: false
+    - text: iOS 分享面板交付需真机/模拟器验证 share_plus；下载链路逻辑已由单测覆盖。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-19T00:51:03.718Z
+blockers: []
+verification:
+  candidate_id: 25e93baf-38ca-4498-b3de-d4542d241e2c
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:7d479f31-889b-46ac-b43a-6e34500c0131
+  iteration: 2
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: verify-analyze
+      name:
+        text: flutter analyze
+        truncated: false
+      argv_display:
+        - text: analyze
+          truncated: false
+        - text: --no-pub
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 2909
+    - id: verify-test
+      name:
+        text: flutter test
+        truncated: false
+      argv_display:
+        - text: test
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 21392
+  summary:
+    text: 第二轮独立复核 9/9 通过。班级显示链路（Course.className 模型/解析/序列化、详情 sheet
+      换行条目、复制文本）与旧数据回退均有实现及通过中的测试支撑；应用内更新链路（Dio 流式下载+进度快照、顶部横幅、取消/失败/重试/发布页、同
+      tag 复用）状态机自洽，本轮修复点（HomeviewPage 向横幅注入 onOpenRelease 与横幅默认 launchUrl
+      兜底）已核实到位。flutter analyze 与 flutter test 均通过。A5/A6 真机行为仅代码审查通过，已列入 risks
+      待真机手工验收。
+    truncated: false
+  risks:
+    - text: A5/A6 及 A4 的真机表现未实测：Android 下载完成后自动唤起系统安装、未授权引导设置的全流程，以及 iOS 分享面板交付
+        TrollStore，需按 brief 验收期望做真机/实机手工验收
+      truncated: false
+    - text: Android 未授权「安装未知应用」时，跳转设置页后横幅约 4 秒自动消失且不会在返回后自动续装；用户需再次触发下载，走 A9
+        复用路径即时重试安装（体验上可接受但非自动续接）
+      truncated: false
+    - text: A1 班级超长文本的真实换行观感、A4 真机下载进度推进未在设备上人工核验，仅由代码审查与 widget 测试覆盖
+      truncated: false
+    - text: iOS sharePositionOrigin 使用 Rect.fromLTWH(0,0,1,1)，iPad
+        上分享popover定位为全屏左上角，功能可用但弹出位置不精致
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-19T00:58:33.142Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 全部 9 项验收通过代码路径审查。班级链路：Course.className 贯穿模型全链路，普通课表解析 ktmc，详情 sheet
+        教师行后显示班级（自动换行、空值回退、长按复制），复制文本含班级行，均有测试覆盖。应用内更新：Dio
+        流式下载+顶部进度横幅（不拦截交互）+取消清理+失败重试+同 tag 复用已实现；Android
+        FileProvider+REQUEST_INSTALL_PACKAGES 自动唤起安装、未授权跳系统设置（代码路径完整）；iOS
+        下载完分享面板交付 TrollStore。flutter analyze 与 flutter test（691 项）全部通过。真机安装、iOS
+        分享面板、失败横幅发布页按钮接线为主要遗留风险，需手工验收。
+      truncated: false
+    completed_at: 2026-10-19T00:38:56.470Z
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: 用户选择修复横幅「发布页」按钮接线：把首页 openUpdateRelease 注入横幅 onOpenRelease，未注入时横幅默认回退
+        launchUrl 打开 releaseUrl，修复 A8 的小半缺口
+      truncated: false
+    completed_at: 2026-10-19T00:46:29.683Z
+  - goal_cycle: 1
+    iteration: 2
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 第二轮独立复核 9/9 通过。班级显示链路（Course.className 模型/解析/序列化、详情 sheet
+        换行条目、复制文本）与旧数据回退均有实现及通过中的测试支撑；应用内更新链路（Dio 流式下载+进度快照、顶部横幅、取消/失败/重试/发布页、同
+        tag 复用）状态机自洽，本轮修复点（HomeviewPage 向横幅注入 onOpenRelease 与横幅默认 launchUrl
+        兜底）已核实到位。flutter analyze 与 flutter test 均通过。A5/A6 真机行为仅代码审查通过，已列入 risks
+        待真机手工验收。
+      truncated: false
+    completed_at: 2026-10-19T00:58:33.142Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-18T12:23:13.020Z
