@@ -555,6 +555,7 @@ void main() {
     tester,
   ) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('user_page_recharge_tip_dismissed', true);
     final openCompleter = Completer<bool>();
     var openCalls = 0;
 
@@ -595,6 +596,7 @@ void main() {
 
   testWidgets('recharge button recovers after opener throws', (tester) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('user_page_recharge_tip_dismissed', true);
     var openCalls = 0;
 
     await tester.pumpWidget(
@@ -635,6 +637,180 @@ void main() {
     await tester.pump();
 
     expect(openCalls, 2);
+  });
+
+  testWidgets('recharge tip dialog shows before opening when not dismissed', (
+    tester,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    var openCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UserPage(
+          loadPrefs: () async => prefs,
+          hasLinkedCampusAccount: () async => true,
+          loadBalance: () async => '12.34',
+          loadScoreSummary:
+              () async => const ScoreLoadResult(
+                achievement: [],
+                yxzxf: '40',
+                zxfjd: '120',
+                pjxfjd: '3.5',
+              ),
+          openRechargePage: (_) async {
+            openCalls++;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await _pumpUntil(tester, () => find.text('前往充值').evaluate().isNotEmpty);
+
+    await tester.tap(find.widgetWithText(FilledButton, '前往充值'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 0);
+    expect(find.text('前往支付宝小程序充值'), findsOneWidget);
+    expect(find.textContaining('身份证后 6 位'), findsOneWidget);
+    expect(find.textContaining('左上角'), findsOneWidget);
+    expect(find.textContaining('出现异常，请联系运维人员'), findsOneWidget);
+    expect(find.textContaining('先充 1 块钱'), findsOneWidget);
+    expect(find.text('知道了'), findsOneWidget);
+    expect(find.text('不再提示'), findsOneWidget);
+
+    await tester.tap(find.text('知道了'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 1);
+
+    // 「知道了」不写入偏好，下次点击仍先弹框。
+    await tester.tap(find.widgetWithText(FilledButton, '前往充值'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 1);
+    expect(find.text('前往支付宝小程序充值'), findsOneWidget);
+
+    await tester.tap(find.text('知道了'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 2);
+  });
+
+  testWidgets('recharge tip no-more-tip choice persists and skips dialog', (
+    tester,
+  ) async {
+    var openCalls = 0;
+
+    Widget buildPage() => MaterialApp(
+      home: UserPage(
+        hasLinkedCampusAccount: () async => true,
+        loadBalance: () async => '12.34',
+        loadScoreSummary:
+            () async => const ScoreLoadResult(
+              achievement: [],
+              yxzxf: '40',
+              zxfjd: '120',
+              pjxfjd: '3.5',
+            ),
+        openRechargePage: (_) async {
+          openCalls++;
+          return true;
+        },
+      ),
+    );
+
+    await tester.pumpWidget(buildPage());
+
+    await _pumpUntil(tester, () => find.text('前往充值').evaluate().isNotEmpty);
+
+    await tester.tap(find.widgetWithText(FilledButton, '前往充值'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('前往支付宝小程序充值'), findsOneWidget);
+
+    await tester.tap(find.text('不再提示'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 1);
+
+    final stored = await SharedPreferences.getInstance();
+    expect(stored.getBool('user_page_recharge_tip_dismissed'), isTrue);
+
+    // 新页面实例（同一 mock 偏好，模拟重启）读取后直接跳转、不再弹框。
+    openCalls = 0;
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    await tester.pumpWidget(buildPage());
+
+    await _pumpUntil(tester, () => find.text('前往充值').evaluate().isNotEmpty);
+
+    await tester.tap(find.widgetWithText(FilledButton, '前往充值'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 1);
+    expect(find.text('前往支付宝小程序充值'), findsNothing);
+  });
+
+  testWidgets('recharge tip barrier dismissal neither opens nor persists', (
+    tester,
+  ) async {
+    var openCalls = 0;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: UserPage(
+          hasLinkedCampusAccount: () async => true,
+          loadBalance: () async => '12.34',
+          loadScoreSummary:
+              () async => const ScoreLoadResult(
+                achievement: [],
+                yxzxf: '40',
+                zxfjd: '120',
+                pjxfjd: '3.5',
+              ),
+          openRechargePage: (_) async {
+            openCalls++;
+            return true;
+          },
+        ),
+      ),
+    );
+
+    await _pumpUntil(tester, () => find.text('前往充值').evaluate().isNotEmpty);
+
+    await tester.tap(find.widgetWithText(FilledButton, '前往充值'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('前往支付宝小程序充值'), findsOneWidget);
+
+    // 点遮罩（弹框外区域）关闭，不点任何按钮。
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('前往支付宝小程序充值'), findsNothing);
+    expect(openCalls, 0);
+
+    final stored = await SharedPreferences.getInstance();
+    expect(stored.getBool('user_page_recharge_tip_dismissed'), isNull);
+
+    // 下次点击仍先弹框。
+    await tester.tap(find.widgetWithText(FilledButton, '前往充值'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(openCalls, 0);
+    expect(find.text('前往支付宝小程序充值'), findsOneWidget);
   });
 }
 
