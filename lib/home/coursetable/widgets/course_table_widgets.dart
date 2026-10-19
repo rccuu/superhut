@@ -433,6 +433,11 @@ class _CourseDetailSheetState extends State<CourseDetailSheet> {
         text: course.teacherName.isEmpty ? '暂无教师信息' : course.teacherName,
       ),
       _CourseDetailItem(
+        icon: Ionicons.school_outline,
+        text: course.className.isEmpty ? '暂无班级信息' : course.className,
+        wrapText: true,
+      ),
+      _CourseDetailItem(
         icon: Ionicons.location_outline,
         text: course.location.isEmpty ? '暂无上课地点' : course.location,
       ),
@@ -538,6 +543,7 @@ class _CourseDetailSheetState extends State<CourseDetailSheet> {
                   _CourseDetailRow(
                     icon: item.icon,
                     text: item.text,
+                    wrapText: item.wrapText,
                     onLongPress: () => _copyValue(item.text, '已复制${item.text}'),
                   ),
               ],
@@ -805,10 +811,15 @@ class _CourseSheetCard extends StatelessWidget {
 }
 
 class _CourseDetailItem {
-  const _CourseDetailItem({required this.icon, required this.text});
+  const _CourseDetailItem({
+    required this.icon,
+    required this.text,
+    this.wrapText = false,
+  });
 
   final IconData icon;
   final String text;
+  final bool wrapText;
 }
 
 class _CourseActionItem {
@@ -885,6 +896,7 @@ class _CourseDetailRow extends StatelessWidget {
     this.onLongPress,
     this.trailing,
     this.accentColor,
+    this.wrapText = false,
   });
 
   final IconData icon;
@@ -893,6 +905,7 @@ class _CourseDetailRow extends StatelessWidget {
   final VoidCallback? onLongPress;
   final Widget? trailing;
   final Color? accentColor;
+  final bool wrapText;
 
   @override
   Widget build(BuildContext context) {
@@ -904,7 +917,8 @@ class _CourseDetailRow extends StatelessWidget {
     final rowContent = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment:
+            wrapText ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           Container(
             width: 38,
@@ -919,6 +933,8 @@ class _CourseDetailRow extends StatelessWidget {
           Expanded(
             child: Text(
               text,
+              maxLines: wrapText ? null : 1,
+              overflow: wrapText ? TextOverflow.visible : TextOverflow.ellipsis,
               style: theme.textTheme.bodyLarge?.copyWith(
                 color: accentColor ?? colorScheme.onSurface,
                 fontWeight:

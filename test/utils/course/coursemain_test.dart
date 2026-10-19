@@ -360,6 +360,7 @@ void main() {
                 'teacherName': '张老师',
                 'classWeek': '1-2,4',
                 'classWeekDetails': ',1,2,4,',
+                'ktmc': '软件工程2301班',
                 'location': '公共201',
               },
             ],
@@ -376,6 +377,7 @@ void main() {
     expect(weekData['2026-03-16']?.single.name, '软件工程');
     expect(weekData['2026-03-16']?.single.location, '公共201');
     expect(weekData['2026-03-16']?.single.teacherName, '张老师');
+    expect(weekData['2026-03-16']?.single.className, '软件工程2301班');
   });
 
   test(

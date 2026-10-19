@@ -293,6 +293,7 @@ class GetSingleWeekClass {
             location: tempClass['location']?.toString() ?? '',
             startSection: startSection,
             duration: duration,
+            className: tempClass['ktmc']?.toString() ?? '',
           ),
         );
       } catch (error, stackTrace) {

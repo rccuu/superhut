@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
+import '../../core/services/app_update_download_service.dart';
 import '../../core/services/app_update_service.dart';
 import '../../core/services/course_sync_service.dart';
 import '../../core/ui/app_page_route.dart';
@@ -25,6 +26,7 @@ import '../about/first_open_trust_dialog.dart';
 import '../about/trust_page.dart';
 import '../../pages/Electricitybill/electricity_api.dart';
 import '../../pages/Electricitybill/electricity_page.dart';
+import 'widgets/app_update_download_banner.dart';
 
 typedef HomeElectricityApiFactory = ElectricityApiClient Function();
 typedef HomeElectricityPageOpener = Future<void> Function(BuildContext context);
@@ -32,6 +34,7 @@ typedef HomeUpdateFetcher =
     Future<AppUpdateInfo?> Function({required String currentVersion});
 typedef HomeUpdateReleaseOpener = Future<bool> Function(Uri releaseUrl);
 typedef HomeCurrentVersionLoader = Future<String> Function();
+typedef HomeUpdateStartDownloader = Future<void> Function(AppUpdateInfo update);
 
 class HomeElectricityAlert {
   const HomeElectricityAlert({
@@ -115,6 +118,7 @@ class HomeviewPage extends StatefulWidget {
     this.loadCurrentVersion,
     this.fetchUpdate,
     this.openUpdateRelease,
+    this.startUpdateDownload,
   });
 
   final int initialIndex;
@@ -125,6 +129,7 @@ class HomeviewPage extends StatefulWidget {
   final HomeCurrentVersionLoader? loadCurrentVersion;
   final HomeUpdateFetcher? fetchUpdate;
   final HomeUpdateReleaseOpener? openUpdateRelease;
+  final HomeUpdateStartDownloader? startUpdateDownload;
 
   @override
   State<HomeviewPage> createState() => _HomeviewPageState();
@@ -164,6 +169,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
   bool _isOpeningElectricityPageFromAlert = false;
   bool _isOpeningUpdateRelease = false;
   bool _hasLoadedCurrentVersion = false;
+  bool _isStartingUpdateDownload = false;
 
   @override
   void initState() {
@@ -447,9 +453,9 @@ class _HomeviewPageState extends State<HomeviewPage> {
               child: Text(update.updateActionLabel),
               onPressed: () {
                 unawaited(
-                  _openUpdateReleaseFromDialog(
+                  _handleUpdateDialogPrimaryAction(
                     dialogContext: context,
-                    updateUrl: update.updateUrl,
+                    update: update,
                   ),
                 );
               },
@@ -458,6 +464,33 @@ class _HomeviewPageState extends State<HomeviewPage> {
         );
       },
     );
+  }
+
+  Future<void> _handleUpdateDialogPrimaryAction({
+    required BuildContext dialogContext,
+    required AppUpdateInfo update,
+  }) async {
+    if (!update.hasDirectDownload) {
+      await _openUpdateReleaseFromDialog(
+        dialogContext: dialogContext,
+        updateUrl: update.updateUrl,
+      );
+      return;
+    }
+
+    if (_isStartingUpdateDownload) {
+      return;
+    }
+    _isStartingUpdateDownload = true;
+    try {
+      await Navigator.of(dialogContext).maybePop();
+      final downloadStarter = widget.startUpdateDownload;
+      await (downloadStarter == null
+          ? AppUpdateDownloadService.startDownload(update)
+          : downloadStarter(update));
+    } finally {
+      _isStartingUpdateDownload = false;
+    }
   }
 
   String _buildUpdateDescription(String releaseNotes) {
@@ -552,6 +585,14 @@ class _HomeviewPageState extends State<HomeviewPage> {
             left: 16,
             right: 16,
             child: const IgnorePointer(child: _CourseSyncOverlay()),
+          ),
+          Positioned(
+            top: topInset + 10,
+            left: 16,
+            right: 16,
+            child: AppUpdateDownloadBanner(
+              onOpenRelease: widget.openUpdateRelease ?? _launchUpdateRelease,
+            ),
           ),
           Positioned(
             left: 0,

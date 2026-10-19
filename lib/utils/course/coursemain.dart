@@ -109,6 +109,7 @@ class Course {
   final int duration;
   final bool isExp;
   final String pcid;
+  final String className;
 
   Course({
     required this.name,
@@ -119,6 +120,7 @@ class Course {
     required this.duration,
     this.isExp = false,
     this.pcid = '',
+    this.className = '',
   });
 
   // 将 Course 对象转换为 Map
@@ -132,6 +134,7 @@ class Course {
       'duration': duration,
       'isExp': isExp,
       'pcid': pcid,
+      'className': className,
     };
   }
 
@@ -146,6 +149,7 @@ class Course {
       duration: json['duration'],
       isExp: json['isExp'] ?? false,
       pcid: json['pcid'] ?? '',
+      className: json['className'] ?? '',
     );
   }
 
@@ -159,6 +163,7 @@ class Course {
       duration: duration,
       isExp: isExp,
       pcid: '',
+      className: className,
     );
   }
 }

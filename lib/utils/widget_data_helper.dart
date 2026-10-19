@@ -28,6 +28,7 @@ class WidgetDataHelper {
               duration: course['duration'],
               isExp: course['isExp'] ?? false,
               pcid: course['pcid'] ?? '',
+              className: course['className'] ?? '',
             ),
           );
         }

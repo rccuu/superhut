@@ -145,6 +145,35 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('shows class name row and fallback text', (tester) async {
+    final courseWithClass = Course(
+      name: '体育4',
+      teacherName: '彭老师',
+      weekDuration: '3-10,12-15',
+      location: '第二田径场-11',
+      startSection: 3,
+      duration: 2,
+      className: '包装工程[2303-2304]班,数媒艺术2302班,3D打印2301班',
+    );
+
+    await tester.pumpWidget(buildSheet(courseWithClass));
+
+    expect(find.textContaining('包装工程[2303-2304]班'), findsOneWidget);
+
+    final courseWithoutClass = Course(
+      name: '高等数学',
+      teacherName: '李老师',
+      weekDuration: '1-16',
+      location: '公共101',
+      startSection: 1,
+      duration: 2,
+    );
+
+    await tester.pumpWidget(buildSheet(courseWithoutClass));
+
+    expect(find.text('暂无班级信息'), findsOneWidget);
+  });
+
   testWidgets('copy action recovers after clipboard write throws', (
     tester,
   ) async {

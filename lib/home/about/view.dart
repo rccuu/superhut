@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_logger.dart';
+import '../../core/services/app_update_download_service.dart';
 import '../../core/services/app_update_service.dart';
 import '../../core/ui/app_loading_indicator.dart';
 import '../../core/ui/app_page_route.dart';
@@ -17,6 +18,7 @@ typedef AboutUrlOpener = Future<bool> Function(Uri url);
 typedef AboutUpdateChecker =
     Future<AppUpdateCheckResult> Function({required String currentVersion});
 typedef AboutVersionLoader = Future<String> Function();
+typedef AboutUpdateDownloadStarter = Future<void> Function(AppUpdateInfo update);
 
 class AboutPage extends StatefulWidget {
   const AboutPage({
@@ -26,6 +28,7 @@ class AboutPage extends StatefulWidget {
     this.openUrl,
     this.checkForUpdate,
     this.loadVersion,
+    this.startUpdateDownload,
   });
 
   final AboutPageRouteOpener? openTrustPage;
@@ -33,6 +36,7 @@ class AboutPage extends StatefulWidget {
   final AboutUrlOpener? openUrl;
   final AboutUpdateChecker? checkForUpdate;
   final AboutVersionLoader? loadVersion;
+  final AboutUpdateDownloadStarter? startUpdateDownload;
 
   static Route<void> route() {
     return buildAppPageRoute<void>(
@@ -233,7 +237,14 @@ class _AboutPageState extends State<AboutPage> {
               child: Text(update.updateActionLabel),
               onPressed: () async {
                 Navigator.of(context).pop();
-                await _openUrl(update.updateUrl);
+                if (!update.hasDirectDownload) {
+                  await _openUrl(update.updateUrl);
+                  return;
+                }
+                final downloadStarter = widget.startUpdateDownload;
+                await (downloadStarter == null
+                    ? AppUpdateDownloadService.startDownload(update)
+                    : downloadStarter(update));
               },
             ),
           ],

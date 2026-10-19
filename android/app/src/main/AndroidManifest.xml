@@ -8,6 +8,15 @@
             android:usesCleartextTraffic="true"
             android:enableOnBackInvokedCallback="true"
             android:icon="@mipmap/launcher_icon" tools:targetApi="tiramisu">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.tune.superhut.updateprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -85,6 +94,9 @@
 
     <!-- 扫码导入课表 -->
     <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- 应用内更新：允许安装下载的安装包 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- 定位权限 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
