@@ -1216,6 +1216,9 @@ class _CourseTableViewState extends State<CourseTableView> {
       '时间：${_buildCourseScheduleText(placement.day, placement.startSection, placement.endSection)}',
       '教师：${course.teacherName.isEmpty ? '暂无教师信息' : course.teacherName}',
       '班级：${course.className.isEmpty ? '暂无班级信息' : course.className}',
+      '上课人数：${course.peopleCount.isEmpty ? '暂无上课人数信息' : course.peopleCount}',
+      '学时：${course.creditHours.isEmpty ? '暂无学时信息' : course.creditHours}',
+      '考核方式：${course.assessmentType.isEmpty ? '暂无考核方式信息' : course.assessmentType}',
       '地点：${course.location.isEmpty ? '暂无上课地点' : course.location}',
     ].join('\n');
   }

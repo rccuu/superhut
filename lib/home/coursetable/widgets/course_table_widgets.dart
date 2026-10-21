@@ -438,6 +438,18 @@ class _CourseDetailSheetState extends State<CourseDetailSheet> {
         wrapText: true,
       ),
       _CourseDetailItem(
+        icon: Ionicons.people_outline,
+        text: course.peopleCount.isEmpty ? '暂无上课人数信息' : course.peopleCount,
+      ),
+      _CourseDetailItem(
+        icon: Ionicons.book_outline,
+        text: course.creditHours.isEmpty ? '暂无学时信息' : course.creditHours,
+      ),
+      _CourseDetailItem(
+        icon: Ionicons.checkmark_circle_outline,
+        text: course.assessmentType.isEmpty ? '暂无考核方式信息' : course.assessmentType,
+      ),
+      _CourseDetailItem(
         icon: Ionicons.location_outline,
         text: course.location.isEmpty ? '暂无上课地点' : course.location,
       ),

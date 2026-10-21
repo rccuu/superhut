@@ -1419,6 +1419,91 @@ void main() {
     expect(imported.courseData['2026-03-16']?.single.pcid, isEmpty);
   });
 
+  test('Course keeps class and course metadata across serialization', () {
+    final course = Course(
+      name: '工程造价与管理',
+      teacherName: '曾丹',
+      weekDuration: '7-10,13-16',
+      location: '公共423',
+      startSection: 5,
+      duration: 2,
+      className: '智能建造2304班',
+      peopleCount: '30',
+      creditHours: '16',
+      assessmentType: '考试',
+    );
+
+    final restored = Course.fromJson(course.toJson());
+    expect(restored.className, '智能建造2304班');
+    expect(restored.peopleCount, '30');
+    expect(restored.creditHours, '16');
+    expect(restored.assessmentType, '考试');
+
+    final shared = course.sanitizedForShare();
+    expect(shared.className, '智能建造2304班');
+    expect(shared.peopleCount, '30');
+    expect(shared.creditHours, '16');
+    expect(shared.assessmentType, '考试');
+  });
+
+  test('Course.fromJson falls back to empty course metadata', () {
+    final restored = Course.fromJson({
+      'name': '软件工程',
+      'teacherName': '张老师',
+      'weekDuration': '1-16',
+      'location': '公共201',
+      'startSection': 1,
+      'duration': 2,
+    });
+
+    expect(restored.className, isEmpty);
+    expect(restored.peopleCount, isEmpty);
+    expect(restored.creditHours, isEmpty);
+    expect(restored.assessmentType, isEmpty);
+  });
+
+  test('share code carries class and course metadata', () {
+    final schedule = SavedCourseSchedule(
+      id: 'schedule-meta',
+      name: '带元信息的课表',
+      ownerName: '张三',
+      termLabel: '2026-2027-1',
+      semesterId: '2026-2027-1',
+      firstDay: '2026-10-19',
+      maxWeek: 20,
+      sourceType: CourseScheduleSourceType.selfSync,
+      isReadOnly: false,
+      createdAt: '2026-10-19T08:00:00.000',
+      updatedAt: '2026-10-19T08:00:00.000',
+      courseData: {
+        '2026-10-19': [
+          Course(
+            name: '工程造价与管理',
+            teacherName: '曾丹',
+            weekDuration: '7-10,13-16',
+            location: '公共423',
+            startSection: 5,
+            duration: 2,
+            className: '智能建造2304班',
+            peopleCount: '30',
+            creditHours: '16',
+            assessmentType: '考试',
+          ),
+        ],
+      },
+    );
+
+    final imported = parseCourseScheduleShareCode(
+      buildCourseScheduleShareCode(schedule),
+    );
+    final course = imported.courseData['2026-10-19']?.single;
+
+    expect(course?.className, '智能建造2304班');
+    expect(course?.peopleCount, '30');
+    expect(course?.creditHours, '16');
+    expect(course?.assessmentType, '考试');
+  });
+
   test('course share parser ignores pasted whitespace without RegExp', () {
     final schedule = SavedCourseSchedule(
       id: 'schedule-whitespace',

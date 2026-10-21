@@ -110,6 +110,9 @@ class Course {
   final bool isExp;
   final String pcid;
   final String className;
+  final String peopleCount;
+  final String creditHours;
+  final String assessmentType;
 
   Course({
     required this.name,
@@ -121,6 +124,9 @@ class Course {
     this.isExp = false,
     this.pcid = '',
     this.className = '',
+    this.peopleCount = '',
+    this.creditHours = '',
+    this.assessmentType = '',
   });
 
   // 将 Course 对象转换为 Map
@@ -135,6 +141,9 @@ class Course {
       'isExp': isExp,
       'pcid': pcid,
       'className': className,
+      'peopleCount': peopleCount,
+      'creditHours': creditHours,
+      'assessmentType': assessmentType,
     };
   }
 
@@ -150,6 +159,9 @@ class Course {
       isExp: json['isExp'] ?? false,
       pcid: json['pcid'] ?? '',
       className: json['className'] ?? '',
+      peopleCount: json['peopleCount'] ?? '',
+      creditHours: json['creditHours'] ?? '',
+      assessmentType: json['assessmentType'] ?? '',
     );
   }
 
@@ -164,6 +176,9 @@ class Course {
       isExp: isExp,
       pcid: '',
       className: className,
+      peopleCount: peopleCount,
+      creditHours: creditHours,
+      assessmentType: assessmentType,
     );
   }
 }

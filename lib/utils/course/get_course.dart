@@ -23,6 +23,49 @@ int _readInt(dynamic value, {int fallback = 0}) {
   return fallback;
 }
 
+/// 教务接口的数值型元信息在普通课表里是 int、在实验课表里是 String，
+/// 统一规范成展示用的字符串；缺失或空白一律返回空串。
+String _readDisplayValue(dynamic value) {
+  if (value == null) {
+    return '';
+  }
+  return value.toString().trim();
+}
+
+/// 实验课的 `ktmc` 形如「班级 + 课程号 + 组号」（如「智能建造2304班0315374031」），
+/// 课程号出现在班级串之后。当 `ktmc` 中包含该条目的课程号 `kch`、且其后只跟着组号时，
+/// 截断出课程号之前的班级串；否则原样保留（纯班级串如「智能建造[2303-2304]班」不能误剥离）。
+String _readExperimentClassName(
+  Map<String, dynamic> tempClass, {
+  required String rawClassName,
+}) {
+  final courseCode = _readDisplayValue(tempClass['kch']);
+  if (courseCode.isEmpty) {
+    return rawClassName;
+  }
+  final courseCodeIndex = rawClassName.indexOf(courseCode);
+  if (courseCodeIndex <= 0) {
+    return rawClassName;
+  }
+  final groupSuffix = rawClassName.substring(courseCodeIndex + courseCode.length);
+  if (groupSuffix.isNotEmpty &&
+      (groupSuffix.length > 3 || !_isAllDigits(groupSuffix))) {
+    return rawClassName;
+  }
+  final className = rawClassName.substring(0, courseCodeIndex).trim();
+  return className.isEmpty ? rawClassName : className;
+}
+
+bool _isAllDigits(String value) {
+  for (var index = 0; index < value.length; index++) {
+    final codeUnit = value.codeUnitAt(index);
+    if (codeUnit < 0x30 || codeUnit > 0x39) {
+      return false;
+    }
+  }
+  return true;
+}
+
 Map<String, dynamic>? _asResponseMap(dynamic data) {
   if (data is Map<String, dynamic>) {
     return data;
@@ -293,7 +336,10 @@ class GetSingleWeekClass {
             location: tempClass['location']?.toString() ?? '',
             startSection: startSection,
             duration: duration,
-            className: tempClass['ktmc']?.toString() ?? '',
+            className: _readDisplayValue(tempClass['ktmc']),
+            peopleCount: _readDisplayValue(tempClass['peopleNumber']),
+            creditHours: _readDisplayValue(tempClass['zxs']),
+            assessmentType: _readDisplayValue(tempClass['khfs']),
           ),
         );
       } catch (error, stackTrace) {
@@ -576,6 +622,11 @@ class GetSingleWeekExpClass {
             duration: duration,
             isExp: true,
             pcid: tempClass['pcid']?.toString() ?? '',
+            className: _readExperimentClassName(
+              tempClass,
+              rawClassName: _readDisplayValue(tempClass['ktmc']),
+            ),
+            peopleCount: _readDisplayValue(tempClass['peopleNumber']),
           ),
         );
       } catch (error, stackTrace) {

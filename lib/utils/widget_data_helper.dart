@@ -29,6 +29,9 @@ class WidgetDataHelper {
               isExp: course['isExp'] ?? false,
               pcid: course['pcid'] ?? '',
               className: course['className'] ?? '',
+              peopleCount: course['peopleCount'] ?? '',
+              creditHours: course['creditHours'] ?? '',
+              assessmentType: course['assessmentType'] ?? '',
             ),
           );
         }

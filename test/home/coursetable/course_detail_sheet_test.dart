@@ -174,6 +174,46 @@ void main() {
     expect(find.text('暂无班级信息'), findsOneWidget);
   });
 
+  testWidgets('shows people count, credit hours and assessment rows', (
+    tester,
+  ) async {
+    final course = Course(
+      name: '工程造价与管理',
+      teacherName: '曾丹',
+      weekDuration: '7-10,13-16',
+      location: '公共423',
+      startSection: 5,
+      duration: 2,
+      className: '智能建造2304班',
+      peopleCount: '30',
+      creditHours: '16',
+      assessmentType: '考试',
+    );
+
+    await tester.pumpWidget(buildSheet(course));
+
+    expect(find.text('30'), findsOneWidget);
+    expect(find.text('16'), findsOneWidget);
+    expect(find.text('考试'), findsOneWidget);
+  });
+
+  testWidgets('shows fallback text for missing course metadata', (tester) async {
+    final course = Course(
+      name: '高等数学',
+      teacherName: '李老师',
+      weekDuration: '1-16',
+      location: '公共101',
+      startSection: 1,
+      duration: 2,
+    );
+
+    await tester.pumpWidget(buildSheet(course));
+
+    expect(find.text('暂无上课人数信息'), findsOneWidget);
+    expect(find.text('暂无学时信息'), findsOneWidget);
+    expect(find.text('暂无考核方式信息'), findsOneWidget);
+  });
+
   testWidgets('copy action recovers after clipboard write throws', (
     tester,
   ) async {
