@@ -1,0 +1,101 @@
+{
+ "data": [
+  {
+   "date": [
+    {
+     "xqmc": "一",
+     "mxrq": "2026-10-19",
+     "zc": "7",
+     "xqid": 1
+    },
+    {
+     "xqmc": "二",
+     "mxrq": "2026-10-20",
+     "zc": "7",
+     "xqid": 2
+    },
+    {
+     "xqmc": "三",
+     "mxrq": "2026-10-21",
+     "zc": "7",
+     "xqid": 3
+    },
+    {
+     "xqmc": "四",
+     "mxrq": "2026-10-22",
+     "zc": "7",
+     "xqid": 4
+    },
+    {
+     "xqmc": "五",
+     "mxrq": "2026-10-23",
+     "zc": "7",
+     "xqid": 5
+    },
+    {
+     "xqmc": "六",
+     "mxrq": "2026-10-24",
+     "zc": "7",
+     "xqid": 6
+    },
+    {
+     "xqmc": "日",
+     "mxrq": "2026-10-25",
+     "zc": "7",
+     "xqid": 7
+    }
+   ],
+   "courses": [
+    {
+     "teacherName": "姚丁",
+     "syxmName": "工程结构大数据及应用",
+     "weekNoteDetail": "109,110",
+     "xmid": "REDACTED",
+     "ktmc": "智能建造[2303-2304]班",
+     "buildingName": "唐永豪",
+     "kch": "03153761",
+     "courseName": "工程结构大数据及应用",
+     "peopleNumber": "64",
+     "classroomName": "崇仁楼202",
+     "weekDay": 1,
+     "maxClassTime": "",
+     "pcid": "REDACTED",
+     "startTime": "",
+     "endTIme": "",
+     "kkzc": "7",
+     "coursesNote": 2
+    }
+   ],
+   "nowWeeked": "7",
+   "qsxq": "1"
+  }
+ ],
+ "jcdatalist": [
+  {
+   "XJMC": "01,02",
+   "DJMC": "第一大节"
+  },
+  {
+   "XJMC": "03,04",
+   "DJMC": "第二大节"
+  },
+  {
+   "XJMC": "05,06",
+   "DJMC": "第三大节"
+  },
+  {
+   "XJMC": "07,08",
+   "DJMC": "第四大节"
+  },
+  {
+   "XJMC": "09,10",
+   "DJMC": "第五大节"
+  },
+  {
+   "XJMC": "11,12",
+   "DJMC": "第六大节"
+  }
+ ],
+ "code": "1",
+ "Msg": "success"
+}

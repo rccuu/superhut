@@ -1,0 +1,473 @@
+schema: comet.native.v4
+name: course-class-field-fix
+language: zh-CN
+phase: archive
+status: done
+state_version: 10
+brief: brief.md
+document_constraints_version: 3
+shape_confirmation_hash: 337c3f585143d9e34dcce3440f6468b8d10304cb33fea93212c4953b0dcb7e41
+spec_changes:
+  - capability: course-class-display
+    operation: modify
+    source: specs/course-class-display/spec.md
+workspace:
+  isolation: current
+  change_branch: main
+  target_branch: main
+  finish: null
+loop:
+  stage: done
+  goal_cycle: 2
+  iteration: 1
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: "Scenario: 用真实抓取的实验课样本驱动解析，含课程号后缀的 `ktmc`（如「智能建造2304班0315374031」）解析后
+      `Course.className` 为剥离后的「智能建造2304班」。"
+    result: passed
+    reason:
+      text: 实现：lib/utils/course/get_course.dart:38-57 新增 _readExperimentClassName，实验课
+        getSingleClass 在 :625-628 传入 rawClassName=_readDisplayValue(ktmc)。剥离规则：以
+        kch 为锚点（:42 取 tempClass['kch']），取 indexOf(courseCode)（:45），要求锚点前非空（:46
+        courseCodeIndex <= 0 时原样返回），且其后缀为空或 ≤3 位纯数字（:50-53
+        _isAllDigits），否则原样保留；命中则截取前缀并
+        trim（:55-56）。测试：test/utils/course/course_class_display_test.dart:64-87
+        真实实验课样本用例，ktmc='智能建造2304班0315374031'（kch='03153740'）解析结果断言为
+        '智能建造2304班'（:78）；同文件 :121-133 另有独立构造用例覆盖同一形态。定向运行该文件全部通过（Runtime 全量
+        flutter test 日志亦含该文件，:2632-2635 行）。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "Scenario: 用真实抓取的普通课表样本驱动解析，6 门课的 `className` 全部等于样本 `ktmc` 原值，无一条为空。"
+    result: passed
+    reason:
+      text: "实现：lib/utils/course/get_course.dart:339 className:
+        _readDisplayValue(tempClass['ktmc'])，trim 后非空才写入（:28-34
+        null/空白统一返回空串）。样本一致性核对（我自己做的字节级比对）：测试内联的 _realCurriculumWeek7Json 与留证文件
+        docs/comet/changes/course-class-field-fix/sample/curriculum_week7.json
+        逐字节相同（Python 比对结果 True，JSON 解析后也相等），样本第 7 周 6 条 item 的 ktmc
+        为「智能建造2304班」「智能建造[2303-2304]班」，与 brief
+        取证结论一致。测试：test/utils/course/course_class_display_test.dart:27-40 断言课程数
+        6、每条 className 非空、取值集合等于 {智能建造2304班, 智能建造[2303-2304]班]}。定向与全量测试均通过。"
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: "Scenario: 实验课响应中 `ktmc` 为纯班级串（如「智能建造[2303-2304]班」）时解析结果原样保留，不误剥离。"
+    result: passed
+    reason:
+      text: 实现：get_course.dart:45-53 只有在 ktmc 中确实包含该条目 kch 且其后缀是 ≤3
+        位纯数字时才剥离；纯班级串「智能建造[2303-2304]班」不含 kch（:46 indexOf 返回 -1 →
+        courseCodeIndex <= 0 → 原样返回），且该串本身含非数字字符，即使误命中后缀检查也会被 _isAllDigits
+        拦下。测试：test/utils/course/course_class_display_test.dart:82-86 真实样本中
+        ktmc='智能建造[2303-2304]班'、kch='03153761' 断言原样保留；:135-147
+        独立构造用例同样断言原样保留。定向测试通过。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: "Scenario: 实验课响应中 `ktmc` 缺失或为空的课程条目解析后 `Course.className`
+      为空串，详情弹层显示「暂无班级信息」回退文案，其余信息行不受影响。"
+    result: passed
+    reason:
+      text: "实现：get_course.dart:28-34 _readDisplayValue 对 null/''/纯空白统一返回空串；实验课
+        className 经 :625-628 传入空串时 _readExperimentClassName（:42 kch 非空但 :45
+        indexOf('')= -1 → courseCodeIndex<=0 → 返回 rawClassName
+        即空串）。测试：test/utils/course/course_class_display_test.dart:149-163 循环覆盖
+        null/''/'   ' 三态，断言 parsed?.className
+        isEmpty。展示回退：lib/home/coursetable/widgets/course_table_widgets.dart:437
+        班级行 text: course.className.isEmpty ? '暂无班级信息' :
+        ...；其余信息行（周数/时间/教师/地点）各自独立渲染（:425-452），不受班级空值影响。回退文案用例见
+        course_detail_sheet_test.dart:200-215（断言 暂无上课人数信息/暂无学时信息/暂无考核方式信息）与
+        course_copy_text_test.dart:151-191（断言 班级：暂无班级信息 等四条）。"
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: "Scenario: 同步后打开课程详情，详情信息列表出现「上课人数」「学时」「考核方式」三行，内容分别等于教务返回的
+      `peopleNumber`、`zxs`、`khfs`（普通课）；实验课的「上课人数」等于其分组人数。"
+    result: passed
+    reason:
+      text: 实现：普通课 lib/utils/course/get_course.dart:340-342
+        peopleCount=peopleNumber、creditHours=zxs、assessmentType=khfs，均经
+        _readDisplayValue 规范为字符串（普通课接口为 int，toString 后一致）；实验课 :629
+        peopleCount=peopleNumber（实验课为字符串类型，同样规范）。展示：course_table_widgets.dart:440-451
+        新增三行。测试：course_class_display_test.dart:42-62 用真实普通课样本断言 '30'/'16'/'考试' 与
+        '64'/'12'/'考查'；:79/:86 断言实验课分组人数 '15' 与 '64'（即其分组人数）。详情弹层渲染用例见
+        course_detail_sheet_test.dart:177-198（断言 30/16/考试 均存在）。定向与全量测试通过。
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: "Scenario: 「上课人数」「学时」「考核方式」任一在响应中缺失或为空时，对应行显示回退文案，不显示空白，其余行不受影响。"
+    result: passed
+    reason:
+      text: 实现：缺失/空值在解析层统一为
+        ''（get_course.dart:28-34），展示层三行各带独立回退文案：course_table_widgets.dart:442
+        暂无上课人数信息、:446 暂无学时信息、:450 暂无考核方式信息；复制文本 view.dart:1219-1221
+        同样各自回退。三行互不影响（每行独立
+        _CourseDetailItem）。测试：course_detail_sheet_test.dart:200-215
+        断言三条回退文案均出现且不显示空白（find.text
+        精确匹配回退串，若行内仍显示空白则断言不成立）；course_copy_text_test.dart:151-191
+        断言复制文本含「上课人数：暂无上课人数信息」等。逐项「仅缺失其一」的组合未单独建用例，但因三行取值与文案互相独立、且解析层统一走同一
+        _readDisplayValue，缺失组合与全缺失路径同构。
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: "Scenario: 「复制课程信息为文本」的输出在既有行之后包含「上课人数」「学时」「考核方式」三行。"
+    result: passed
+    reason:
+      text: 实现：lib/home/coursetable/view.dart:1211-1222 _buildCourseCopyText
+        在既有行（课程名称/周数/时间/教师/班级/地点）之间新增「上课人数：」「学时：」「考核方式：」三行（:1219-1221），位置在既有行之后、仍在既有行序列内。测试：test/home/coursetable/course_copy_text_test.dart:102-149
+        通过 mock Clipboard.setData 捕获真实剪贴板写入，断言含
+        '班级：智能建造2304班'、'上课人数：30'、'学时：16'、'考核方式：考试'。定向测试通过。
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: "Scenario: 含新字段的课表生成分享码，旧版本应用导入该分享码不报错（未知字段被忽略）；新版本导入后详情弹层显示三项信息。"
+    result: passed
+    reason:
+      text: "实现：lib/utils/course/coursemain.dart:143-146 toJson 含
+        className/peopleCount/creditHours/assessmentType；:161-164 fromJson
+        逐字段读取；:178-181 sanitizedForShare 保留四字段且仍剥离 pcid（:177 pcid:
+        ''）。分享码链路：SavedCourseSchedule.toShareJson（coursemain.dart:377-392）经
+        _sanitizeCoursesForShare（:241-247）+
+        _encodeCourses→course.toJson（:249-255）落盘，buildCourseScheduleShareCode（:\
+        2161-2169）gzip+base64 打包；parseCourseScheduleShareCode（:2196-2215）反解后走
+        SavedCourseSchedule.fromJson → _parseCourseDataMap →
+        Course.fromJson。测试：coursemain_test.dart:1465-1504 走完整
+        buildCourseScheduleShareCode → parseCourseScheduleShareCode
+        往返，断言四项全部保留。旧版本兼容：仓库内无旧版本二进制可实测；但「按字段名序列化 + fromJson 只读已知键、忽略未知键」在当前与
+        HEAD 版本的 fromJson 实现一致（HEAD 版本 coursemain.dart:142-154
+        同样逐字段读取），旧版本遇到新增键不会报错，该结论属代码事实推导而非实测。"
+      truncated: false
+  - id: A9
+    source: brief.md
+    text: "Scenario:
+      既有旧课表数据（本地缓存无这些字段）的详情弹层与复制文本行为保持上一轮交付的现状不变（回退文案、复制含班级行）；用户重新同步一次后，新字段显示真实\
+      值。"
+    result: passed
+    reason:
+      text: "旧数据兼容：coursemain.dart:161-164 fromJson 对缺失
+        peopleCount/creditHours/assessmentType 回退空串（className
+        同），不触发任何清理/迁移；归档读写仅做 toJson/fromJson 往返（coursemain.dart:457-463 archive
+        toJson → CourseScheduleArchive.fromJson → _parseSavedCourseSchedules →
+        Course.fromJson），无破坏性改写。测试：coursemain_test.dart:1449-1463
+        断言缺字段时四项均为空串；course_copy_text_test.dart:151-191
+        断言旧数据下复制文本为「班级：暂无班级信息」「上课人数：暂无上课人数信息」等回退文案（上一轮交付的班级行仍在）；course_detail_s\
+        heet_test.dart:200-215 断言详情弹层回退。重新同步后新字段为真实值：coursemain.dart:2480-2578
+        saveClassToLocal 用快照 courseData 整体覆盖写入（:2543-2558 copyWith(courseData:
+        snapshot.courseData)），新解析的数据带新字段；解析侧由真实样本测试（course_class_display_test.d\
+        art:42-62）保证值来自接口字段。"
+      truncated: false
+  - id: A10
+    source: brief.md
+    text: "Scenario: 单元测试用真实样本字段驱动：普通课表与实验课表各覆盖「有班级」「无班级」两分支，并覆盖三项元信息的解析与序列化，均有断言。"
+    result: passed
+    reason:
+      text: 测试以真实样本字段驱动：test/utils/course/course_class_display_test.dart
+        内联固化真实样本（:9-11 普通课表，与留证 sample/curriculum_week7.json 逐字节一致；:17-19
+        实验课，结构同源），覆盖普通课表有班级（:27-40，6 门课 className 全非空且等于样本 ktmc
+        原值）与实验课有班级（:64-87，含剥离与原样两分支）、无班级分支（:149-163，ktmc 缺失/空串/空白三态）；三项元信息解析断言见
+        :52-61 与 :79/:86；序列化断言见
+        coursemain_test.dart:1422-1447（toJson/fromJson/sanitizedForShare
+        四字段）、:1449-1463（旧数据回退）、:1465-1504（分享码往返）；详情弹层与复制文本断言见
+        course_detail_sheet_test.dart:177-215、course_copy_text_test.dart:102-191。Runtime
+        全量 flutter test 日志确认 course_class_display_test.dart 与
+        course_copy_text_test.dart 均已执行并计入 709 项全通过；我另跑 4 个相关测试文件（71 项）亦全通过。
+      truncated: false
+builder_handoff:
+  candidate_id: 7f4797eb-05c7-4066-8031-09633f236e8a
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:9e609584-7518-4932-8069-5e54a5fe1314
+  iteration: 1
+  summary:
+    text: 实现课程班级与课程元信息展示。1) Course 模型新增 peopleCount/creditHours/assessmentType 三个
+      String 字段，toJson/fromJson/sanitizedForShare
+      全链路接入（coursemain.dart:112-186）。2) 普通课表解析接入 peopleNumber/zxs/khfs，ktmc
+      取值收紧为 trim 后非空才写（get_course.dart:336-343）。3) 实验课解析首次接入 ktmc 与
+      peopleNumber，新增 _readExperimentClassName 按课程号 kch
+      边界剥离「班级+课程号+组号」后缀，纯班级串原样保留（get_course.dart:26-68, 622-630）。4)
+      详情弹层新增「上课人数」「学时」「考核方式」三行（course_table_widgets.dart:440-451）。5)
+      复制课程信息文本新增对应三行（view.dart:1219-1221）。6)
+      小组件数据归一化补齐新字段（widget_data_helper.dart:32-34）。新增测试：真实样本驱动的解析用例
+      course_class_display_test.dart、模型序列化与分享码用例 coursemain_test.dart、详情弹层展示用例
+      course_detail_sheet_test.dart、复制文本用例 course_copy_text_test.dart。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+    - A9
+    - A10
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/get_course.dart:26-68 新增 _readExperimentClassName，按
+          kch 边界剥离实验课班级串
+        - test/utils/course/course_class_display_test.dart
+          实验课样本用例：ktmc='智能建造2304班0315374031' 解析为 '智能建造2304班'
+        - flutter test test/utils/course/course_class_display_test.dart 通过（6 项）
+      note: 真实实验课样本覆盖「班级+课程号+组号」形态，剥离后得到纯班级串。
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/get_course.dart:336-343 普通课表解析写入 className（ktmc trim
+          后取值）
+        - test/utils/course/course_class_display_test.dart 普通课表样本用例：6 门课
+          className 全部非空且等于 ktmc 原值
+        - flutter test test/utils/course/course_class_display_test.dart 通过
+      note: 真实普通课表样本第 7 周 6 条 item，班级取值为「智能建造2304班」「智能建造[2303-2304]班」。
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/get_course.dart:52-56 仅当课程号后的后缀是 ≤3 位纯数字时才剥离，否则原样保留
+        - test/utils/course/course_class_display_test.dart
+          纯班级串用例：ktmc='智能建造[2303-2304]班' 解析结果原样保留
+      note: 后缀非纯数字或超过 3 位时不剥离，避免误伤真实班级串。
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/get_course.dart:26-34 _readDisplayValue 对
+          null/空白统一返回空串
+        - test/utils/course/course_class_display_test.dart ktmc 缺失/空串/纯空白三态用例断言
+          className 为空串
+        - lib/home/coursetable/widgets/course_table_widgets.dart:436-439
+          空值显示「暂无班级信息」回退文案
+      note: 空班级不影响其余信息行，详情弹层其余行独立渲染。
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/get_course.dart:340-342 普通课接入
+          peopleNumber/zxs/khfs；实验课 :628 接入 peopleNumber
+        - test/utils/course/course_class_display_test.dart
+          元信息用例：peopleCount='30'、creditHours='16'、assessmentType='考试'；另一门为
+          '64'/'12'/'考查'
+        - test/utils/course/course_class_display_test.dart 实验课分组人数用例：'15' 与 '64'
+      note: 普通课人数取自 peopleNumber（int），实验课取自 peopleNumber（字符串），统一规范为字符串。
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/get_course.dart:26-34 缺失/空白统一为空串
+        - lib/home/coursetable/widgets/course_table_widgets.dart:440-451
+          三行各自回退文案「暂无上课人数信息」「暂无学时信息」「暂无考核方式信息」
+        - test/home/coursetable/course_detail_sheet_test.dart 缺元信息回退用例断言三条回退文案均出现
+      note: 三行互不影响，空值不显示空白。
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/view.dart:1219-1221 复制文本新增「上课人数」「学时」「考核方式」三行
+        - test/home/coursetable/course_copy_text_test.dart
+          断言复制文本含「班级：智能建造2304班」「上课人数：30」「学时：16」「考核方式：考试」
+      note: 通过 flutter/platform 通道捕获真实剪贴板写入内容。
+    - id: A8
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/coursemain.dart:141-151、176-186
+          toJson/fromJson/sanitizedForShare 均含三个新字段
+        - test/utils/course/coursemain_test.dart
+          分享码用例：buildCourseScheduleShareCode → parseCourseScheduleShareCode 后
+          className/peopleCount/creditHours/assessmentType 完整保留
+        - test/utils/course/coursemain_test.dart fromJson 回退用例：缺字段时四项均为空串（旧数据兼容）
+      note: 新字段按名称追加，旧版本读取新分享码时按未知字段忽略。
+    - id: A9
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/coursemain.dart:159-166 fromJson 对缺失字段回退空串，不做破坏性迁移
+        - test/utils/course/coursemain_test.dart fromJson 回退用例
+        - test/home/coursetable/course_copy_text_test.dart
+          回退用例：复制文本含「班级：暂无班级信息」等四条回退文案
+      note: 本地缓存不做清空或改写；用户重新同步后新数据自然带上真实值。
+    - id: A10
+      status: implemented-with-evidence
+      evidence:
+        - test/utils/course/course_class_display_test.dart 真实样本内联固化（普通课表 6 条
+          item + 实验课 2 条 course），覆盖有班级/无班级两分支与元信息解析
+        - test/utils/course/coursemain_test.dart 模型序列化与分享码用例
+        - test/home/coursetable/course_detail_sheet_test.dart 详情三行显示与回退用例
+        - test/home/coursetable/course_copy_text_test.dart 复制文本两条用例
+        - flutter test 全量 709 项通过；flutter analyze 无问题
+      note: 样本与 change 产物目录 sample/ 下的留证文件同源，jx0408id/pcid 已脱敏。
+  checks:
+    - name:
+        text: flutter analyze
+        truncated: false
+      result: passed
+      note:
+        text: No issues found! (ran in 2.7s)
+        truncated: false
+    - name:
+        text: flutter test（全量）
+        truncated: false
+      result: passed
+      note:
+        text: 709 项全部通过
+        truncated: false
+    - name:
+        text: flutter test test/utils/course/course_class_display_test.dart
+        truncated: false
+      result: passed
+      note:
+        text: 6 项通过
+        truncated: false
+    - name:
+        text: flutter test test/utils/course/coursemain_test.dart
+        truncated: false
+      result: passed
+      note:
+        text: 54 项通过
+        truncated: false
+    - name:
+        text: flutter test test/home/coursetable/course_detail_sheet_test.dart
+        truncated: false
+      result: passed
+      note:
+        text: 9 项通过
+        truncated: false
+    - name:
+        text: flutter test test/home/coursetable/course_copy_text_test.dart
+        truncated: false
+      result: passed
+      note:
+        text: 2 项通过
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 真机手工验收未执行：需用户在 App 内重新同步当前学期课表，确认普通课与实验课详情弹层显示真实班级、上课人数、学时、考核方式。
+      truncated: false
+    - text: 旧版本 App 导入含新字段的分享码不报错这一点未做跨版本实测，只依据「按字段名序列化 + fromJson 忽略未知字段」的既有约定推导。
+      truncated: false
+    - text: 实验课班级串剥离规则以真实样本中出现的「班级+课程号+≤3位数字组号」形态为准；若教务侧出现其它后缀形态，会走原样保留分支。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-21T05:40:08.443Z
+blockers: []
+verification:
+  candidate_id: 7f4797eb-05c7-4066-8031-09633f236e8a
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:2bfd0d5e-490e-48a9-a24e-0c1486948836
+  iteration: 1
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: flutter-analyze
+      name:
+        text: flutter analyze
+        truncated: false
+      argv_display:
+        - text: analyze
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 3505
+    - id: flutter-test
+      name:
+        text: flutter test
+        truncated: false
+      argv_display:
+        - text: test
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 20362
+  summary:
+    text: A1-A10 全部通过。实现侧：Course 模型新增 peopleCount/creditHours/assessmentType 三字段并贯通
+      toJson/fromJson/sanitizedForShare（lib/utils/course/coursemain.dart:112-181）；普通课解析接入
+      ktmc/peopleNumber/zxs/khfs（lib/utils/course/get_course.dart:339-342），实验课接入
+      ktmc（经 _readExperimentClassName 剥离课程号后缀）与
+      peopleNumber（get_course.dart:625-629）；详情弹层新增三行回退文案（lib/home/coursetable/widgets/course_table_widgets.dart:440-451）；复制文本新增三行（lib/home/coursetable/view.dart:1219-1221）；小组件归一化补三字段（lib/utils/widget_data_helper.dart:32-34）。测试侧：真实样本内联于
+      test/utils/course/course_class_display_test.dart（普通课表样本与
+      docs/comet/changes/course-class-field-fix/sample/curriculum_week7.json
+      逐字节一致；实验课样本比留证文件多一条带课程号后缀的条目，字段结构一致），覆盖有/无班级两分支与三项元信息解析；coursemain_test.dart:1422/1449/1465
+      覆盖序列化、旧数据回退与分享码；course_detail_sheet_test.dart:177/200 与
+      course_copy_text_test.dart:102/151 覆盖详情弹层与复制文本的有值/回退。Runtime 两条检查（flutter
+      analyze、flutter test）均为 passed/exit 0，测试日志确认新测试文件已执行、全量 709 项通过；我另跑 4
+      个定向测试文件全绿。唯一遗留：真机手工验收未执行、旧版本 App 导入新分享码未做跨版本实测（已由 Builder 在 known_limits
+      中声明）。
+    truncated: false
+  risks:
+    - text: 留证样本文件
+        docs/comet/changes/course-class-field-fix/sample/course_schedule_exp_week7.json
+        只含 1 条实验课 course，而测试内联的实验课样本含 2
+        条（多出带课程号后缀的「智能建造2304班0315374034031」形态那条）。该条只存在于测试内联样本中，仓库内无其它留证可交叉核对该具体取值，属未独立留证的样本条目。
+      truncated: false
+    - text: A8 的「旧版本应用导入含新字段的分享码不报错」未做跨版本实测：仓库内只有当前版本（fromJson
+        忽略未知字段），旧版本二进制不在本工作区，无法直接观测；结论基于「按字段名序列化 + fromJson 逐字段读取、忽略未知键」的代码事实推导。
+      truncated: false
+    - text: A9 的「用户重新同步一次后新字段显示真实值」依赖真实教务响应，本次仅以真实样本驱动的解析测试覆盖，未在真机执行同步。
+      truncated: false
+    - text: 实验课班级串剥离规则只覆盖「班级 + kch + ≤3 位纯数字组号」形态；若教务侧出现其他后缀形态（如组号超过 3
+        位或含非数字），会走原样保留分支。
+      truncated: false
+    - text: 本次改动的新增代码未通过 dart format（dart format --output=none --set-exit-if-changed
+        报告
+        lib/utils/course/get_course.dart、lib/home/coursetable/widgets/course_table_widgets.dart
+        及 3 个测试文件需要重排）。该现象在 HEAD 版本同样存在（同一命令对 HEAD 抽取的 4 个文件同样报
+        changed），属仓库既有风格状态而非本次回归；CI 未配置格式检查。
+      truncated: false
+    - text: Brief 提到的「本轮抓取 23 条实验课样本、16 条带课程号后缀、7 条纯班级串」只有第 7 周的 2
+        条进了留证文件，其余周次样本未留证，无法独立复核该统计口径。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-21T06:36:03.528Z
+history:
+  - goal_cycle: 1
+    iteration: 0
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native confirmed acceptance criteria changed
+      truncated: false
+    completed_at: 2026-10-21T05:14:44.399Z
+  - goal_cycle: 2
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: A1-A10 全部通过。实现侧：Course 模型新增 peopleCount/creditHours/assessmentType 三字段并贯通
+        toJson/fromJson/sanitizedForShare（lib/utils/course/coursemain.dart:112-181）；普通课解析接入
+        ktmc/peopleNumber/zxs/khfs（lib/utils/course/get_course.dart:339-342），实验课接入
+        ktmc（经 _readExperimentClassName 剥离课程号后缀）与
+        peopleNumber（get_course.dart:625-629）；详情弹层新增三行回退文案（lib/home/coursetable/widgets/course_table_widgets.dart:440-451）；复制文本新增三行（lib/home/coursetable/view.dart:1219-1221）；小组件归一化补三字段（lib/utils/widget_data_helper.dart:32-34）。测试侧：真实样本内联于
+        test/utils/course/course_class_display_test.dart（普通课表样本与
+        docs/comet/changes/course-class-field-fix/sample/curriculum_week7.json
+        逐字节一致；实验课样本比留证文件多一条带课程号后缀的条目，字段结构一致），覆盖有/无班级两分支与三项元信息解析；coursemain_test.dart:1422/1449/1465
+        覆盖序列化、旧数据回退与分享码；course_detail_sheet_test.dart:177/200 与
+        course_copy_text_test.dart:102/151 覆盖详情弹层与复制文本的有值/回退。Runtime
+        两条检查（flutter analyze、flutter test）均为 passed/exit 0，测试日志确认新测试文件已执行、全量 709
+        项通过；我另跑 4 个定向测试文件全绿。唯一遗留：真机手工验收未执行、旧版本 App 导入新分享码未做跨版本实测（已由 Builder 在
+        known_limits 中声明）。
+      truncated: false
+    completed_at: 2026-10-21T06:36:03.528Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-21T02:43:28.716Z
