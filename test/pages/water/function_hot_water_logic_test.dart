@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:superhut/pages/water/default_device_store.dart';
 import 'package:superhut/pages/water/logic.dart';
 
 void main() {
@@ -532,6 +533,237 @@ void main() {
     expect(api.delWaterDeviceCalls, 2);
     expect(api.getHotWaterDeviceCalls, 0);
   });
+
+  test('saved default device is selected when the device list loads', () async {
+    final api = _FakeHotWaterApi(
+      deviceResponses: [
+        Future.value({
+          'code': 200,
+          'data': [
+            {'poscode': '100001', 'posname': '一栋热水'},
+            {'poscode': '200002', 'posname': '二栋热水'},
+          ],
+        }),
+      ],
+      openDevices: const [],
+      balance: '12.34',
+    );
+    final storage = _FakeHotWaterAuthStorage(isLoggedIn: true);
+    final preferences = _FakeHotWaterDevicePreferenceStore(
+      defaultDeviceCode: '200002',
+    );
+    final logic = FunctionHotWaterLogic(
+      hotWaterApi: api,
+      authStorage: storage,
+      devicePreferenceStore: preferences,
+    );
+    addTearDown(logic.onClose);
+
+    logic.hutUserInfo['hutIsLogin'] = true;
+
+    await logic.getDeviceList();
+
+    expect(logic.state.choiceDevice.value, 1);
+    expect(logic.state.defaultDeviceCode.value, '200002');
+  });
+
+  test('missing default device falls back to the first device', () async {
+    final api = _FakeHotWaterApi(
+      deviceResponses: [
+        Future.value({
+          'code': 200,
+          'data': [
+            {'poscode': '100001', 'posname': '一栋热水'},
+            {'poscode': '200002', 'posname': '二栋热水'},
+          ],
+        }),
+      ],
+      openDevices: const [],
+      balance: '12.34',
+    );
+    final storage = _FakeHotWaterAuthStorage(isLoggedIn: true);
+    final preferences = _FakeHotWaterDevicePreferenceStore(
+      defaultDeviceCode: '999999',
+    );
+    final logic = FunctionHotWaterLogic(
+      hotWaterApi: api,
+      authStorage: storage,
+      devicePreferenceStore: preferences,
+    );
+    addTearDown(logic.onClose);
+
+    logic.hutUserInfo['hutIsLogin'] = true;
+
+    await logic.getDeviceList();
+
+    expect(logic.state.choiceDevice.value, 0);
+    expect(logic.state.defaultDeviceCode.value, '');
+  });
+
+  test('no default device keeps selecting the first device', () async {
+    final api = _FakeHotWaterApi(
+      deviceResponses: [
+        Future.value({
+          'code': 200,
+          'data': [
+            {'poscode': '100001', 'posname': '一栋热水'},
+            {'poscode': '200002', 'posname': '二栋热水'},
+          ],
+        }),
+      ],
+      openDevices: const [],
+      balance: '12.34',
+    );
+    final storage = _FakeHotWaterAuthStorage(isLoggedIn: true);
+    final preferences = _FakeHotWaterDevicePreferenceStore();
+    final logic = FunctionHotWaterLogic(
+      hotWaterApi: api,
+      authStorage: storage,
+      devicePreferenceStore: preferences,
+    );
+    addTearDown(logic.onClose);
+
+    logic.hutUserInfo['hutIsLogin'] = true;
+
+    await logic.getDeviceList();
+
+    expect(logic.state.choiceDevice.value, 0);
+    expect(logic.state.defaultDeviceCode.value, '');
+  });
+
+  test(
+    'toggling default device persists the choice without changing selection',
+    () async {
+      final api = _FakeHotWaterApi(
+        deviceResponses: const <Future<Map<String, dynamic>>>[],
+        openDevices: const [],
+      );
+      final storage = _FakeHotWaterAuthStorage(isLoggedIn: true);
+      final preferences = _FakeHotWaterDevicePreferenceStore();
+      final logic = FunctionHotWaterLogic(
+        hotWaterApi: api,
+        authStorage: storage,
+        devicePreferenceStore: preferences,
+      );
+      addTearDown(logic.onClose);
+
+      logic.state.deviceList.value = [
+        {'poscode': '100001', 'posname': '一栋热水'},
+        {'poscode': '200002', 'posname': '二栋热水'},
+      ];
+      logic.state.choiceDevice.value = 0;
+
+      await logic.toggleDefaultDevice(1);
+
+      expect(preferences.defaultDeviceCode, '200002');
+      expect(logic.state.defaultDeviceCode.value, '200002');
+      // 显式设为默认不改本次会话的当前选中设备。
+      expect(logic.state.choiceDevice.value, 0);
+
+      await logic.toggleDefaultDevice(1);
+
+      expect(preferences.defaultDeviceCode, '');
+      expect(logic.state.defaultDeviceCode.value, '');
+      expect(logic.state.choiceDevice.value, 0);
+    },
+  );
+
+  test('an open device still overrides the default device', () async {
+    final api = _FakeHotWaterApi(
+      deviceResponses: [
+        Future.value({
+          'code': 200,
+          'data': [
+            {'poscode': '100001', 'posname': '一栋热水'},
+            {'poscode': '200002', 'posname': '二栋热水'},
+          ],
+        }),
+      ],
+      openDevices: const ['100001'],
+      balance: '12.34',
+    );
+    final storage = _FakeHotWaterAuthStorage(isLoggedIn: true);
+    final preferences = _FakeHotWaterDevicePreferenceStore(
+      defaultDeviceCode: '200002',
+    );
+    final logic = FunctionHotWaterLogic(
+      hotWaterApi: api,
+      authStorage: storage,
+      devicePreferenceStore: preferences,
+    );
+    addTearDown(logic.onClose);
+
+    logic.hutUserInfo['hutIsLogin'] = true;
+
+    await logic.getDeviceList();
+
+    // 未关闭的设备优先于默认设备。
+    expect(logic.state.choiceDevice.value, 0);
+    expect(logic.state.waterStatus.value, isTrue);
+    // 默认设备本身仍然保留。
+    expect(logic.state.defaultDeviceCode.value, '200002');
+  });
+
+  test('deleting the default device clears the stored preference', () async {
+    final api = _FakeHotWaterApi(
+      deviceResponses: [
+        Future.value({
+          'code': 200,
+          'data': [
+            {'poscode': '100001', 'posname': '一栋热水'},
+            {'poscode': '200002', 'posname': '二栋热水'},
+          ],
+        }),
+        Future.value({
+          'code': 200,
+          'data': [
+            {'poscode': '100001', 'posname': '一栋热水'},
+          ],
+        }),
+      ],
+      openDevices: const [],
+      balance: '12.34',
+    );
+    final storage = _FakeHotWaterAuthStorage(isLoggedIn: true);
+    final preferences = _FakeHotWaterDevicePreferenceStore(
+      defaultDeviceCode: '200002',
+    );
+    final logic = FunctionHotWaterLogic(
+      hotWaterApi: api,
+      authStorage: storage,
+      devicePreferenceStore: preferences,
+    );
+    addTearDown(logic.onClose);
+
+    logic.hutUserInfo['hutIsLogin'] = true;
+
+    await logic.getDeviceList();
+    expect(logic.state.defaultDeviceCode.value, '200002');
+
+    final deleted = await logic.deleteDevice('200002');
+
+    expect(deleted, isTrue);
+    expect(preferences.defaultDeviceCode, '');
+    expect(logic.state.defaultDeviceCode.value, '');
+    expect(logic.state.choiceDevice.value, 0);
+  });
+}
+
+class _FakeHotWaterDevicePreferenceStore
+    implements HotWaterDevicePreferenceStore {
+  _FakeHotWaterDevicePreferenceStore({this.defaultDeviceCode = ''});
+
+  String defaultDeviceCode;
+
+  @override
+  Future<String> readDefaultDeviceCode() async {
+    return defaultDeviceCode;
+  }
+
+  @override
+  Future<void> writeDefaultDeviceCode(String deviceCode) async {
+    defaultDeviceCode = deviceCode;
+  }
 }
 
 class _FakeHotWaterApi implements HotWaterApiClient {

@@ -7,6 +7,9 @@ class FunctionHotWaterState {
   // 选中的设备值
   RxInt choiceDevice = (-1).obs;
 
+  // 默认（固定）设备的设备号；空串表示未设置默认设备
+  RxString defaultDeviceCode = ''.obs;
+
   // 洗澡按钮状态
   RxBool waterStatus = false.obs;
 

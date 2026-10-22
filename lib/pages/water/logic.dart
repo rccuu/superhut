@@ -8,11 +8,13 @@ import 'package:superhut/utils/hut_user_api.dart';
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
 import '../../core/ui/app_snack_bar.dart';
+import 'default_device_store.dart';
 import 'state.dart';
 
 const String hotWaterStartFailureMessage = '设备开启失败，请稍后重试';
 const String hotWaterAddDeviceFailureMessage = '添加设备失败，请稍后重试';
 const String hotWaterDeleteDeviceFailureMessage = '删除设备失败，请稍后重试';
+const String hotWaterDefaultDeviceFailureMessage = '默认设备设置失败，请稍后重试';
 
 abstract class HotWaterApiClient {
   Future<Map<String, dynamic>> getHotWaterDevice();
@@ -135,10 +137,14 @@ class FunctionHotWaterLogic extends GetxController {
   FunctionHotWaterLogic({
     HotWaterApiClient? hotWaterApi,
     HotWaterAuthStorage? authStorage,
+    HotWaterDevicePreferenceStore? devicePreferenceStore,
     HotWaterLoginRedirect? redirectToLogin,
     this.loginRedirectDelay = const Duration(milliseconds: 100),
   }) : hutUserApi = hotWaterApi ?? HutHotWaterApiClient(),
        _storage = authStorage ?? AppHotWaterAuthStorage(),
+       _devicePreferenceStore =
+           devicePreferenceStore ??
+           SharedPreferencesHotWaterDevicePreferenceStore(),
        _redirectToLogin =
            redirectToLogin ??
            (() => Get.off(() => UnifiedLoginPage(returnToCaller: true)));
@@ -146,6 +152,7 @@ class FunctionHotWaterLogic extends GetxController {
   final FunctionHotWaterState state = FunctionHotWaterState();
   final HotWaterApiClient hutUserApi;
   final HotWaterAuthStorage _storage;
+  final HotWaterDevicePreferenceStore _devicePreferenceStore;
   final HotWaterLoginRedirect _redirectToLogin;
   final Duration loginRedirectDelay;
   Future<void>? _deviceListLoad;
@@ -305,12 +312,61 @@ class FunctionHotWaterLogic extends GetxController {
 
     final rawDevices = value["data"];
     state.deviceList.value = rawDevices is List ? rawDevices : [];
-    _assignChoiceDevice(state.deviceList.isNotEmpty ? 0 : -1);
+    await _applyDefaultDeviceSelection();
+    if (_isDisposed) {
+      return;
+    }
+
     state.deviceCheckComplete.value = false;
     await Future.wait([_refreshOpenDeviceState(), _refreshBalanceValue()]);
     if (_isDisposed) {
       return;
     }
+  }
+
+  /// 按默认设备解析本次要选中的设备。
+  ///
+  /// 默认设备按设备号匹配，不依赖列表下标：设备列表顺序由服务端下发，
+  /// 跨会话可能变化。默认设备已解绑（不在列表中）时回退到第一台设备。
+  Future<void> _applyDefaultDeviceSelection() async {
+    if (state.deviceList.isEmpty) {
+      state.defaultDeviceCode.value = '';
+      _assignChoiceDevice(-1);
+      return;
+    }
+
+    final savedCode = await _devicePreferenceStore.readDefaultDeviceCode();
+    if (_isDisposed) {
+      return;
+    }
+
+    if (savedCode.isEmpty) {
+      state.defaultDeviceCode.value = '';
+      _assignChoiceDevice(0);
+      return;
+    }
+
+    final index = _deviceIndexForCode(savedCode);
+    if (index == -1) {
+      // 默认设备不在当前列表（已被学校侧解绑）：回退到第一台设备。
+      // 偏好本身保留，设备重新绑定后仍能自动选中。
+      state.defaultDeviceCode.value = '';
+      _assignChoiceDevice(0);
+      return;
+    }
+
+    state.defaultDeviceCode.value = savedCode;
+    _assignChoiceDevice(index);
+  }
+
+  int _deviceIndexForCode(String deviceCode) {
+    for (var index = 0; index < state.deviceList.length; index++) {
+      final device = state.deviceList[index];
+      if (device is Map && device["poscode"]?.toString() == deviceCode) {
+        return index;
+      }
+    }
+    return -1;
   }
 
   /// 获取喝水设备列表
@@ -473,6 +529,76 @@ class FunctionHotWaterLogic extends GetxController {
   /// 改变选中的设备值
   void setChoiceDevice(int device) {
     _assignChoiceDevice(device);
+  }
+
+  /// 把某台设备设为默认（固定）设备。
+  ///
+  /// 显式操作，与「本次选择」相互独立：只改默认设备，不改当前选中项。
+  /// 传入的索引已是默认设备时，改为取消默认。
+  Future<void> toggleDefaultDevice(int device) async {
+    if (device < 0 || device >= state.deviceList.length) {
+      return;
+    }
+
+    final deviceCode = _deviceCodeAt(device);
+    if (deviceCode.isEmpty) {
+      return;
+    }
+
+    if (state.defaultDeviceCode.value == deviceCode) {
+      await clearDefaultDevice();
+      return;
+    }
+
+    try {
+      await _devicePreferenceStore.writeDefaultDeviceCode(deviceCode);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to persist hot water default device',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!_isDisposed) {
+        _showStatusSnackBar('操作失败', hotWaterDefaultDeviceFailureMessage, isError: true);
+      }
+      return;
+    }
+
+    if (_isDisposed) {
+      return;
+    }
+    state.defaultDeviceCode.value = deviceCode;
+  }
+
+  /// 取消默认（固定）设备。
+  Future<void> clearDefaultDevice() async {
+    try {
+      await _devicePreferenceStore.writeDefaultDeviceCode('');
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to clear hot water default device',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!_isDisposed) {
+        _showStatusSnackBar('操作失败', hotWaterDefaultDeviceFailureMessage, isError: true);
+      }
+      return;
+    }
+
+    if (_isDisposed) {
+      return;
+    }
+    state.defaultDeviceCode.value = '';
+  }
+
+  /// 设备号（poscode）；设备数据不完整时返回空串。
+  String _deviceCodeAt(int index) {
+    final device = state.deviceList[index];
+    if (device is! Map) {
+      return '';
+    }
+    return device["poscode"]?.toString() ?? '';
   }
 
   bool _assignChoiceDevice(int device) {
@@ -640,6 +766,14 @@ class FunctionHotWaterLogic extends GetxController {
     }
   }
 
+  /// 被删除的设备正是默认设备时，清掉本机默认偏好。
+  Future<void> _clearDefaultDeviceIfMatches(String deviceCode) async {
+    if (deviceCode.isEmpty || state.defaultDeviceCode.value != deviceCode) {
+      return;
+    }
+    await clearDefaultDevice();
+  }
+
   Future<bool> _deleteDevice(String deviceCode) async {
     try {
       final value = await hutUserApi.delWaterDevice(deviceCode);
@@ -649,6 +783,7 @@ class FunctionHotWaterLogic extends GetxController {
 
       if (value['result'] == true) {
         _showStatusSnackBar('操作成功', '设备删除成功');
+        await _clearDefaultDeviceIfMatches(deviceCode);
         await getDeviceList();
 
         return true;

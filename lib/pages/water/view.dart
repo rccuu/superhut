@@ -160,6 +160,7 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
               devices: devices,
               deviceCount: deviceCount,
               selectedIndex: logic.state.choiceDevice.value,
+              defaultDeviceCode: logic.state.defaultDeviceCode.value,
               onManageDevices: () {
                 Navigator.of(sheetContext).pop();
                 _showDeviceManagementDialog();
@@ -172,6 +173,10 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
 
                 logic.setChoiceDevice(index);
                 Navigator.of(sheetContext).pop();
+              },
+              onToggleDefaultDevice: (index) {
+                // 设为默认是显式操作，不改本次选择，也不关闭列表。
+                logic.toggleDefaultDevice(index);
               },
             );
           }),
@@ -413,10 +418,21 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
                                     ? state.deviceList[selectedIndex]['posname']
                                         ?.toString()
                                     : null;
+                            final selectedDeviceCode =
+                                hasSelectedDevice
+                                    ? state.deviceList[selectedIndex]['poscode']
+                                            ?.toString() ??
+                                        ''
+                                    : '';
+                            final isDefaultDevice =
+                                selectedDeviceCode.isNotEmpty &&
+                                selectedDeviceCode ==
+                                    state.defaultDeviceCode.value;
 
                             return HotWaterCurrentDeviceCard(
                               deviceName: deviceName,
                               hasSelectedDevice: hasSelectedDevice,
+                              isDefaultDevice: isDefaultDevice,
                               onTap: _showDeviceSelectionDialog,
                             );
                           }),
