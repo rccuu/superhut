@@ -272,11 +272,15 @@ class HotWaterCurrentDeviceCard extends StatelessWidget {
     super.key,
     required this.deviceName,
     required this.hasSelectedDevice,
+    required this.isDefaultDevice,
     required this.onTap,
   });
 
   final String? deviceName;
   final bool hasSelectedDevice;
+
+  /// 当前选中的设备是否同时是默认（固定）设备。
+  final bool isDefaultDevice;
   final VoidCallback onTap;
 
   @override
@@ -323,6 +327,18 @@ class HotWaterCurrentDeviceCard extends StatelessWidget {
                               color: colorScheme.onSurfaceVariant,
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          if (isDefaultDevice)
+                            _WaterCapsule(
+                              label: '默认',
+                              toneColor: accent,
+                              textColor: accent,
+                              icon: Icons.star_rounded,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                            ),
                           const SizedBox(width: 8),
                           _WaterCapsule(
                             label: hasSelectedDevice ? '切换' : '选择',
@@ -1082,15 +1098,23 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
     required this.devices,
     required this.deviceCount,
     required this.selectedIndex,
+    required this.defaultDeviceCode,
     required this.onManageDevices,
     required this.onSelectDevice,
+    required this.onToggleDefaultDevice,
   });
 
   final List<dynamic> devices;
   final int deviceCount;
   final int selectedIndex;
+
+  /// 当前默认（固定）设备的设备号；空串表示未设置默认设备。
+  final String defaultDeviceCode;
   final VoidCallback onManageDevices;
   final ValueChanged<int> onSelectDevice;
+
+  /// 星标入口：设为默认 / 取消默认。
+  final ValueChanged<int> onToggleDefaultDevice;
 
   @override
   Widget build(BuildContext context) {
@@ -1142,6 +1166,10 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final device = devices[index] as Map;
                   final bool isSelected = selectedIndex == index;
+                  final String deviceCode =
+                      device['poscode']?.toString() ?? '';
+                  final bool isDefault =
+                      deviceCode.isNotEmpty && deviceCode == defaultDeviceCode;
                   return ListTile(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(18),
@@ -1157,10 +1185,34 @@ class WaterDeviceSelectionSheet extends StatelessWidget {
                         color: colorScheme.onSurface,
                       ),
                     ),
-                    trailing:
-                        isSelected
-                            ? Icon(Ionicons.checkmark_circle, color: accent)
+                    subtitle:
+                        isDefault
+                            ? Text(
+                              '默认设备',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: accent,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
                             : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            isDefault
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            color: isDefault ? accent : colorScheme.outline,
+                          ),
+                          tooltip: isDefault ? '取消默认设备' : '设为默认设备',
+                          onPressed: () => onToggleDefaultDevice(index),
+                        ),
+                        if (isSelected)
+                          Icon(Ionicons.checkmark_circle, color: accent),
+                      ],
+                    ),
                     onTap: () => onSelectDevice(index),
                   );
                 },
