@@ -143,8 +143,8 @@ void main() {
     expect(copiedTexts, hasLength(1));
     final copied = copiedTexts.single;
     expect(copied, contains('班级：智能建造2304班'));
-    expect(copied, contains('上课人数：30'));
-    expect(copied, contains('学时：16'));
+    expect(copied, contains('上课人数：30 人'));
+    expect(copied, contains('学时：16 学时'));
     expect(copied, contains('考核方式：考试'));
   });
 
