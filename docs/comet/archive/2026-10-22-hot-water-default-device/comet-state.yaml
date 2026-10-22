@@ -1,0 +1,410 @@
+schema: comet.native.v4
+name: hot-water-default-device
+language: zh-CN
+phase: archive
+status: done
+state_version: 8
+brief: brief.md
+document_constraints_version: 3
+shape_confirmation_hash: 16b8ec60234cd08bd0cb7c14a94f7b3736b36a5d81262947e122b99b04abe936
+spec_changes:
+  - capability: hot-water-default-device
+    operation: create
+    source: specs/hot-water-default-device/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/hot-water-default-device
+  target_branch: main
+  finish: merge
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 1
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: "Scenario: 设备列表加载后，本机保存的默认设备号在返回列表中时，页面自动选中该设备，且当前设备卡片标注「默认」。"
+    result: passed
+    reason:
+      text: "实现：logic.dart:331-360 `_applyDefaultDeviceSelection` 按 poscode 在
+        deviceList 中匹配 savedCode 并 `_assignChoiceDevice(index)`，命中时同时置
+        `state.defaultDeviceCode = savedCode`；view.dart:421-435 由「当前选中设备号 ==
+        defaultDeviceCode」算出 `isDefaultDevice` 传给
+        HotWaterCurrentDeviceCard；water_page_widgets.dart:331-341 在
+        isDefaultDevice 时渲染 _WaterCapsule(label: '默认', icon:
+        star_rounded)。独立验证（在 /tmp 的仓库副本中新增只读核验用例，走真实
+        SharedPreferencesHotWaterDevicePreferenceStore 与默认注入的
+        FunctionHotWaterLogic，未改动被验仓库）：`flutter test
+        test/pages/water/zz_verifier_widget_test.dart` 的 A1 用例通过——预置
+        SharedPreferences 键 hot_water_default_device='200002'，getDeviceList() 后
+        choiceDevice==1（选中二栋热水），渲染页面后 find.text('二栋热水') 与 find.text('默认') 均
+        findsOneWidget，HotWaterCurrentDeviceCard.isDefaultDevice==true。存储键与饮水页
+        'device_order'/'device_note_*' 无冲突（grep 确认）。"
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "Scenario: 本机没有保存过默认设备时，保持现状选中列表第一台设备。"
+    result: passed
+    reason:
+      text: "实现：logic.dart:343-347，savedCode 为空时 `state.defaultDeviceCode=''` 且
+        `_assignChoiceDevice(0)`，与改造前
+        `_assignChoiceDevice(state.deviceList.isNotEmpty ? 0 : -1)`（git diff
+        可见）对非空列表完全等价，空列表仍为 -1。独立验证：zz_verifier_widget_test.dart 的 A2
+        用例通过——无预置默认时 choiceDevice==0，页面渲染 find.text('一栋热水') 命中且 find.text('默认')
+        findsNothing（不误标）。"
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: "Scenario: 在选择设备列表中点击某台设备的「设为默认」后，该选择被持久保存，退出并重新进入宿舍热水页面仍自动选中它。"
+    result: passed
+    reason:
+      text: 持久化路径核对：view.dart:177-180 把星标点击接到
+        `logic.toggleDefaultDevice(index)`；logic.dart:538-571
+        `toggleDefaultDevice` 调
+        `_devicePreferenceStore.writeDefaultDeviceCode(deviceCode)`（写入失败弹
+        '操作失败：默认设备设置失败，请稍后重试'，不静默丢弃）；默认注入为
+        `SharedPreferencesHotWaterDevicePreferenceStore`（logic.dart:145-147），其实现
+        default_device_store.dart:41-49 用
+        `prefs.setString('hot_water_default_device', code)` 落盘、读用
+        `prefs.getString`（读取失败按无默认处理）。独立验证（真实存储 + 新 controller
+        实例读回）：zz_verifier_persistence_test.dart 的 A3
+        用例通过——toggleDefaultDevice(1) 后
+        SharedPreferences.getInstance().getString('hot_water_default_device')=='200002'，随后新建的第二个
+        FunctionHotWaterLogic（未注入假存储，走默认真实存储）getDeviceList() 后
+        choiceDevice==1、defaultDeviceCode=='200002'；zz_verifier_widget_test.dart
+        的 A3 用例通过——页面内点列表星标后 prefs 真实键值为 '200002'、state.defaultDeviceCode
+        立即更新、choiceDevice 仍为 0（不改本次选择）、WaterDeviceSelectionSheet 未关闭、列表出现 '默认设备'
+        标注。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: "Scenario: 在选择设备列表中再次点击已设为默认的设备可取消默认；取消后重新进入页面回到选中列表第一台。"
+    result: passed
+    reason:
+      text: 实现：logic.dart:548-551 当 state.defaultDeviceCode 与目标设备号相同即转
+        `clearDefaultDevice()`，后者在 logic.dart:574-593
+        写空串；default_device_store.dart:44-46 空串走
+        `prefs.remove(hotWaterDefaultDeviceKey)`（真正删键，不是写空值）。独立验证：zz_verifier_persistence_test.dart
+        的 A4 用例通过——预置默认 '200002' 后 toggleDefaultDevice(1) 使
+        prefs.containsKey('hot_water_default_device')==false，新建 controller 实例
+        getDeviceList() 后
+        choiceDevice==0、defaultDeviceCode==''；zz_verifier_widget_test.dart 的 A4
+        用例通过——点实心星标后键被删除、state.defaultDeviceCode 清空、列表中 '默认设备' 标注消失。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: "Scenario: 检测到有设备未关闭时，仍优先选中该未关闭设备并给出提示，不被默认设备覆盖。"
+    result: passed
+    reason:
+      text: 时序核对：logic.dart:308-325 `_applyDeviceList` 先 `await
+        _applyDefaultDeviceSelection()`（默认选中），再 `await
+        Future.wait([_refreshOpenDeviceState(),
+        _refreshBalanceValue()])`；`_refreshOpenDeviceState`→`_applyOpenDeviceState`（logic.dart:510-527）在检测到未关闭设备时重新
+        `_assignChoiceDevice(deviceIndex)` 并弹既有提示
+        '设备状态提醒：检测到有设备尚未关闭'（isWarning），顺序上默认设备无法覆盖未关闭设备；逻辑层默认存储读取与设备状态检查、余额刷新仍并发（Future.wait
+        保持原样）。独立验证：zz_verifier_persistence_test.dart 的 A5 用例通过（默认 '200002' + 未关闭
+        '100001' → choiceDevice==0、waterStatus==true、defaultDeviceCode 仍为
+        '200002'）；zz_verifier_widget_test.dart 的 A5 用例通过——GetMaterialApp 下确实渲染出
+        '检测到有设备尚未关闭' 提示，当前卡片显示一栋热水且 find.text('默认') findsNothing（按 R4
+        以实际选中设备判断标记）。
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: "Scenario: 删除已设为默认的设备后，本机默认偏好被清理，重新进入页面选中列表第一台，且不报错、不残留旧运行态。"
+    result: passed
+    reason:
+      text: 实现：logic.dart:777-809 `_deleteDevice` 在 result==true 后先 `await
+        _clearDefaultDeviceIfMatches(deviceCode)`（logic.dart:770-775，仅当被删设备号等于当前默认设备号才清），再
+        `await getDeviceList()` 重新加载；清理走
+        clearDefaultDevice→prefs.remove，删除失败分支不触碰默认偏好（logic.dart:790-797）。清空后
+        `_applyDefaultDeviceSelection` 读到空 savedCode → 选 index
+        0。独立验证：zz_verifier_persistence_test.dart 的 A6 用例通过——删除默认设备 '200002' 后
+        prefs.containsKey('hot_water_default_device')==false、state.defaultDeviceCode==''、choiceDevice==0，且新建
+        controller 实例 getDeviceList() 后仍选中第一台；zz_verifier_widget_test.dart 的 A6
+        用例通过——走真实页面路径（选择列表→管理设备→删除默认设备→确认删除）后 prefs 键被清理、deviceList 只剩 1
+        台、choiceDevice==0，页面既无 '默认' 也无 '默认设备' 残留（无报错）。
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: "Scenario: 默认设备已被学校侧解绑（不在返回列表中）时，回退选中列表第一台，不崩溃、不残留旧运行态。"
+    result: passed
+    reason:
+      text: 实现：logic.dart:349-356，当 savedCode 非空但在返回列表中找不到（index==-1，即已被学校侧解绑）时
+        `state.defaultDeviceCode=''` 并
+        `_assignChoiceDevice(0)`，不抛异常、不访问越界下标；_deviceIndexForCode（logic.dart:362-370）对不完整设备数据做了
+        is Map 保护。独立验证：zz_verifier_persistence_test.dart 的 A7 用例通过——预置默认
+        '999999'（不在列表）后 getDeviceList()
+        正常完成，choiceDevice==0、defaultDeviceCode==''、waterStatus==false、deviceCheckComplete==true；zz_verifier_widget_test.dart
+        的 A7 用例通过——页面渲染无异常，当前卡片显示 '一栋热水'（第一台）且无 '默认' 标记，无旧运行态残留。
+      truncated: false
+builder_handoff:
+  candidate_id: 7f9e938e-a77a-4aa1-9dff-da7eb46c4c07
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:2ae5bd87-7d18-4c47-bd66-6d221f90491a
+  iteration: 1
+  summary:
+    text: 宿舍热水页支持固定默认设备。实现：1) 新建
+      lib/pages/water/default_device_store.dart——HotWaterDevicePreferenceStore
+      抽象 + SharedPreferencesHotWaterDevicePreferenceStore 实现，键
+      hot_water_default_device，按设备号(poscode)存储；读取失败按「无默认设备」返回空串不阻塞页面。2)
+      state.dart 新增 RxString defaultDeviceCode。3) logic.dart 构造函数注入
+      devicePreferenceStore；_applyDeviceList 改为先 await
+      _applyDefaultDeviceSelection()，按设备号在列表中匹配选中下标（匹配不到或未设置则回退第一台，空列表则
+      -1），随后仍并发执行 _refreshOpenDeviceState 与
+      _refreshBalanceValue，未关闭设备因此仍可覆盖默认设备；新增
+      toggleDefaultDevice(index)/clearDefaultDevice()（显式设为/取消默认，只改默认不改本次选择）、_clearDefaultDeviceIfMatches（删除设备后清理失效默认）。4)
+      water_page_widgets.dart：WaterDeviceSelectionSheet
+      每行加星标入口（实心=已默认、空心=未默认，默认行显示「默认设备」副标题），HotWaterCurrentDeviceCard 新增
+      isDefaultDevice 参数并在卡片显示「默认」标记。5) view.dart 串接 onToggleDefaultDevice 回调与
+      isDefaultDevice 计算。6) 测试：function_hot_water_logic_test.dart 新增 6
+      个用例（默认设备自动选中/默认设备缺失回退第一台/无默认仍选第一台/切换默认不改变本次选择/未关闭设备优先于默认设备/删除默认设备清理偏好）；function_hot_water_page_test.dart
+      新增 3 个用例（默认设备标注、��标入口设为默认、当前设备卡片默认标记）。开发期检查：flutter analyze 全量无问题；flutter
+      test 全量 718 项通过（test/pages/water/ 33 项）。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - lib/pages/water/logic.dart:331-360 — _applyDefaultDeviceSelection
+          按设备号在 state.deviceList 中匹配下标，匹配到则 _assignChoiceDevice(index) 并写回
+          state.defaultDeviceCode
+        - lib/pages/water/logic.dart:362-370 — _deviceIndexForCode 按 poscode
+          遍历匹配，不依赖列表下标
+        - lib/pages/water/state.dart:11-12 — 新增 RxString defaultDeviceCode
+        - test/pages/water/function_hot_water_logic_test.dart — 'saved default
+          device is selected when the device list loads' 断言预置默认设备 200002 时
+          choiceDevice==1 且 defaultDeviceCode=='200002'
+      note: 有默认设备且在列表中时自动选中并标注。
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - lib/pages/water/logic.dart:343-347 — savedCode 为空时
+          _assignChoiceDevice(0)
+        - lib/pages/water/logic.dart:349-356 — 默认设备号不在列表时同样
+          _assignChoiceDevice(0)
+        - test/pages/water/function_hot_water_logic_test.dart — 'no default
+          device keeps selecting the first device' 断言 choiceDevice==0；'missing
+          default device falls back to the first device' 断言预置 999999（不在列表）时
+          choiceDevice==0
+      note: 无默认或默认不在列表时都选中第一台。
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - lib/pages/water/logic.dart:541-563 — toggleDefaultDevice
+          显式写入/清除偏好，isDefaultDevice 命中时改走 clearDefaultDevice
+        - lib/pages/water/logic.dart:566-586 — clearDefaultDevice 写空串并清
+          state.defaultDeviceCode
+        - lib/pages/water/widgets/water_page_widgets.dart:1097-1131, 1168-1200 —
+          WaterDeviceSelectionSheet 每行有星标 IconButton（实心=已默认、空心=未默认），默认行 subtitle
+          显示「默认设备」
+        - lib/pages/water/view.dart:159-176 — onToggleDefaultDevice 调
+          logic.toggleDefaultDevice(index)
+        - test/pages/water/function_hot_water_logic_test.dart — 'toggling
+          default device persists the choice without changing selection' 断言写入
+          200002 后再点一次清空；'star entry sets a device as default without selecting
+          it' 断言点击星标后 preferences.defaultDeviceCode=='200002'、choiceDevice 仍为
+          0、列表未关闭
+        - test/pages/water/function_hot_water_page_test.dart — 'device selection
+          sheet marks the default device' 断言 '默认设备' 文案与实心/空心星标各存在
+      note: 显式星标设为/取消默认，不改本次选择，不关列表。
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - lib/pages/water/logic.dart:315-322 — _applyDeviceList 先 await
+          _applyDefaultDeviceSelection()，随后仍执行
+          Future.wait([_refreshOpenDeviceState(), _refreshBalanceValue()])
+        - lib/pages/water/logic.dart:508-520 — _applyOpenDeviceState 匹配到未关闭设备时
+          _assignChoiceDevice(deviceIndex) 覆盖默认设备的选中
+        - test/pages/water/function_hot_water_logic_test.dart — 'an open device
+          still overrides the default device' 断言默认设备为 200002 但未关闭设备为 100001 时最终
+          choiceDevice==0、waterStatus==true，且 defaultDeviceCode 仍为 '200002'
+      note: 未关闭设备优先于默认设备；默认设备本身保留。
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - lib/pages/water/logic.dart:770-775, 786 — _clearDefaultDeviceIfMatches
+          在删除成功后、刷新列表前清理与被删设备号匹配��默认偏好
+        - lib/pages/water/logic.dart:566-586 — clearDefaultDevice 写空串并清
+          state.defaultDeviceCode
+        - test/pages/water/function_hot_water_logic_test.dart — 'deleting the
+          default device clears the stored preference' 断言删除 200002 后
+          preferences.defaultDeviceCode==''、state.defaultDeviceCode==''、choiceDevice==0
+      note: 删除默认设备后偏好被清理，重新加载回到第一台。
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - lib/pages/water/logic.dart:349-356 — 默认设备号不在当前列表时
+          _assignChoiceDevice(0) 且 defaultDeviceCode 置空，不崩溃
+        - lib/pages/water/logic.dart:332-336 — 设备列表为空时 defaultDeviceCode
+          置空、choiceDevice 置 -1，不留旧运行态
+        - test/pages/water/function_hot_water_logic_test.dart — 'missing default
+          device falls back to the first device' 断言预置不在列表的默认设备号时
+          choiceDevice==0、defaultDeviceCode==''，无异常
+      note: 默认设备被解绑时回退第一台，不崩溃。
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - lib/pages/water/widgets/water_page_widgets.dart:303-330 —
+          HotWaterCurrentDeviceCard 新增 isDefaultDevice 参数，为真时在「当前设备」旁显示「默认」标记
+        - lib/pages/water/view.dart:404-428 — Obx 中按选中设备 poscode 与
+          state.defaultDeviceCode.value 比较得出 isDefaultDevice
+        - test/pages/water/function_hot_water_page_test.dart — 'current device
+          card shows the default marker' 断言
+          HotWaterCurrentDeviceCard.isDefaultDevice==true 且界面出现「默认」文案
+      note: 当前设备卡片在选中即默认时显示「默认」标记。
+  checks:
+    - name:
+        text: flutter analyze
+        truncated: false
+      result: passed
+      note:
+        text: 全量分析 No issues found。
+        truncated: false
+    - name:
+        text: flutter test
+        truncated: false
+      result: passed
+      note:
+        text: 全量 718 项通过。
+        truncated: false
+    - name:
+        text: flutter test test/pages/water/
+        truncated: false
+      result: passed
+      note:
+        text: 33 项通过，含新增 9 个用例。
+        truncated: false
+    - name:
+        text: flutter test test/core/ui/performance_boundaries_test.dart
+        truncated: false
+      result: passed
+      note:
+        text: 94 项通过，热水页结构断言未受影响。
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 默认设备按设备号全局存储，不按 HUT 账号分桶：不同账号共用同一台设备时偏好会互相影响。已按 D5
+        决策实现，跨账号时该设备号不在对方列表中会自然回退到第一台。
+      truncated: false
+    - text: 默认设备被学校侧解绑（不在设备列表中）时只回退选中第一台，本机偏好仍保留，设备重新绑定后会自动重新选中。
+      truncated: false
+    - text: 真机手工验收未执行：需用户在 App 内登录 HUT 账号、绑定多台设备后验证「选择设备」列表的星标入口与跨次进入页面的默认选中效果。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-22T01:16:42.282Z
+blockers: []
+verification:
+  candidate_id: 7f9e938e-a77a-4aa1-9dff-da7eb46c4c07
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:30fe1deb-23af-4b34-ba2d-cc0df15e41df
+  iteration: 1
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: verify-analyze
+      name:
+        text: flutter analyze
+        truncated: false
+      argv_display:
+        - text: analyze
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 3450
+    - id: verify-test
+      name:
+        text: flutter test
+        truncated: false
+      argv_display:
+        - text: test
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 21137
+  summary:
+    text: 逐条核验 hot-water-default-device 的 7 项验收，全部通过。实现与需求一致：默认设备以 poscode 存储在
+      SharedPreferences（独立键 hot_water_default_device，与饮水页
+      device_order/device_note_* 不冲突），逻辑层只依赖可注入的 HotWaterDevicePreferenceStore
+      抽象；_applyDeviceList 先按默认设备号解析选中（缺失/解绑回退第一台），随后未关闭设备检查仍可覆盖并给出既有提示，符合 R2/R4
+      的顺序约束；星标入口只改默认不改本次选择、不关列表，删除默认设备会真实删键并回退第一台。核验方式：只读阅读 brief/spec 与实现 +
+      在仓库副本（/tmp/hwd-verify-67129，未改动被验工作树，git status 与开始时一致）中新增 13 个针对真实
+      SharedPreferences 存储与真实页面渲染的独立用例，全部通过：(1) `flutter test
+      test/pages/water/zz_verifier_persistence_test.dart` → 6/6 通过（A1/A2 选型、A3
+      落盘与新 controller 读回、A4 取消默认删键、A5 未关闭设备优先、A6 删除清理、A7 解绑回退）；(2) `flutter test
+      test/pages/water/zz_verifier_widget_test.dart` → 7/7 通过（含 '默认'
+      标记渲染、星标交互真实落盘、'检测到有设备尚未关闭'
+      提示可见、页面内删除默认设备后的清理与回退、解绑回退）。额外运行的检查仅为上述两个定向测试，未重跑 Runtime 已通过的 flutter
+      analyze / flutter test 全量。
+    truncated: false
+  risks:
+    - text: 持久化证据来自 shared_preferences 的测试平台
+        mock（SharedPreferences.setMockInitialValues）下的真实
+        SharedPreferencesHotWaterDevicePreferenceStore 实现，验证了键级读写/删键与跨
+        controller 实例读回；未做真机平台通道的磁盘往返（无设备环境），但实现使用插件标准的
+        setString/getString/remove 路径。
+      truncated: false
+    - text: A7 场景下持久化偏好本身被有意保留（仅运行时状态清空），设备重新绑定后会再次自动选中——这与 spec
+        R2（解绑只要求回退第一台）、R5（仅删除时清理）及 brief D5 一致，非实现偏差，但若产品期望解绑即清盘需另行确认。
+      truncated: false
+    - text: logic.dart 仍直接 import shared_preferences 用于既有 hutUserInfo 持久化（与本 change
+        无关的旧代码）；默认设备路径本身已完全走可注入的 HotWaterDevicePreferenceStore 抽象。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-22T01:51:40.957Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 逐条核验 hot-water-default-device 的 7 项验收，全部通过。实现与需求一致：默认设备以 poscode 存储在
+        SharedPreferences（独立键 hot_water_default_device，与饮水页
+        device_order/device_note_* 不冲突），逻辑层只依赖可注入的 HotWaterDevicePreferenceStore
+        抽象；_applyDeviceList 先按默认设备号解析选中（缺失/解绑回退第一台），随后未关闭设备检查仍可覆盖并给出既有提示，符合
+        R2/R4 的顺序约束；星标入口只改默认不改本次选择、不关列表，删除默认设备会真实删键并回退第一台。核验方式：只读阅读 brief/spec
+        与实现 + 在仓库副本（/tmp/hwd-verify-67129，未改动被验工作树，git status 与开始时一致）中新增 13
+        个针对真实 SharedPreferences 存储与真实页面渲染的独立用例，全部通过：(1) `flutter test
+        test/pages/water/zz_verifier_persistence_test.dart` → 6/6 通过（A1/A2 选型、A3
+        落盘与新 controller 读回、A4 取消默认删键、A5 未关闭设备优先、A6 删除清理、A7 解绑回退）；(2) `flutter
+        test test/pages/water/zz_verifier_widget_test.dart` → 7/7 通过（含 '默认'
+        标记渲染、星标交互真实落盘、'检测到有设备尚未关闭'
+        提示可见、页面内删除默认设备后的清理与回退、解绑回退）。额外运行的检查仅为上述两个定向测试，未重跑 Runtime 已通过的 flutter
+        analyze / flutter test 全量。
+      truncated: false
+    completed_at: 2026-10-22T01:51:40.957Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-21T15:13:31.772Z
