@@ -1,0 +1,355 @@
+schema: comet.native.v4
+name: course-detail-compact
+language: zh-CN
+phase: archive
+status: done
+state_version: 8
+brief: brief.md
+document_constraints_version: 3
+shape_confirmation_hash: b02aaf4b0cbceaf66d9dc8124345ce11334a3fe65a9b717c5aeaf6a3a693c1ea
+spec_changes:
+  - capability: course-class-display
+    operation: modify
+    source: specs/course-class-display/spec.md
+workspace:
+  isolation: worktree
+  change_branch: comet/course-detail-compact
+  target_branch: main
+  finish: merge
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 1
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: "Scenario: 打开课程详情弹层，8 个详情行各自显示字段名标签（周数、时间、教师、班级、上课人数、学时、考核方式、地点），不再只显示裸值。"
+    result: passed
+    reason:
+      text: "实现：lib/home/coursetable/widgets/course_table_widgets.dart:449-493 构造 8 个
+        _CourseDetailItem，每个都带 label（周数/时间/教师/班级/上课人数/学时/考核方式/地点）；:591-599 渲染时传入
+        label: item.label；_CourseDetailRow 在 :1017-1033 渲染固定 64px 标签列（弱化色
+        onSurfaceVariant，w600），值另起一列右对齐，结构上不存在「只有图标+裸值」的行。独立复核：临时 out-of-repo
+        widget 测试渲染同一张弹层，8 个标签各命中 1 次，值列文本（7-10,13-16 / 教师 / 班级等）独立存在。"
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: "Scenario: 「上课人数」显示为「30 人」，「学时」显示为「16 学时」；非纯数字的值原样显示、不追加单位。"
+    result: passed
+    reason:
+      text: 实现：formatCourseDetailValue（:18-27）仅在 trim
+        后为纯数字时拼接单位，_isNumericCourseValue（:29-37）逐码点判定 0-9；上课人数 unit='人'、学时
+        unit='学时'（:475/:481），其余字段 unit 为 null 直接原样返回。独立复核：渲染后 '30 人' 命中 1 次、'16
+        学时' 命中 1 次；peopleCount='三十'、creditHours='每周2' 时 '三十'、'每周2' 原样显示，而 '三十
+        人'、'每周2 学时' 命中 0 次。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: "Scenario: 「班级」「考核方式」等文本型字段显示为「标签 + 原始值」，值不被改写。"
+    result: passed
+    reason:
+      text: 实现：班级/考核方式/教师/地点/周数/时间 的 unit 均为 null，formatCourseDetailValue
+        直接返回原值，不做任何改写；班级 wrapText=true（:469）走 maxLines:null + overflow visible
+        的换行分支。独立复核：含合班逗号串的原始值 '土木工程2307班,智能建造[2303-2304]班' 完整命中 1 次，'考试' 命中 1
+        次，未出现任何被改写或带单位的变体；Course 模型字段（coursemain.dart:112-127）本身未改动，单位只存在于展示层。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: "Scenario: 某字段没有值时，该行仍显示字段名标签，值位置显示弱化的「暂无」。"
+    result: passed
+    reason:
+      text: 实现：_CourseDetailItem.isEmpty（:886）用
+        value.trim().isEmpty；displayValue（:889-890）空值返回 '暂无'；_CourseDetailRow 的
+        mutedText（:996-999/:1041-1046）把值色改为 onSurfaceVariant 且字重降到
+        w500（弱化），标签始终照常渲染。独立复核：把周数/教师/班级/上课人数/学时/考核方式/地点全部置空的课程，渲染出 7 个 '暂无'（时间是
+        scheduleText 恒非空），8 个标签各命中 1 次，无空行、无标签丢失。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: "Scenario: 详情行比改动前明显更紧凑（行高由约 66px 降到约 48px，8 行总高由约 528px 降到约
+      384px），弹层内可容纳的行数增加。"
+    result: passed
+    reason:
+      text: 实现：行内边距 vertical 14→8、图标容器 38→32、图标 19→17（diff 确认）。独立实测（临时 out-of-repo
+        widget 测试，测量渲染后的真实几何）：8 个详情行内层 Row 高度均为 32，详情组 GlassPanel 高度 391 = 8×48
+        行 + 7×1px GlassHairlineDivider，即 8 行自身合计正好 384px，与 brief 目标值一致（改动前为
+        14×2+38=66px/行、8 行 528px）。可容纳行数：在 800×600 测试视口（弹层可视高度 504px）下，8 行中 7
+        行无需滚动即可完整可见（第 8 行底边 538 > 504），而按旧版 66px 行高推算仅第 1-5 行完整可见（第 6 行底边 548 >
+        504），可视行数由 5 增至 7。判定：实现达标。实现者汇报的 358px
+        是「第一行标签文字顶边到最后一行标签文字底边」的文本跨度（解析推导恰为 358.5px），因排除了首尾行的 8px 内边距与 32px
+        图标框高于 15px 标签文字的差值而偏小，属度量口径差异，不是实现未达验收。
+      truncated: false
+  - id: A6
+    source: brief.md
+    text: "Scenario: 长按某个详情行复制，复制内容包含字段名与单位（如「上课人数：30 人」），提示文案与之一致。"
+    result: passed
+    reason:
+      text: 实现：copyText getter（:893）为 '$label：$displayValue'；_CourseDetailSheetState 的
+        onLongPress（:598）传入 _copyValue(item.copyText,
+        '已复制${item.copyText}')。独立复核：长按 '30 人' 行后剪贴板收到 '上课人数：30 人'，同时弹出的 SnackBar
+        文案为 '已复制上课人数：30 人'，提示与复制内容一致（含字段名与单位）。
+      truncated: false
+  - id: A7
+    source: brief.md
+    text: "Scenario: 「复制课程信息为文本」的结果中「上课人数」「学时」两行带单位，空值回退文案保持原样。"
+    result: passed
+    reason:
+      text: 实现：lib/home/coursetable/view.dart:1219-1220 对上课人数/学时改用
+        formatCourseDetailValue(..., '人') / formatCourseDetailValue(...,
+        '学时')，空值分支仍是原来的 '暂无上课人数信息' / '暂无学时信息'（未改名为简写「暂无」），与 brief 约束一致；弹层
+        copyText 由 view.dart:1328 的 _buildCourseCopyText 提供。独立复核：仓库既有定向测试
+        test/home/coursetable/course_copy_text_test.dart 断言 contains('上课人数：30
+        人')、contains('学时：16
+        学时')、contains('上课人数：暂无上课人数信息')、contains('学时：暂无学时信息')，本次定向运行通过。
+      truncated: false
+  - id: A8
+    source: brief.md
+    text: "Scenario: 实验课课程缺少学时与考核方式时，这两行显示「暂无」，其余行正常显示。"
+    result: passed
+    reason:
+      text: 实现：detailItems 是与 isExp 无关的静态 8 项列表（:449-493），实验课不会少行；缺值行由通用的
+        displayValue='暂无' + mutedText 弱化处理。独立复核：构造
+        isExp=true、pcid='pcid-1'、className='智能建造2304班'、peopleCount='12'、creditHours/assessmentType
+        为空的课程，渲染结果恰为 2 个 '暂无'（学时、考核方式），8 个标签各命中 1 次，'12 人' 与 '智能建造2304班' 正常显示。
+      truncated: false
+builder_handoff:
+  candidate_id: cf7ddc68-7539-4f9d-89ec-984d7a3c46db
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:d3b42053-66e7-4fcd-9bb1-4bab2b868497
+  iteration: 1
+  summary:
+    text: 课程详情弹层信息行改为「字段名标签 + 带单位的值」并收紧行距。实现：1) course_table_widgets.dart 新增公开函数
+      formatCourseDetailValue(value,
+      unit)——仅当值为纯数字时追加单位后缀，非数字原样返回；_CourseDetailItem 改为携带 label/value/unit
+      三个字段，暴露 displayValue（空值时为「暂无」）与 copyText（「字段名：值」）；_CourseDetailRow 新增可选
+      label 与 mutedText 参数，渲染「图标 + 定宽标签列(64) + 值」两段式布局，标签用弱化色、值用主色；行内边距
+      14→8、图标容器 38→32、图标尺寸 19→17。2) CourseDetailSheet 的 8
+      个详情行补齐标签（周数/时间/教师/班级/上课人数/学时/考核方式/地点），上课人数与学时追加单位（人/学时）。3) view.dart 的
+      _buildCourseCopyText 中上课人数、学时两行改用 formatCourseDetailValue
+      追加单位，空值回退文案保持原样。4) 测试：course_detail_sheet_test.dart
+      新增「每行都有字段名标签」「非数字值不加单位」「长按复制带标签与单位」「行高收紧到
+      48px」四个用例并更新既有断言；course_copy_text_test.dart 更新复制文本的单位断言。开发期检查：flutter
+      analyze 全量无问题；flutter test 全量 713 项通过（其中 test/home/coursetable/ 52 项）。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+    - A6
+    - A7
+    - A8
+  acceptance_review:
+    - id: A1
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/widgets/course_table_widgets.dart:463-528 — 8 个
+          detailItems 全部带 label（周数/时间/教师/班级/上课人数/学时/考核方式/地点）
+        - lib/home/coursetable/widgets/course_table_widgets.dart:930-975 —
+          _CourseDetailRow 渲染 label 定宽列 + 值
+        - test/home/coursetable/course_detail_sheet_test.dart — 'every detail
+          row carries a field name label' 逐项断言 8 个标签 findsOneWidget
+      note: 8 行全部有标签，无裸值行。
+    - id: A2
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/widgets/course_table_widgets.dart:16-38 —
+          formatCourseDetailValue 仅在 _isNumericCourseValue 为真时追加单位
+        - lib/home/coursetable/widgets/course_table_widgets.dart:474-484 — 上课人数
+          unit='人'、学时 unit='学时'
+        - test/home/coursetable/course_detail_sheet_test.dart — 'shows people
+          count, credit hours and assessment rows' 断言 '30 人'/'16 学时'；'non
+          numeric values keep no unit suffix' 断言 '三十'/'每周2' 保持原样且 '三十 人'/'每周2
+          学时' 不存在
+      note: 纯数字带单位，非数字原样。
+    - id: A3
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/widgets/course_table_widgets.dart:467-472,
+          485-490 — 班级/考核方式/教师/地点/周数/时间六行不传 unit
+        - test/home/coursetable/course_detail_sheet_test.dart — 'shows people
+          count, credit hours and assessment rows' 断言 '考试' 与 '智能建造2304班' 原文出现
+      note: 文本型字段仅加标签，值不被改写。
+    - id: A4
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/widgets/course_table_widgets.dart:862-864 —
+          _CourseDetailItem.isEmpty 与 displayValue 空值时返回 '暂无'
+        - lib/home/coursetable/widgets/course_table_widgets.dart:934-936,
+          971-980 — mutedText 走 onSurfaceVariant + w500 弱化样式，label 仍照常渲染
+        - test/home/coursetable/course_detail_sheet_test.dart — 'shows fallback
+          text for missing course metadata' 断言标签 '上课人数'/'学时'/'考核方式' 存在且 '暂无' 出现
+          4 次（班级/上课人数/学时/考核方式四个空字段）
+      note: 空值保留标签、值位置显示弱化「暂无」。
+    - id: A5
+      status: implemented-with-evidence
+      evidence:
+        - "lib/home/coursetable/widgets/course_table_widgets.dart:943 — 行内边距
+          EdgeInsets.symmetric(horizontal: 16, vertical: 14) 改为 vertical: 8"
+        - lib/home/coursetable/widgets/course_table_widgets.dart:947-955 — 图标容器
+          38x38/radius13 改为 32x32/radius11，图标 size 19 改为 17
+        - 实测：改动后详情行高 48px（改动前 66px），8 行跨度 358px（改动前约 528px）
+        - test/home/coursetable/course_detail_sheet_test.dart — 'detail rows are
+          compact and stay inside the sheet' 断言行高 <= 52
+      note: 行高 66→48px，8 行跨度约 528→358px。
+    - id: A6
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/widgets/course_table_widgets.dart:864-866 —
+          _CourseDetailItem.copyText 为「$label：$displayValue」
+        - lib/home/coursetable/widgets/course_table_widgets.dart:617-624 — 行
+          onLongPress 改为 _copyValue(item.copyText, '已复制${item.copyText}')
+        - test/home/coursetable/course_detail_sheet_test.dart — 'long press
+          copies the labelled field value' 断言剪贴板依次写入 ['上课人数：30 人', '学时：16 学时']
+      note: 长按复制内容含字段名与单位，提示文案同形。
+    - id: A7
+      status: implemented-with-evidence
+      evidence:
+        - lib/home/coursetable/view.dart:1219-1220 — _buildCourseCopyText
+          中上课人数/学时改用 formatCourseDetailValue(value, unit)，空值分支仍写
+          '暂无上课人数信息'/'暂无学时信息'
+        - test/home/coursetable/course_copy_text_test.dart:146-147 — 断言 '上课人数：30
+          人' 与 '学时：16 学时'
+        - test/home/coursetable/course_copy_text_test.dart:187-190 — 空值回退文案
+          '暂无上课人数信息'/'暂无学时信息' 断言保持不变
+      note: 复制文本两行带单位，空值回退文案未变。
+    - id: A8
+      status: implemented-with-evidence
+      evidence:
+        - lib/utils/course/get_course.dart:615-630 — 实验课解析只设置
+          className/peopleCount，creditHours 与 assessmentType 保持默认空串
+        - lib/home/coursetable/widgets/course_table_widgets.dart:466-490 — 详情行按
+          Course 字段值渲染，学时/考核方式空值走 '暂无' 分支
+        - test/home/coursetable/course_detail_sheet_test.dart — 'shows fallback
+          text for missing course metadata' 以缺学时/考核方式的课程断言两行显示 '暂无'，其余行标签照常
+      note: 实验课缺学时/考核方式时显示「暂无」，其余行正常。
+  checks:
+    - name:
+        text: flutter analyze
+        truncated: false
+      result: passed
+      note:
+        text: 全量分析 No issues found。
+        truncated: false
+    - name:
+        text: flutter test
+        truncated: false
+      result: passed
+      note:
+        text: 全量 713 项通过。
+        truncated: false
+    - name:
+        text: flutter test test/home/coursetable/
+        truncated: false
+      result: passed
+      note:
+        text: 52 项通过，含新增 4 个用例。
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: 行高与标签列宽为固定像素值（图标容器 32px、标签列 64px、行内边距
+        8px），未做文字缩放（textScaler）自适应；系统开启超大字号时标签列可能被截断。
+      truncated: false
+    - text: 「上课人数」在普通课表示选课人数、在实验课表示分组人数，本轮沿用 course-class-field-fix 已确认的统一文案，未做区分说明。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-10-22T01:11:25.494Z
+blockers: []
+verification:
+  candidate_id: cf7ddc68-7539-4f9d-89ec-984d7a3c46db
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:f2e59d5d-3f87-45d6-8338-8c61aa43d608
+  iteration: 1
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks:
+    - id: verify-analyze
+      name:
+        text: flutter analyze
+        truncated: false
+      argv_display:
+        - text: analyze
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 4032
+    - id: verify-test
+      name:
+        text: flutter test
+        truncated: false
+      argv_display:
+        - text: test
+          truncated: false
+      argv_truncated: false
+      cwd_ref: .
+      status: passed
+      exit_code: 0
+      duration_ms: 21336
+  summary:
+    text: 独立核验 8 项验收全部通过。实现与 brief/spec 一致：8 个详情行统一为「图标 + 固定宽标签列 +
+      值列」；上课人数/学时在值为纯数字时追加「人」「学时」单位，非数字值原样显示；空值保留标签并以弱化色显示「暂无」；长按复制与 SnackBar
+      均为「字段名：值」形式；复制课程信息文本的数值行带单位且空值回退文案保持原样；实验课缺学时与考核方式时这两行显示「暂无」、其余行正常。行高由
+      66px 收到 48px、8 行合计 384px（实测详情组 391px 含 7 条 1px 分隔线），弹层可视高度内可完整显示的详情行由 5
+      行增至 7 行；实现者汇报的 358px 为标签文字间的跨度，属度量口径差异而非未达标。额外运行的检查：flutter test
+      test/home/coursetable/course_detail_sheet_test.dart
+      test/home/coursetable/course_copy_text_test.dart
+      test/core/ui/performance_boundaries_test.dart 全部通过（108 个用例）；另在 /tmp 下运行 3
+      个临时 out-of-repo widget 测试独立测量行高/分组高度、可视行数、标签与单位渲染、空值回退、长按复制与提示文案。未重复执行
+      Runtime 已跑过的全量 flutter analyze 与全量 flutter test（两者 exit
+      0）。全程只读：未修改任何实现/测试/文档文件，git status 与核验前一致。
+    truncated: false
+  risks:
+    - text: 展示层与复制层对「纯空白值」处理不一致：弹层用 value.trim().isEmpty 判空显示「暂无」，而复制文本用 isEmpty 且
+        formatCourseDetailValue 对空白返回原空白（view.dart:1219-1220）。解析层已保证字段
+        trim，实际不可达，仅为理论差异。
+      truncated: false
+    - text: 标签列固定 64px 加 8px 间距共占 72px，长地点等单行值的可用宽度相应变窄，会以省略号截断（仅班级行按规格允许换行）。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-10-22T01:23:28.110Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 独立核验 8 项验收全部通过。实现与 brief/spec 一致：8 个详情行统一为「图标 + 固定宽标签列 +
+        值列」；上课人数/学时在值为纯数字时追加「人」「学时」单位，非数字值原样显示；空值保留标签并以弱化色显示「暂无」；长按复制与 SnackBar
+        均为「字段名：值」形式；复制课程信息文本的数值行带单位且空值回退文案保持原样；实验课缺学时与考核方式时这两行显示「暂无」、其余行正常。行高由
+        66px 收到 48px、8 行合计 384px（实测详情组 391px 含 7 条 1px 分隔线），弹层可视高度内可完整显示的详情行由 5
+        行增至 7 行；实现者汇报的 358px 为标签文字间的跨度，属度量口径差异而非未达标。额外运行的检查：flutter test
+        test/home/coursetable/course_detail_sheet_test.dart
+        test/home/coursetable/course_copy_text_test.dart
+        test/core/ui/performance_boundaries_test.dart 全部通过（108 个用例）；另在 /tmp 下运行
+        3 个临时 out-of-repo widget 测试独立测量行高/分组高度、可视行数、标签与单位渲染、空值回退、长按复制与提示文案。未重复执行
+        Runtime 已跑过的全量 flutter analyze 与全量 flutter test（两者 exit
+        0）。全程只读：未修改任何实现/测试/文档文件，git status 与核验前一致。
+      truncated: false
+    completed_at: 2026-10-22T01:23:28.110Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-10-21T16:17:40.674Z

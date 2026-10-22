@@ -12,6 +12,30 @@ import '../../../utils/course/coursemain.dart';
 
 typedef CourseDetailClipboardWriter = Future<void> Function(String text);
 
+/// 课程详情字段值的展示形式：纯数字时追加单位后缀，其余原样返回。
+///
+/// 详情弹层与「复制课程信息为文本」共用同一套规则，避免两处口径不一致。
+String formatCourseDetailValue(String value, String? unit) {
+  if (unit == null) {
+    return value;
+  }
+  final trimmed = value.trim();
+  if (trimmed.isEmpty || !_isNumericCourseValue(trimmed)) {
+    return value;
+  }
+  return '$trimmed $unit';
+}
+
+bool _isNumericCourseValue(String value) {
+  for (var index = 0; index < value.length; index++) {
+    final code = value.codeUnitAt(index);
+    if (code < 0x30 || code > 0x39) {
+      return false;
+    }
+  }
+  return true;
+}
+
 class CourseTableToolbar extends StatelessWidget {
   const CourseTableToolbar({
     super.key,
@@ -425,33 +449,46 @@ class _CourseDetailSheetState extends State<CourseDetailSheet> {
     final detailItems = [
       _CourseDetailItem(
         icon: Ionicons.calendar_outline,
-        text: course.weekDuration.isEmpty ? '暂无周数信息' : course.weekDuration,
+        label: '周数',
+        value: course.weekDuration,
       ),
-      _CourseDetailItem(icon: Ionicons.time_outline, text: widget.scheduleText),
+      _CourseDetailItem(
+        icon: Ionicons.time_outline,
+        label: '时间',
+        value: widget.scheduleText,
+      ),
       _CourseDetailItem(
         icon: Ionicons.person_outline,
-        text: course.teacherName.isEmpty ? '暂无教师信息' : course.teacherName,
+        label: '教师',
+        value: course.teacherName,
       ),
       _CourseDetailItem(
         icon: Ionicons.school_outline,
-        text: course.className.isEmpty ? '暂无班级信息' : course.className,
+        label: '班级',
+        value: course.className,
         wrapText: true,
       ),
       _CourseDetailItem(
         icon: Ionicons.people_outline,
-        text: course.peopleCount.isEmpty ? '暂无上课人数信息' : course.peopleCount,
+        label: '上课人数',
+        value: course.peopleCount,
+        unit: '人',
       ),
       _CourseDetailItem(
         icon: Ionicons.book_outline,
-        text: course.creditHours.isEmpty ? '暂无学时信息' : course.creditHours,
+        label: '学时',
+        value: course.creditHours,
+        unit: '学时',
       ),
       _CourseDetailItem(
         icon: Ionicons.checkmark_circle_outline,
-        text: course.assessmentType.isEmpty ? '暂无考核方式信息' : course.assessmentType,
+        label: '考核方式',
+        value: course.assessmentType,
       ),
       _CourseDetailItem(
         icon: Ionicons.location_outline,
-        text: course.location.isEmpty ? '暂无上课地点' : course.location,
+        label: '地点',
+        value: course.location,
       ),
     ];
 
@@ -554,9 +591,11 @@ class _CourseDetailSheetState extends State<CourseDetailSheet> {
                 for (final item in detailItems)
                   _CourseDetailRow(
                     icon: item.icon,
-                    text: item.text,
+                    label: item.label,
+                    text: item.displayValue,
+                    mutedText: item.isEmpty,
                     wrapText: item.wrapText,
-                    onLongPress: () => _copyValue(item.text, '已复制${item.text}'),
+                    onLongPress: () => _copyValue(item.copyText, '已复制${item.copyText}'),
                   ),
               ],
             ),
@@ -825,13 +864,33 @@ class _CourseSheetCard extends StatelessWidget {
 class _CourseDetailItem {
   const _CourseDetailItem({
     required this.icon,
-    required this.text,
+    required this.label,
+    required this.value,
+    this.unit,
     this.wrapText = false,
   });
 
   final IconData icon;
-  final String text;
+
+  /// 字段名标签，如「上课人数」。
+  final String label;
+
+  /// 教务返回的原始值，未清洗。
+  final String value;
+
+  /// 数值型字段的单位，如「人」。
+  final String? unit;
+
   final bool wrapText;
+
+  bool get isEmpty => value.trim().isEmpty;
+
+  /// 弹层里展示的值：空值时是弱化的「暂无」，纯数字追加单位。
+  String get displayValue =>
+      isEmpty ? '暂无' : formatCourseDetailValue(value, unit);
+
+  /// 长按复制的文本：「字段名：值」，与「复制课程信息为文本」同格式。
+  String get copyText => '$label：$displayValue';
 }
 
 class _CourseActionItem {
@@ -904,20 +963,28 @@ class _CourseDetailRow extends StatelessWidget {
   const _CourseDetailRow({
     required this.icon,
     required this.text,
+    this.label,
     this.onTap,
     this.onLongPress,
     this.trailing,
     this.accentColor,
     this.wrapText = false,
+    this.mutedText = false,
   });
 
   final IconData icon;
   final String text;
+
+  /// 字段名标签；为空时按纯文本行渲染（操作行）。
+  final String? label;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final Widget? trailing;
   final Color? accentColor;
   final bool wrapText;
+
+  /// 值为空时的弱化样式。
+  final bool mutedText;
 
   @override
   Widget build(BuildContext context) {
@@ -925,32 +992,58 @@ class _CourseDetailRow extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final tint = accentColor ?? colorScheme.primary;
     final isInteractive = onTap != null || onLongPress != null;
+    final labelText = label;
+    final valueColor =
+        mutedText
+            ? colorScheme.onSurfaceVariant
+            : (accentColor ?? colorScheme.onSurface);
 
     final rowContent = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         crossAxisAlignment:
             wrapText ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: tint.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: Icon(icon, color: tint, size: 19),
+            child: Icon(icon, color: tint, size: 17),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
+          if (labelText != null) ...[
+            SizedBox(
+              width: 64,
+              child: Text(
+                labelText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                  height: 1.25,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: Text(
               text,
               maxLines: wrapText ? null : 1,
               overflow: wrapText ? TextOverflow.visible : TextOverflow.ellipsis,
               style: theme.textTheme.bodyLarge?.copyWith(
-                color: accentColor ?? colorScheme.onSurface,
+                color: valueColor,
                 fontWeight:
-                    accentColor != null ? FontWeight.w700 : FontWeight.w600,
+                    mutedText
+                        ? FontWeight.w500
+                        : (accentColor != null
+                            ? FontWeight.w700
+                            : FontWeight.w600),
                 letterSpacing: -0.2,
                 height: 1.25,
               ),

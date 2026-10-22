@@ -171,7 +171,38 @@ void main() {
 
     await tester.pumpWidget(buildSheet(courseWithoutClass));
 
-    expect(find.text('暂无班级信息'), findsOneWidget);
+    expect(find.text('班级'), findsOneWidget);
+    expect(find.text('暂无'), findsNWidgets(4));
+  });
+
+  testWidgets('every detail row carries a field name label', (tester) async {
+    final course = Course(
+      name: '工程造价与管理',
+      teacherName: '曾丹',
+      weekDuration: '7-10,13-16',
+      location: '公共423',
+      startSection: 5,
+      duration: 2,
+      className: '智能建造2304班',
+      peopleCount: '30',
+      creditHours: '16',
+      assessmentType: '考试',
+    );
+
+    await tester.pumpWidget(buildSheet(course));
+
+    for (final label in [
+      '周数',
+      '时间',
+      '教师',
+      '班级',
+      '上课人数',
+      '学时',
+      '考核方式',
+      '地点',
+    ]) {
+      expect(find.text(label), findsOneWidget, reason: '缺少字段名标签 $label');
+    }
   });
 
   testWidgets('shows people count, credit hours and assessment rows', (
@@ -192,9 +223,29 @@ void main() {
 
     await tester.pumpWidget(buildSheet(course));
 
-    expect(find.text('30'), findsOneWidget);
-    expect(find.text('16'), findsOneWidget);
+    expect(find.text('30 人'), findsOneWidget);
+    expect(find.text('16 学时'), findsOneWidget);
     expect(find.text('考试'), findsOneWidget);
+  });
+
+  testWidgets('non numeric values keep no unit suffix', (tester) async {
+    final course = Course(
+      name: '高等数学',
+      teacherName: '李老师',
+      weekDuration: '1-16',
+      location: '公共101',
+      startSection: 1,
+      duration: 2,
+      peopleCount: '三十',
+      creditHours: '每周2',
+    );
+
+    await tester.pumpWidget(buildSheet(course));
+
+    expect(find.text('三十'), findsOneWidget);
+    expect(find.text('每周2'), findsOneWidget);
+    expect(find.text('三十 人'), findsNothing);
+    expect(find.text('每周2 学时'), findsNothing);
   });
 
   testWidgets('shows fallback text for missing course metadata', (tester) async {
@@ -209,9 +260,74 @@ void main() {
 
     await tester.pumpWidget(buildSheet(course));
 
-    expect(find.text('暂无上课人数信息'), findsOneWidget);
-    expect(find.text('暂无学时信息'), findsOneWidget);
-    expect(find.text('暂无考核方式信息'), findsOneWidget);
+    expect(find.text('上课人数'), findsOneWidget);
+    expect(find.text('学时'), findsOneWidget);
+    expect(find.text('考核方式'), findsOneWidget);
+    expect(find.text('暂无'), findsNWidgets(4));
+  });
+
+  testWidgets('detail rows are compact and stay inside the sheet', (
+    tester,
+  ) async {
+    final course = Course(
+      name: '工程造价与管理',
+      teacherName: '曾丹',
+      weekDuration: '7-10,13-16',
+      location: '公共423',
+      startSection: 5,
+      duration: 2,
+      className: '智能建造2304班',
+      peopleCount: '30',
+      creditHours: '16',
+      assessmentType: '考试',
+    );
+
+    await tester.pumpWidget(buildSheet(course));
+
+    final peopleRow = find.ancestor(
+      of: find.text('上课人数'),
+      matching: find.byType(Row),
+    );
+    expect(peopleRow, findsOneWidget);
+
+    final rowHeight = tester.getSize(peopleRow.first).height;
+    expect(
+      rowHeight,
+      lessThanOrEqualTo(52),
+      reason: '详情行应收紧到约 48px，避免弹层内滚动过多。',
+    );
+  });
+
+  testWidgets('long press copies the labelled field value', (tester) async {
+    final copiedTexts = <String>[];
+    final course = Course(
+      name: '工程造价与管理',
+      teacherName: '曾丹',
+      weekDuration: '7-10,13-16',
+      location: '公共423',
+      startSection: 5,
+      duration: 2,
+      className: '智能建造2304班',
+      peopleCount: '30',
+      creditHours: '16',
+      assessmentType: '考试',
+    );
+
+    await tester.pumpWidget(
+      buildSheet(
+        course,
+        writeClipboard: (text) async {
+          copiedTexts.add(text);
+        },
+      ),
+    );
+
+    await tester.longPress(find.text('30 人'));
+    await tester.pump();
+    await tester.longPress(find.text('16 学时'));
+    await tester.pump();
+
+    expect(copiedTexts, ['上课人数：30 人', '学时：16 学时']);
   });
 
   testWidgets('copy action recovers after clipboard write throws', (
