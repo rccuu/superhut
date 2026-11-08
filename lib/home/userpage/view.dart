@@ -19,7 +19,6 @@ import '../../utils/course/coursemain.dart';
 import '../../utils/hut_user_api.dart';
 import '../../utils/token.dart';
 import '../about/view.dart';
-import 'recharge_tip_dialog.dart';
 
 typedef UserPageTokenRenewer = Future<bool> Function(BuildContext context);
 typedef UserPageTokenLoader = Future<String> Function();
@@ -438,28 +437,6 @@ class _UserPageState extends State<UserPage> {
     }
     _isOpeningRechargePage = true;
     try {
-      if (await _shouldShowRechargeTip()) {
-        if (!mounted) {
-          return;
-        }
-        final action = await showRechargeTipDialog(context);
-        if (action == null || !mounted) {
-          return;
-        }
-        if (action == RechargeTipDialogAction.noMoreTip) {
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool(rechargeTipDismissedPrefsKey, true);
-          } catch (error, stackTrace) {
-            AppLogger.error(
-              'Failed to persist recharge tip preference',
-              error: error,
-              stackTrace: stackTrace,
-            );
-          }
-        }
-      }
-
       final openRechargePage =
           widget.openRechargePage ?? _openCampusCardRecharge;
       final opened = await openRechargePage();
@@ -485,20 +462,6 @@ class _UserPageState extends State<UserPage> {
       }
     } finally {
       _isOpeningRechargePage = false;
-    }
-  }
-
-  Future<bool> _shouldShowRechargeTip() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return !(prefs.getBool(rechargeTipDismissedPrefsKey) ?? false);
-    } catch (error, stackTrace) {
-      AppLogger.error(
-        'Failed to read recharge tip preference',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      return true;
     }
   }
 
