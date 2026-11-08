@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ui/ambient_bubble_field.dart';
+import '../../pages/campuscard/campus_card_api.dart';
+import '../../pages/campuscard/campus_card_recharge_page.dart';
 import '../../core/ui/app_bottom_sheet.dart';
 import '../../core/ui/app_snack_bar.dart';
+import '../../utils/hut_user_api.dart';
 import 'logic.dart';
 import 'widgets/water_page_widgets.dart';
 
@@ -19,7 +21,7 @@ typedef HotWaterBottomSheetPresenter =
       Radius? topRadius,
       BoxShadow? shadow,
     });
-typedef HotWaterUrlOpener = Future<bool> Function(Uri url);
+typedef HotWaterRechargeOpener = Future<bool> Function();
 
 class FunctionHotWaterPage extends StatefulWidget {
   const FunctionHotWaterPage({
@@ -31,7 +33,7 @@ class FunctionHotWaterPage extends StatefulWidget {
 
   final FunctionHotWaterLogic? logic;
   final HotWaterBottomSheetPresenter? showBottomSheet;
-  final HotWaterUrlOpener? openRechargePage;
+  final HotWaterRechargeOpener? openRechargePage;
 
   @override
   State<FunctionHotWaterPage> createState() => _FunctionHotWaterPageState();
@@ -41,9 +43,6 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
   static const Radius _hotWaterSheetTopRadius = Radius.circular(28);
   late final FunctionHotWaterLogic logic;
   late final bool _ownsLogic;
-  final Uri _url = Uri.parse(
-    'alipays://platformapi/startapp?appId=2019030163398604&page=pages/index/index',
-  );
   bool _isDeviceSelectionSheetOpen = false;
   bool _isDeviceManagementSheetOpen = false;
   bool _isAddDeviceSheetOpen = false;
@@ -63,6 +62,23 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     }
   }
 
+  /// 生产默认充值入口：构建完美校园 H5 链接并用自带 WebView 打开，
+  /// WebView 关闭后刷新校园卡余额（brief A3/A6）。
+  Future<bool> _openCampusCardRecharge() async {
+    try {
+      final token = await HutUserApi().getToken();
+      final entryUrl = CampusCardApi.buildEntryUrl(token);
+      await Get.to<void>(() => CampusCardRechargePage(entryUrl: entryUrl));
+      await logic.getBalance();
+      return true;
+    } on CampusCardTokenMissingException {
+      _showSnackBar('请先登录后再充值', type: AppSnackBarType.error);
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _launchUrl() async {
     if (_isOpeningRechargePage) {
       return;
@@ -71,8 +87,8 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
     _isOpeningRechargePage = true;
     try {
       final openRechargePage =
-          widget.openRechargePage ?? (Uri url) => launchUrl(url);
-      if (!await openRechargePage(_url)) {
+          widget.openRechargePage ?? _openCampusCardRecharge;
+      if (!await openRechargePage()) {
         _showSnackBar('无法打开校园卡页面', type: AppSnackBarType.error);
       }
     } catch (_) {

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:ionicons/ionicons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/services/app_auth_storage.dart';
 import '../../core/services/app_logger.dart';
@@ -13,6 +12,8 @@ import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
 import '../../login/unified_login_page.dart';
 import '../../pages/score/logic.dart';
+import '../../pages/campuscard/campus_card_api.dart';
+import '../../pages/campuscard/campus_card_recharge_page.dart';
 import '../../pages/score/scorepage.dart';
 import '../../utils/course/coursemain.dart';
 import '../../utils/hut_user_api.dart';
@@ -26,7 +27,7 @@ typedef UserPageCourseSyncStarter = Future<bool> Function(String token);
 typedef UserPageBalanceLoader = Future<String> Function();
 typedef UserPageScoreSummaryLoader = Future<ScoreLoadResult> Function();
 typedef UserPageRouteOpener = Future<void> Function(BuildContext context);
-typedef UserPageUrlOpener = Future<bool> Function(Uri url);
+typedef UserPageRechargeOpener = Future<bool> Function();
 
 class _UserPageAccountState {
   const _UserPageAccountState({
@@ -94,7 +95,7 @@ class UserPage extends StatefulWidget {
   final UserPageRouteOpener? openLoginPage;
   final UserPageRouteOpener? openAboutPage;
   final UserPageRouteOpener? openScorePage;
-  final UserPageUrlOpener? openRechargePage;
+  final UserPageRechargeOpener? openRechargePage;
 
   @override
   State<UserPage> createState() => _UserPageState();
@@ -103,9 +104,6 @@ class UserPage extends StatefulWidget {
 class _UserPageState extends State<UserPage> {
   static const String _cachedBalanceKey = 'user_page_cached_balance';
   final hutUserApi = HutUserApi();
-  final Uri _url = Uri.parse(
-    'alipays://platformapi/startapp?appId=2019030163398604&page=pages/index/index',
-  );
   bool _isRefreshingCourse = false;
   bool _isOpeningLoginPage = false;
   bool _isOpeningAboutPage = false;
@@ -392,6 +390,48 @@ class _UserPageState extends State<UserPage> {
     }
   }
 
+  /// 生产默认充值入口：构建完美校园 H5 链接并用自带 WebView 打开。
+  ///
+  /// 返回 true 表示流程已打开；token 缺失时提示先登录；其他异常交给
+  /// 调用方按「无法打开充值入口」处理。WebView 关闭后刷新余额展示。
+  Future<bool> _openCampusCardRecharge() async {
+    try {
+      final token = await hutUserApi.getToken();
+      final Uri entryUrl;
+      try {
+        entryUrl = CampusCardApi.buildEntryUrl(token);
+      } on CampusCardTokenMissingException {
+        if (mounted) {
+          showAppSnackBar(
+            context,
+            message: '请先登录后再充值',
+            type: AppSnackBarType.error,
+          );
+        }
+        return false;
+      }
+      if (!mounted) {
+        return false;
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => CampusCardRechargePage(entryUrl: entryUrl),
+        ),
+      );
+      if (mounted && _hasLinkedCampusAccount) {
+        await _refreshBalance(showStatus: false);
+      }
+      return true;
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to open campus card recharge page',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
+  }
+
   Future<void> _launchUrl() async {
     if (_isOpeningRechargePage) {
       return;
@@ -421,8 +461,8 @@ class _UserPageState extends State<UserPage> {
       }
 
       final openRechargePage =
-          widget.openRechargePage ?? (Uri url) => launchUrl(url);
-      final opened = await openRechargePage(_url);
+          widget.openRechargePage ?? _openCampusCardRecharge;
+      final opened = await openRechargePage();
       if (!opened && mounted) {
         showAppSnackBar(
           context,
