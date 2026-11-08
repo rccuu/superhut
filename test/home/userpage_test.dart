@@ -572,7 +572,7 @@ void main() {
                 zxfjd: '120',
                 pjxfjd: '3.5',
               ),
-          openRechargePage: (_) {
+          openRechargePage: () {
             openCalls++;
             return openCompleter.future;
           },
@@ -612,7 +612,7 @@ void main() {
                 zxfjd: '120',
                 pjxfjd: '3.5',
               ),
-          openRechargePage: (_) async {
+          openRechargePage: () async {
             openCalls++;
             throw Exception('recharge unavailable');
           },
@@ -658,7 +658,7 @@ void main() {
                 zxfjd: '120',
                 pjxfjd: '3.5',
               ),
-          openRechargePage: (_) async {
+          openRechargePage: () async {
             openCalls++;
             return true;
           },
@@ -718,7 +718,7 @@ void main() {
               zxfjd: '120',
               pjxfjd: '3.5',
             ),
-        openRechargePage: (_) async {
+        openRechargePage: () async {
           openCalls++;
           return true;
         },
@@ -777,7 +777,7 @@ void main() {
                 zxfjd: '120',
                 pjxfjd: '3.5',
               ),
-          openRechargePage: (_) async {
+          openRechargePage: () async {
             openCalls++;
             return true;
           },

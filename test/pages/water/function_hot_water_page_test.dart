@@ -118,7 +118,7 @@ void main() {
       MaterialApp(
         home: FunctionHotWaterPage(
           logic: logic,
-          openRechargePage: (_) {
+          openRechargePage: () {
             openCalls++;
             return openCompleter.future;
           },
@@ -159,7 +159,7 @@ void main() {
       MaterialApp(
         home: FunctionHotWaterPage(
           logic: logic,
-          openRechargePage: (_) async {
+          openRechargePage: () async {
             openCalls++;
             throw Exception('recharge unavailable');
           },
