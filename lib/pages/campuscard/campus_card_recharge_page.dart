@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -131,10 +132,32 @@ class _CampusCardRechargePageState extends State<CampusCardRechargePage> {
     }
   }
 
+  /// 复制入口链接（含登录凭证）：WebView 内异常时可在浏览器打开同一页面。
+  Future<void> _copyEntryUrl() async {
+    await Clipboard.setData(ClipboardData(text: widget.entryUrl.toString()));
+    if (!mounted) {
+      return;
+    }
+    showAppSnackBar(
+      context,
+      message: '链接已复制，可粘贴到浏览器打开（含登录凭证，请勿外发）',
+      type: AppSnackBarType.success,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('校园卡充值')),
+      appBar: AppBar(
+        title: const Text('校园卡充值'),
+        actions: [
+          IconButton(
+            tooltip: '复制链接',
+            icon: const Icon(Icons.link_outlined),
+            onPressed: _copyEntryUrl,
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           InAppWebView(
