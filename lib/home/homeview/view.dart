@@ -1212,29 +1212,29 @@ class _LiquidGlassDock extends StatelessWidget {
     // LiquidGlassTabBar（Impeller 玻璃 pill 档）是全屏自放置 overlay：
     // 直接放开渲染，bottom 间距走 margin（包内叠加 safe-area）。
     // hit-zone 层按 bar 的自放置几何对齐（底部居中、bar 尺寸），
-    // 提供稳定的语义节点与测试 key（home-hit-zone-*）。
+    // 仅提供稳定的语义节点与测试 key（home-hit-zone-*）。整层
+    // IgnorePointer：点击必须全部交给 bar 自己的 InkWell/手势层，
+    // 否则 pill 的按压/滑动动画与玻璃交互会被拦截失效。
     final hitZones = Positioned(
       left: (screenWidth - tabBarWidth) / 2,
       right: (screenWidth - tabBarWidth) / 2,
       bottom: dockBottom + bottomInset,
       height: 64,
-      child: Row(
-        children: [
-          for (var index = 0; index < _dockItems.length; index++)
-            Expanded(
-              child: Semantics(
-                button: true,
-                selected: index == selectedIndex,
-                label: _dockItems[index].label,
-                child: GestureDetector(
+      child: IgnorePointer(
+        child: Row(
+          children: [
+            for (var index = 0; index < _dockItems.length; index++)
+              Expanded(
+                child: Semantics(
                   key: ValueKey<String>('home-hit-zone-${_dockItems[index].label}'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => onSelected(index),
+                  button: true,
+                  selected: index == selectedIndex,
+                  label: _dockItems[index].label,
                   child: const SizedBox.expand(),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
 
