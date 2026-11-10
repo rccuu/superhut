@@ -1,0 +1,1904 @@
+# comet-execution: managed-run
+change_id: 0492d3e0-5b56-4853-9114-ee05d41844f7
+workflow: hotfix
+language: zh-CN
+phase: archive
+context_compression: off
+build_mode: direct
+build_pause: null
+subagent_dispatch: null
+tdd_mode: direct
+review_mode: off
+isolation: worktree
+verify_mode: light
+auto_transition: true
+base_ref: 36b4199a56142c6f166e28d386a03d0aaaf8b2af
+design_doc: null
+plan: null
+verify_result: pass
+verify_failures: 0
+verification_report: docs/superpowers/reports/fix-ios-dock-height.md
+branch_status: pending
+created_at: 2026-11-10
+verified_at: 2026-11-10
+archive_confirmation: confirmed
+archived: true
+bound_branch: comet/fix-ios-dock-height
+direct_override: null
+handoff_context: null
+handoff_hash: null
+classic_profile: null
+classic_migration: null
+run_checkpoint:
+  schema: comet.workflow-run-checkpoint.v1
+  hash: 25298382d090b9a2c779242d46c50ffe0ee9c40c7860ab7ea0b178cb19a0d4ff
+  run:
+    protocolVersion: 1
+    schemaVersion: 1
+    runId: fix-ios-dock-height
+    revision: 1
+    workflow:
+      id: comet-classic-hotfix
+      version: "1"
+      hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+    definitionHashes:
+      '["comet-classic-hotfix","1"]': 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+    initialStateHash: d7349b8c2383b552ce6618034bcd748b68cb4491c1b16f115743840403b35ecd
+    input:
+      change: fix-ios-dock-height
+      changeDir: docs/openspec/changes/fix-ios-dock-height
+      workspaceBaseline:
+        ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+    state:
+      archiveConfirmation: confirmed
+      archived: true
+      autoTransition: true
+      baseRef: 36b4199a56142c6f166e28d386a03d0aaaf8b2af
+      boundBranch: comet/fix-ios-dock-height
+      branchStatus: pending
+      buildMode: direct
+      buildPause: null
+      checkEpoch: 5
+      classicMigration: null
+      classicProfile: null
+      contextCompression: off
+      createdAt: 2026-11-10
+      designDoc: null
+      directOverride: null
+      handoffContext: null
+      handoffHash: null
+      isolation: worktree
+      language: zh-CN
+      phase: archive
+      plan: null
+      reviewMode: off
+      subagentDispatch: null
+      tddMode: direct
+      verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+      verifiedAt: 2026-11-10
+      verifyFailures: 0
+      verifyMode: light
+      verifyResult: pass
+      workflow: hotfix
+    status: running
+    sequence: 14
+    actions:
+      - attempt: 1
+        claim:
+          executorId: comet-classic-guard
+          token: portable-ceb0e4c1543d58a11d3b179c9376cdd8711b40cdf313f3c93e2d7a1d1060706d
+        executionOrigin:
+          workflow:
+            hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+            id: comet-classic-hotfix
+            version: "1"
+        id: fix-ios-dock-height:1
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs: {}
+        inputHash: 39f1fb03ed4e8626503cbe577c93e2c42eca3c6e8deba49a3009b7ce353a5072
+        outcome:
+          actionId: fix-ios-dock-height:1
+          attempt: 1
+          claimToken: portable-ceb0e4c1543d58a11d3b179c9376cdd8711b40cdf313f3c93e2d7a1d1060706d
+          inputHash: 39f1fb03ed4e8626503cbe577c93e2c42eca3c6e8deba49a3009b7ce353a5072
+          outcomeId: 5c6a7ad4-0f91-4643-9c0f-9e2220fecdc9
+          output:
+            event: open-complete
+            requirementsEvidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          status: succeeded
+        protocolVersion: 1
+        receipts:
+          - hash: 22f282832fea92f8f55025ce89b1561db19b5cadff2215653406a732e6bebcb2
+            outcomeId: 5c6a7ad4-0f91-4643-9c0f-9e2220fecdc9
+        reconciliations: []
+        ref: comet-hotfix
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: succeeded
+        stepId: hotfix.open
+        type: invoke_skill
+      - attempt: 1
+        claim:
+          executorId: comet-classic-state
+          sessionId: classic-builder/fix-ios-dock-height:3/1
+          token: portable-6d6da4dab75a335342e347358a42ea0650641ae336fe25ec0f2af92246ebfe37
+        executionOrigin:
+          workflow:
+            hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+            id: comet-classic-hotfix
+            version: "1"
+        id: fix-ios-dock-height:3
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.open:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.open.evidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+        inputHash: b603d63ebc8443ba99dbaac2ad120b6923f913c9fa4546bd3d5a5d6345d97414
+        outcome:
+          actionId: fix-ios-dock-height:3
+          attempt: 1
+          claimToken: portable-6d6da4dab75a335342e347358a42ea0650641ae336fe25ec0f2af92246ebfe37
+          inputHash: b603d63ebc8443ba99dbaac2ad120b6923f913c9fa4546bd3d5a5d6345d97414
+          outcomeId: f6b39dd7-d2d7-4aa0-a287-c7b9c8438616
+          output:
+            event: build-complete
+          status: succeeded
+        protocolVersion: 1
+        receipts:
+          - hash: 225f170c7fea228bca6f653c43f06982a76cff81af652348505eface7d633ee1
+            outcomeId: f6b39dd7-d2d7-4aa0-a287-c7b9c8438616
+        reconciliations: []
+        ref: comet-build
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: succeeded
+        stepId: hotfix.build.execute
+        type: invoke_skill
+      - attempt: 1
+        claim:
+          executorId: comet-classic-check
+          token: portable-7923fd5219eb7429a979ff3735f924f9c299179f2bf946f6fab2835b3ade498e
+        executionOrigin:
+          workflow:
+            hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+            id: comet-classic-hotfix
+            version: "1"
+        id: fix-ios-dock-height:4
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.build.execute:
+              event: build-complete
+            hotfix.open:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.open.evidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+        inputHash: 838b36c92ecb9cad358a64b08c9bd9c864490248dc6536c48e709991ebffdce7
+        outcome:
+          actionId: fix-ios-dock-height:4
+          attempt: 1
+          claimToken: portable-7923fd5219eb7429a979ff3735f924f9c299179f2bf946f6fab2835b3ade498e
+          inputHash: 838b36c92ecb9cad358a64b08c9bd9c864490248dc6536c48e709991ebffdce7
+          outcomeId: d6ee88cc-d32a-40f1-9f33-6504178282f3
+          output:
+            argv:
+              - flutter
+              - test
+            changedDuringExecution: []
+            checkEpoch: 1
+            contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+            cwd: .
+            environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+            exitCode: 0
+            inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+            inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+            manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+            manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+            receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+            reusable: false
+            reused: false
+            scope: build
+            tier: full
+            timeoutMs: 300000
+          status: succeeded
+        protocolVersion: 1
+        receipts:
+          - hash: 66e27ec6c22c40cf2ecb6180c956cc5284b758da7374b46d43a6fd79129318ce
+            outcomeId: d6ee88cc-d32a-40f1-9f33-6504178282f3
+        reconciliations: []
+        ref: classic-check
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: succeeded
+        stepId: hotfix.build.check
+        type: call_tool
+      - attempt: 1
+        claim:
+          executorId: comet-classic-guard
+          token: portable-7d75c8bf0e5d323b6299d5e84c358ed73bda255565961fd5534016a9c7251e02
+        executionOrigin:
+          workflow:
+            hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+            id: comet-classic-hotfix
+            version: "1"
+        id: fix-ios-dock-height:6
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.build.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+            hotfix.build.check.evidence:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+            hotfix.build.execute:
+              event: build-complete
+            hotfix.open:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.open.evidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+        inputHash: 15a7fe55f7ac3078193f87f80e7f58801f9d3adc286be3fc0d1930d24937ce87
+        outcome:
+          actionId: fix-ios-dock-height:6
+          attempt: 1
+          claimToken: portable-7d75c8bf0e5d323b6299d5e84c358ed73bda255565961fd5534016a9c7251e02
+          inputHash: 15a7fe55f7ac3078193f87f80e7f58801f9d3adc286be3fc0d1930d24937ce87
+          outcomeId: 82f99f02-0bdf-407d-adf3-b6ba28d6d5b5
+          output:
+            event: verification-ready
+            verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+          status: succeeded
+        protocolVersion: 1
+        receipts:
+          - hash: 3f123746c0b952d6b70493b15c43e7d091dbae5f4fb0535eecbba80806df3930
+            outcomeId: 82f99f02-0bdf-407d-adf3-b6ba28d6d5b5
+        reconciliations: []
+        ref: comet-verify
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: succeeded
+        stepId: hotfix.verify.run
+        type: invoke_skill
+      - attempt: 1
+        claim:
+          executorId: comet-classic-check
+          token: portable-ae8954b9050a99557f0c3426ff06c10adfec33e0a11ae048cc24ebb49c170fa5
+        executionOrigin:
+          workflow:
+            hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+            id: comet-classic-hotfix
+            version: "1"
+        id: fix-ios-dock-height:8
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.build.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+            hotfix.build.check.evidence:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+            hotfix.build.execute:
+              event: build-complete
+            hotfix.open:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.open.evidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.verify.report.evidence:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+            hotfix.verify.run:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        inputHash: 1ae8dc07e3b8c91649f7f74c5c44a3de997a576efc87cd292eb690ce15829ffd
+        outcome:
+          actionId: fix-ios-dock-height:8
+          attempt: 1
+          claimToken: portable-ae8954b9050a99557f0c3426ff06c10adfec33e0a11ae048cc24ebb49c170fa5
+          inputHash: 1ae8dc07e3b8c91649f7f74c5c44a3de997a576efc87cd292eb690ce15829ffd
+          outcomeId: 2ea1a79d-15a7-400a-a2d3-c1eca436831f
+          output:
+            argv:
+              - flutter
+              - test
+            changedDuringExecution: []
+            checkEpoch: 2
+            contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+            cwd: .
+            deliveryInputs:
+              lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+            environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+            exitCode: 0
+            inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+            inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+            manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+            manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+            receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+            reusable: false
+            reused: false
+            scope: verify
+            tier: full
+            timeoutMs: 300000
+          status: succeeded
+        protocolVersion: 1
+        receipts:
+          - hash: 6e2d8e6618c63d8a8acff83e696dac47746771941baaf84e44d949a2658d6b67
+            outcomeId: 2ea1a79d-15a7-400a-a2d3-c1eca436831f
+        reconciliations: []
+        ref: classic-check
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: succeeded
+        stepId: hotfix.verify.check
+        type: call_tool
+      - attempt: 1
+        claim:
+          executorId: comet-classic-state
+          token: portable-147c07622fc63677d274482ee4d4f0488246ec145029a5e06844ad4a030b9a26
+        executionOrigin:
+          workflow:
+            hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+            id: comet-classic-hotfix
+            version: "1"
+        id: fix-ios-dock-height:10
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.build.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+            hotfix.build.check.evidence:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+            hotfix.build.execute:
+              event: build-complete
+            hotfix.open:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.open.evidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.verify.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+            hotfix.verify.check.evidence:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+            hotfix.verify.report.evidence:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+            hotfix.verify.run:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        inputHash: 2c25dad8cedfcc2b8042ca1bae60a771f21008940c10687636e636fbd46a4e46
+        outcome:
+          actionId: fix-ios-dock-height:10
+          attempt: 1
+          claimToken: portable-147c07622fc63677d274482ee4d4f0488246ec145029a5e06844ad4a030b9a26
+          inputHash: 2c25dad8cedfcc2b8042ca1bae60a771f21008940c10687636e636fbd46a4e46
+          outcomeId: 4567d832-0dc6-4b70-9ce3-eebd93bf39f1
+          output:
+            summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+              safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+              无告警、727 测试通过。拟本地归档并合并到 main。
+            targetBranch: comet/fix-ios-dock-height
+          status: succeeded
+        protocolVersion: 1
+        receipts:
+          - hash: 18d2edf62a1f384977e26060e5fd52a5953bcd26fc7e7be62031381faf835f11
+            outcomeId: 4567d832-0dc6-4b70-9ce3-eebd93bf39f1
+        reconciliations: []
+        ref: comet-archive
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: succeeded
+        stepId: hotfix.archive.prepare
+        type: invoke_skill
+      - attempt: 1
+        claim:
+          executorId: comet-classic-archive-preflight
+          token: portable-6c9c5f01b53190edab0fa6be353d03b35973c075e8f37a49c695643527c8ff73
+        executionOrigin:
+          workflow:
+            hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+            id: comet-classic-hotfix
+            version: "1"
+        id: fix-ios-dock-height:12
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.archive.confirm:
+              choice: local
+              proposal:
+                input:
+                  change: fix-ios-dock-height
+                  changeDir: docs/openspec/changes/fix-ios-dock-height
+                  workspaceBaseline:
+                    ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+                outputs:
+                  hotfix.archive.prepare:
+                    summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                      safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock
+                      定位参数，analyze 无告警、727 测试通过。拟本地归档并合并到 main。
+                    targetBranch: comet/fix-ios-dock-height
+            hotfix.archive.prepare:
+              summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                无告警、727 测试通过。拟本地归档并合并到 main。
+              targetBranch: comet/fix-ios-dock-height
+            hotfix.build.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+            hotfix.build.check.evidence:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+            hotfix.build.execute:
+              event: build-complete
+            hotfix.open:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.open.evidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.verify.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+            hotfix.verify.check.evidence:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+            hotfix.verify.report.evidence:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+            hotfix.verify.run:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        inputHash: afee7114d7e69a63e86d7e04920fd230eb3d7e93416760f5029de7d8b9fafb5c
+        outcome:
+          actionId: fix-ios-dock-height:12
+          attempt: 1
+          claimToken: portable-6c9c5f01b53190edab0fa6be353d03b35973c075e8f37a49c695643527c8ff73
+          inputHash: afee7114d7e69a63e86d7e04920fd230eb3d7e93416760f5029de7d8b9fafb5c
+          outcomeId: ab5fe199-85bf-40d1-9ce1-71f5e9722f5b
+          output:
+            baseCommit: 36b4199a56142c6f166e28d386a03d0aaaf8b2af
+            deliveryAction: local
+            targetBranch: comet/fix-ios-dock-height
+            verifiedBranch: comet/fix-ios-dock-height
+          status: succeeded
+        protocolVersion: 1
+        receipts:
+          - hash: c78f19fd57950c79ccc83a283c8dca392032f1cac39207cfa451ab3a4d348a75
+            outcomeId: ab5fe199-85bf-40d1-9ce1-71f5e9722f5b
+        reconciliations: []
+        ref: classic-archive-preflight
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: succeeded
+        stepId: hotfix.archive.preflight
+        type: call_tool
+      - attempt: 1
+        claim:
+          executorId: comet-classic-archive
+          token: portable-7a4bf37ec59395dfb689bd3c02117c40ebd5c8265f95f7d6d6007eb5b2391e60
+        executionOrigin:
+          workflow:
+            hash: 6f71bc84d0b99735ca7b6578709966e435eb6c732dcd702ad2771b5569fc9552
+            id: comet-classic-hotfix
+            version: "1"
+        id: fix-ios-dock-height:13
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.archive.confirm:
+              choice: local
+              proposal:
+                input:
+                  change: fix-ios-dock-height
+                  changeDir: docs/openspec/changes/fix-ios-dock-height
+                  workspaceBaseline:
+                    ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+                outputs:
+                  hotfix.archive.prepare:
+                    summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                      safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock
+                      定位参数，analyze 无告警、727 测试通过。拟本地归档并合并到 main。
+                    targetBranch: comet/fix-ios-dock-height
+            hotfix.archive.preflight:
+              baseCommit: 36b4199a56142c6f166e28d386a03d0aaaf8b2af
+              deliveryAction: local
+              targetBranch: comet/fix-ios-dock-height
+              verifiedBranch: comet/fix-ios-dock-height
+            hotfix.archive.prepare:
+              summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                无告警、727 测试通过。拟本地归档并合并到 main。
+              targetBranch: comet/fix-ios-dock-height
+            hotfix.build.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+            hotfix.build.check.evidence:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+            hotfix.build.execute:
+              event: build-complete
+            hotfix.open:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.open.evidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.verify.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+            hotfix.verify.check.evidence:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+            hotfix.verify.report.evidence:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+            hotfix.verify.run:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        inputHash: d89d862e37559c587ed42a7926921e7a207da181c7a531da88aaa06e94349795
+        outcome:
+          actionId: fix-ios-dock-height:13
+          artifacts:
+            - sha256: 97daba87a681e789f3d31918850c337fad6d9f7e6b2ccca2bf12eb7ced48c62d
+              uri: docs/openspec/changes/archive/2026-11-10-fix-ios-dock-height/.comet/archive-manifest.json
+          attempt: 1
+          claimToken: portable-7a4bf37ec59395dfb689bd3c02117c40ebd5c8265f95f7d6d6007eb5b2391e60
+          inputHash: d89d862e37559c587ed42a7926921e7a207da181c7a531da88aaa06e94349795
+          outcomeId: d1b48bb4-d499-4af8-ac88-e3ca556a98d2
+          output:
+            archiveDirectory: docs/openspec/changes/archive/2026-11-10-fix-ios-dock-height
+          status: succeeded
+        protocolVersion: 1
+        receipts:
+          - hash: 6e5d069e7400a12fc1a5b9c980be737748aab59518150001784947f735873141
+            outcomeId: d1b48bb4-d499-4af8-ac88-e3ca556a98d2
+        reconciliations: []
+        ref: classic-archive
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: succeeded
+        stepId: hotfix.archive.execute
+        type: call_tool
+      - attempt: 1
+        id: fix-ios-dock-height:14
+        input:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.archive.confirm:
+              choice: local
+              proposal:
+                input:
+                  change: fix-ios-dock-height
+                  changeDir: docs/openspec/changes/fix-ios-dock-height
+                  workspaceBaseline:
+                    ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+                outputs:
+                  hotfix.archive.prepare:
+                    summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                      safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock
+                      定位参数，analyze 无告警、727 测试通过。拟本地归档并合并到 main。
+                    targetBranch: comet/fix-ios-dock-height
+            hotfix.archive.execute:
+              archiveDirectory: docs/openspec/changes/archive/2026-11-10-fix-ios-dock-height
+            hotfix.archive.preflight:
+              baseCommit: 36b4199a56142c6f166e28d386a03d0aaaf8b2af
+              deliveryAction: local
+              targetBranch: comet/fix-ios-dock-height
+              verifiedBranch: comet/fix-ios-dock-height
+            hotfix.archive.prepare:
+              summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                无告警、727 测试通过。拟本地归档并合并到 main。
+              targetBranch: comet/fix-ios-dock-height
+            hotfix.build.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+            hotfix.build.check.evidence:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+            hotfix.build.execute:
+              event: build-complete
+            hotfix.open:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.open.evidence:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+            hotfix.verify.check:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+            hotfix.verify.check.evidence:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+            hotfix.verify.report.evidence:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+            hotfix.verify.run:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        inputHash: 096e2fdecd3f4280c8c56b144200108d73a6d9778279f3faf0955f296c21c2c9
+        protocolVersion: 1
+        receipts: []
+        reconciliations: []
+        ref: comet-archive
+        requiredCapabilities: []
+        retry: manual
+        runId: fix-ios-dock-height
+        status: pending
+        stepId: hotfix.archive.deliver
+        type: invoke_skill
+    actionContexts:
+      fix-ios-dock-height:1:
+        results: {}
+        sequence: 1
+      fix-ios-dock-height:10:
+        results:
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.verify.check:
+            sequence: 8
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+          hotfix.verify.check.evidence:
+            sequence: 9
+            value:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+          hotfix.verify.report.evidence:
+            sequence: 7
+            value:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+          hotfix.verify.run:
+            sequence: 6
+            value:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        sequence: 10
+      fix-ios-dock-height:12:
+        results:
+          hotfix.archive.confirm:
+            sequence: 11
+            value:
+              choice: local
+              proposal:
+                input:
+                  change: fix-ios-dock-height
+                  changeDir: docs/openspec/changes/fix-ios-dock-height
+                  workspaceBaseline:
+                    ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+                outputs:
+                  hotfix.archive.prepare:
+                    summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                      safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock
+                      定位参数，analyze 无告警、727 测试通过。拟本地归档并合并到 main。
+                    targetBranch: comet/fix-ios-dock-height
+          hotfix.archive.prepare:
+            sequence: 10
+            value:
+              summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                无告警、727 测试通过。拟本地归档并合并到 main。
+              targetBranch: comet/fix-ios-dock-height
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.verify.check:
+            sequence: 8
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+          hotfix.verify.check.evidence:
+            sequence: 9
+            value:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+          hotfix.verify.report.evidence:
+            sequence: 7
+            value:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+          hotfix.verify.run:
+            sequence: 6
+            value:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        sequence: 12
+      fix-ios-dock-height:13:
+        results:
+          hotfix.archive.confirm:
+            sequence: 11
+            value:
+              choice: local
+              proposal:
+                input:
+                  change: fix-ios-dock-height
+                  changeDir: docs/openspec/changes/fix-ios-dock-height
+                  workspaceBaseline:
+                    ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+                outputs:
+                  hotfix.archive.prepare:
+                    summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                      safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock
+                      定位参数，analyze 无告警、727 测试通过。拟本地归档并合并到 main。
+                    targetBranch: comet/fix-ios-dock-height
+          hotfix.archive.preflight:
+            sequence: 12
+            value:
+              baseCommit: 36b4199a56142c6f166e28d386a03d0aaaf8b2af
+              deliveryAction: local
+              targetBranch: comet/fix-ios-dock-height
+              verifiedBranch: comet/fix-ios-dock-height
+          hotfix.archive.prepare:
+            sequence: 10
+            value:
+              summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                无告警、727 测试通过。拟本地归档并合并到 main。
+              targetBranch: comet/fix-ios-dock-height
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.verify.check:
+            sequence: 8
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+          hotfix.verify.check.evidence:
+            sequence: 9
+            value:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+          hotfix.verify.report.evidence:
+            sequence: 7
+            value:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+          hotfix.verify.run:
+            sequence: 6
+            value:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        sequence: 13
+      fix-ios-dock-height:14:
+        results:
+          hotfix.archive.confirm:
+            sequence: 11
+            value:
+              choice: local
+              proposal:
+                input:
+                  change: fix-ios-dock-height
+                  changeDir: docs/openspec/changes/fix-ios-dock-height
+                  workspaceBaseline:
+                    ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+                outputs:
+                  hotfix.archive.prepare:
+                    summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                      safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock
+                      定位参数，analyze 无告警、727 测试通过。拟本地归档并合并到 main。
+                    targetBranch: comet/fix-ios-dock-height
+          hotfix.archive.execute:
+            sequence: 13
+            value:
+              archiveDirectory: docs/openspec/changes/archive/2026-11-10-fix-ios-dock-height
+          hotfix.archive.preflight:
+            sequence: 12
+            value:
+              baseCommit: 36b4199a56142c6f166e28d386a03d0aaaf8b2af
+              deliveryAction: local
+              targetBranch: comet/fix-ios-dock-height
+              verifiedBranch: comet/fix-ios-dock-height
+          hotfix.archive.prepare:
+            sequence: 10
+            value:
+              summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                无告警、727 测试通过。拟本地归档并合并到 main。
+              targetBranch: comet/fix-ios-dock-height
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.verify.check:
+            sequence: 8
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+          hotfix.verify.check.evidence:
+            sequence: 9
+            value:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+          hotfix.verify.report.evidence:
+            sequence: 7
+            value:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+          hotfix.verify.run:
+            sequence: 6
+            value:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        sequence: 14
+      fix-ios-dock-height:3:
+        results:
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+        sequence: 3
+      fix-ios-dock-height:4:
+        results:
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+        sequence: 4
+      fix-ios-dock-height:6:
+        results:
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+        sequence: 6
+      fix-ios-dock-height:8:
+        results:
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.verify.report.evidence:
+            sequence: 7
+            value:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+          hotfix.verify.run:
+            sequence: 6
+            value:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        sequence: 8
+    waits:
+      - id: fix-ios-dock-height:11
+        stepId: hotfix.archive.confirm
+        sequence: 11
+        status: resolved
+        proposal:
+          input:
+            change: fix-ios-dock-height
+            changeDir: docs/openspec/changes/fix-ios-dock-height
+            workspaceBaseline:
+              ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+          outputs:
+            hotfix.archive.prepare:
+              summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                无告警、727 测试通过。拟本地归档并合并到 main。
+              targetBranch: comet/fix-ios-dock-height
+        proposalHash: a05b798503de384796e536e707eb5d28ac232dae0d7a34ac9bf7fb2612043f13
+        choices:
+          - local
+          - push
+          - pr
+          - reverify
+          - later
+        results:
+          hotfix.archive.prepare:
+            sequence: 10
+            value:
+              summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                无告警、727 测试通过。拟本地归档并合并到 main。
+              targetBranch: comet/fix-ios-dock-height
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.verify.check:
+            sequence: 8
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+          hotfix.verify.check.evidence:
+            sequence: 9
+            value:
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+          hotfix.verify.report.evidence:
+            sequence: 7
+            value:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+          hotfix.verify.run:
+            sequence: 6
+            value:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        decision:
+          id: classic-archive-a05b798503de384796e536e707eb5d28ac232dae0d7a34ac9bf7fb2612043f13-local
+          choice: local
+          proposalHash: a05b798503de384796e536e707eb5d28ac232dae0d7a34ac9bf7fb2612043f13
+    evidenceWaits:
+      - id: fix-ios-dock-height:2
+        stepId: hotfix.open.evidence
+        sequence: 2
+        kind: classic-open-artifacts
+        status: resolved
+        results:
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+        receipt:
+          ref: docs/openspec/changes/fix-ios-dock-height
+          contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+          submissionId: efc467ad-1632-4665-9a28-8aa877edba9b
+      - id: fix-ios-dock-height:5
+        stepId: hotfix.build.check.evidence
+        sequence: 5
+        kind: classic-build-check
+        status: resolved
+        results:
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+        receipt:
+          ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+          submissionId: d3fad91d-dcc9-4fc2-ae2a-7ec58f00ac65
+      - id: fix-ios-dock-height:7
+        stepId: hotfix.verify.report.evidence
+        sequence: 7
+        kind: classic-verification-report
+        status: resolved
+        results:
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.verify.run:
+            sequence: 6
+            value:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        receipt:
+          ref: docs/superpowers/reports/fix-ios-dock-height.md
+          contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+          submissionId: 700af267-e305-433c-a59c-1aef033b816f
+      - id: fix-ios-dock-height:9
+        stepId: hotfix.verify.check.evidence
+        sequence: 9
+        kind: classic-verify-check
+        status: resolved
+        results:
+          hotfix.build.check:
+            sequence: 4
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 1
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              cwd: .
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+              reusable: false
+              reused: false
+              scope: build
+              tier: full
+              timeoutMs: 300000
+          hotfix.build.check.evidence:
+            sequence: 5
+            value:
+              contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+              ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          hotfix.build.execute:
+            sequence: 3
+            value:
+              event: build-complete
+          hotfix.open:
+            sequence: 1
+            value:
+              event: open-complete
+              requirementsEvidence:
+                contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+                ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.open.evidence:
+            sequence: 2
+            value:
+              contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+              ref: docs/openspec/changes/fix-ios-dock-height
+          hotfix.verify.check:
+            sequence: 8
+            value:
+              argv:
+                - flutter
+                - test
+              changedDuringExecution: []
+              checkEpoch: 2
+              contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+              cwd: .
+              deliveryInputs:
+                lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+              environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+              exitCode: 0
+              inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+              manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+              manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+              receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+              reusable: false
+              reused: false
+              scope: verify
+              tier: full
+              timeoutMs: 300000
+          hotfix.verify.report.evidence:
+            sequence: 7
+            value:
+              contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+              ref: docs/superpowers/reports/fix-ios-dock-height.md
+          hotfix.verify.run:
+            sequence: 6
+            value:
+              event: verification-ready
+              verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+        receipt:
+          ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+          contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+          submissionId: 1efeef07-c2b5-4b53-b3ac-17f4f9782afe
+    ready: []
+    joins: {}
+    outputs:
+      hotfix.archive.confirm:
+        sequence: 11
+        value:
+          choice: local
+          proposal:
+            input:
+              change: fix-ios-dock-height
+              changeDir: docs/openspec/changes/fix-ios-dock-height
+              workspaceBaseline:
+                ref: 9ac12d93-2019-45d0-b2fa-1fe36b1db1a6
+            outputs:
+              hotfix.archive.prepare:
+                summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+                  safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+                  无告警、727 测试通过。拟本地归档并合并到 main。
+                targetBranch: comet/fix-ios-dock-height
+      hotfix.archive.execute:
+        sequence: 13
+        value:
+          archiveDirectory: docs/openspec/changes/archive/2026-11-10-fix-ios-dock-height
+      hotfix.archive.preflight:
+        sequence: 12
+        value:
+          baseCommit: 36b4199a56142c6f166e28d386a03d0aaaf8b2af
+          deliveryAction: local
+          targetBranch: comet/fix-ios-dock-height
+          verifiedBranch: comet/fix-ios-dock-height
+      hotfix.archive.prepare:
+        sequence: 10
+        value:
+          summary: 修复 iOS 底部 dock 偏高：底部间距由重复计入 safe-area 的 89pt 改为 12pt 留白 + 单次
+            safe-area，实测底缘 46pt、顶缘约 110pt；仅改 _LiquidGlassDock 定位参数，analyze
+            无告警、727 测试通过。拟本地归档并合并到 main。
+          targetBranch: comet/fix-ios-dock-height
+      hotfix.build.check:
+        sequence: 4
+        value:
+          argv:
+            - flutter
+            - test
+          changedDuringExecution: []
+          checkEpoch: 1
+          contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+          cwd: .
+          environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+          exitCode: 0
+          inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+          inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+          manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+          manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/53428546-d49c-49dd-9cbc-f66cbd710461.manifest
+          receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+          reusable: false
+          reused: false
+          scope: build
+          tier: full
+          timeoutMs: 300000
+      hotfix.build.check.evidence:
+        sequence: 5
+        value:
+          contentHash: 819103337a2caaef0b4bb143b3a4e3766ed43ea7b2697c77ad6ffcc5344a3716
+          ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/1d18e948-1fc1-4aad-8429-d75633951f2d.log
+      hotfix.build.execute:
+        sequence: 3
+        value:
+          event: build-complete
+      hotfix.open:
+        sequence: 1
+        value:
+          event: open-complete
+          requirementsEvidence:
+            contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+            ref: docs/openspec/changes/fix-ios-dock-height
+      hotfix.open.evidence:
+        sequence: 2
+        value:
+          contentHash: 6d4a442eef5da66f2299c2d9000cca3222ed5067204dfd9a1448b65256808f16
+          ref: docs/openspec/changes/fix-ios-dock-height
+      hotfix.verify.check:
+        sequence: 8
+        value:
+          argv:
+            - flutter
+            - test
+          changedDuringExecution: []
+          checkEpoch: 2
+          contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+          cwd: .
+          deliveryInputs:
+            lib/home/homeview/view.dart: git:ebbaa5e682bd6e46c613d2dcdc08d3bf26d2299f
+          environment: 96d2e12746bfe2dd55876da8eafdfc0ae2d21c52e297aa153e302f4b96a2ac05
+          exitCode: 0
+          inputAfter: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+          inputBefore: 11419853830fe2c8e6f4338f6e6e52149aa90676196a771775d0d8dfc611700b
+          manifestHash: 356262bbc669fbe18c0b7674dc951ba69992435addf116c9fe05ade6392308f2
+          manifestRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/6d2c23da-966b-4078-88a6-5666d4dab8b0.manifest
+          receiptRef: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+          reusable: false
+          reused: false
+          scope: verify
+          tier: full
+          timeoutMs: 300000
+      hotfix.verify.check.evidence:
+        sequence: 9
+        value:
+          contentHash: 14b21a0dc78804a6def1dca40362750b8a8a388041716d10179626055ba998a4
+          ref: .comet/runtime/classic-sdk-checks/695163d7fae1b9a84fb297ea02ba6f9fab9abee79d2335cb710e4c905e896c6f/d738ea3e-3b7d-4faf-87a0-1ae406db2998.log
+      hotfix.verify.report.evidence:
+        sequence: 7
+        value:
+          contentHash: 91a10dc6f25523d367047025cab47b2a90548a9a906efe43e52d1609b13d95ce
+          ref: docs/superpowers/reports/fix-ios-dock-height.md
+      hotfix.verify.run:
+        sequence: 6
+        value:
+          event: verification-ready
+          verificationReport: docs/superpowers/reports/fix-ios-dock-height.md
+    children: []
+    lineage: []
+  sourceRevision: 22
+  sourceHash: 374643effc275cccaceece59c9bb582d533a05cbe2c6a2024c4291a2c343a64b
+check_epoch: 5
