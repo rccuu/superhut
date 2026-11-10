@@ -1206,7 +1206,10 @@ class _LiquidGlassDock extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final screenWidth = MediaQuery.sizeOf(context).width;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final dockBottom = (bottomInset > 12 ? bottomInset : 12.0) + 24;
+    // 底部视觉留白固定 12pt；safe-area 由 LiquidGlassTabBar 内部
+    // 自行叠加（Impeller 分支会加 MediaQuery.padding.bottom），这里
+    // 不能再重复计入，否则安全区被算两次、bar 整体抬高约 34pt。
+    const dockMargin = 12.0;
     final tabBarWidth = math.min(screenWidth - 48, 320.0);
 
     // LiquidGlassTabBar（Impeller 玻璃 pill 档）是全屏自放置 overlay：
@@ -1218,7 +1221,7 @@ class _LiquidGlassDock extends StatelessWidget {
     final hitZones = Positioned(
       left: (screenWidth - tabBarWidth) / 2,
       right: (screenWidth - tabBarWidth) / 2,
-      bottom: dockBottom + bottomInset,
+      bottom: dockMargin + bottomInset,
       height: 64,
       child: IgnorePointer(
         child: Row(
@@ -1250,7 +1253,7 @@ class _LiquidGlassDock extends StatelessWidget {
           pillStyle: glass.tabPillStyle,
           width: tabBarWidth,
           height: 64,
-          margin: EdgeInsets.only(bottom: dockBottom),
+          margin: const EdgeInsets.only(bottom: dockMargin),
         ),
         hitZones,
       ],
