@@ -1,11 +1,11 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
-import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:superhut/home/Functionpage/view.dart';
@@ -22,6 +22,7 @@ import '../../core/ui/app_page_route.dart';
 import '../../core/ui/app_progress_indicator.dart';
 import '../../core/ui/app_snack_bar.dart';
 import '../../core/ui/apple_glass.dart';
+import '../../theme/glass/glass_theme.dart';
 import '../about/first_open_trust_dialog.dart';
 import '../about/trust_page.dart';
 import '../../pages/Electricitybill/electricity_api.dart';
@@ -138,31 +139,10 @@ class HomeviewPage extends StatefulWidget {
 class _HomeviewPageState extends State<HomeviewPage> {
   static const int _courseTabIndex = 0;
   static const _tabAnimationDuration = Duration(milliseconds: 150);
-  static const _dockItems = [
-    _DockItemData(icon: CupertinoIcons.calendar, label: '课表'),
-    _DockItemData(icon: CupertinoIcons.square_grid_2x2, label: '功能'),
-    _DockItemData(icon: CupertinoIcons.person, label: '我的'),
-  ];
-  static const List<GButton> _dockTabs = [
-    GButton(
-      key: ValueKey<String>('home-tab-课表'),
-      icon: CupertinoIcons.calendar,
-      text: '课表',
-    ),
-    GButton(
-      key: ValueKey<String>('home-tab-功能'),
-      icon: CupertinoIcons.square_grid_2x2,
-      text: '功能',
-    ),
-    GButton(
-      key: ValueKey<String>('home-tab-我的'),
-      icon: CupertinoIcons.person,
-      text: '我的',
-    ),
-  ];
   String _currentVersion = '0.0.1'; // 默认版本号
   late final ValueNotifier<_HomeTabState> _tabStateNotifier;
   late final ValueNotifier<bool> _courseTransitionLiteMode;
+  late final ValueNotifier<bool> _dockHiddenNotifier;
   late final List<Widget> _pages;
   int _handledCourseSyncEventId = 0;
   bool _hasHandledStartupDialogs = false;
@@ -175,6 +155,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
   void initState() {
     super.initState();
     _courseTransitionLiteMode = ValueNotifier<bool>(false);
+    _dockHiddenNotifier = ValueNotifier<bool>(false);
     _pages = <Widget>[
       CourseTableView(transitionLiteModeListenable: _courseTransitionLiteMode),
       const FunctionPage(),
@@ -208,6 +189,7 @@ class _HomeviewPageState extends State<HomeviewPage> {
       _handleCourseSyncStateChanged,
     );
     _courseTransitionLiteMode.dispose();
+    _dockHiddenNotifier.dispose();
     _tabStateNotifier.dispose();
     super.dispose();
   }
@@ -557,73 +539,91 @@ class _HomeviewPageState extends State<HomeviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final dockBottom = bottomInset > 12 ? bottomInset.toDouble() : 12.0;
     final topInset = MediaQuery.viewPaddingOf(context).top;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBody: true,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          ValueListenableBuilder<_HomeTabState>(
-            valueListenable: _tabStateNotifier,
-            builder: (context, tabState, child) {
-              return _ActiveOnlyIndexedStack(
-                key: const ValueKey<String>('home-tab-stage'),
-                index: tabState.selectedIndex,
-                children: [
-                  for (var index = 0; index < _pages.length; index++)
-                    _buildPageSlot(index, tabState),
-                ],
-              );
-            },
-          ),
-          Positioned(
-            top: topInset + 10,
-            left: 16,
-            right: 16,
-            child: const IgnorePointer(child: _CourseSyncOverlay()),
-          ),
-          Positioned(
-            top: topInset + 10,
-            left: 16,
-            right: 16,
-            child: AppUpdateDownloadBanner(
-              onOpenRelease: widget.openUpdateRelease ?? _launchUpdateRelease,
+      // 滚动驱动 dock 收起/浮现（对齐上游交互：下滚隐藏、上滚浮现）。
+      body: NotificationListener<ScrollNotification>(
+        onNotification: _handleScrollNotification,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ValueListenableBuilder<_HomeTabState>(
+              valueListenable: _tabStateNotifier,
+              builder: (context, tabState, child) {
+                return _ActiveOnlyIndexedStack(
+                  key: const ValueKey<String>('home-tab-stage'),
+                  index: tabState.selectedIndex,
+                  children: [
+                    for (var index = 0; index < _pages.length; index++)
+                      _buildPageSlot(index, tabState),
+                  ],
+                );
+              },
             ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: dockBottom,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              heightFactor: 1,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 390),
-                  child: ValueListenableBuilder<_HomeTabState>(
-                    valueListenable: _tabStateNotifier,
-                    builder: (context, tabState, child) {
-                      return _ClassicTabBar(
-                        key: const ValueKey<String>('home-bottom-nav'),
-                        items: _dockItems,
-                        tabs: _dockTabs,
-                        selectedIndex: tabState.selectedIndex,
-                        onSelected: _onTabChange,
-                      );
-                    },
+            Positioned(
+              top: topInset + 10,
+              left: 16,
+              right: 16,
+              child: const IgnorePointer(child: _CourseSyncOverlay()),
+            ),
+            Positioned(
+              top: topInset + 10,
+              left: 16,
+              right: 16,
+              child: AppUpdateDownloadBanner(
+                onOpenRelease: widget.openUpdateRelease ?? _launchUpdateRelease,
+              ),
+            ),
+            ValueListenableBuilder<bool>(
+              valueListenable: _dockHiddenNotifier,
+              builder: (context, hidden, child) {
+                return IgnorePointer(
+                  ignoring: hidden,
+                  child: AnimatedSlide(
+                    offset: hidden ? const Offset(0, 0.2) : Offset.zero,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: AnimatedOpacity(
+                      opacity: hidden ? 0 : 1,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      child: child,
+                    ),
                   ),
+                );
+              },
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                heightFactor: 1,
+                child: _LiquidGlassDock(
+                  key: const ValueKey<String>('home-bottom-nav'),
+                  selectedIndex: _tabStateNotifier.value.selectedIndex,
+                  onSelected: _onTabChange,
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  /// 纵向滚动驱动：下滚（delta > 2 且 pixels > 48）隐藏 dock，上滚浮现。
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    final pixels = notification.metrics.pixels;
+    if (notification is ScrollUpdateNotification) {
+      final delta = notification.scrollDelta ?? 0;
+      if (delta > 2 && pixels > 48 && !_dockHiddenNotifier.value) {
+        _dockHiddenNotifier.value = true;
+      } else if (delta < -2 && _dockHiddenNotifier.value) {
+        _dockHiddenNotifier.value = false;
+      }
+    }
+    return false;
   }
 
   Widget _buildPageSlot(int index, _HomeTabState tabState) {
@@ -652,6 +652,10 @@ class _HomeviewPageState extends State<HomeviewPage> {
   }
 
   void _onTabChange(int index) {
+    // 切换 tab 时恢复 dock 可见（对齐上游 _resetOverlayState）。
+    if (_dockHiddenNotifier.value) {
+      _dockHiddenNotifier.value = false;
+    }
     final tabState = _tabStateNotifier.value;
     if (index < 0 ||
         index >= _pages.length ||
@@ -962,13 +966,6 @@ class _CourseSyncOverlay extends StatelessWidget {
   }
 }
 
-class _DockItemData {
-  const _DockItemData({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-}
-
 class _AnimatedTabPage extends StatefulWidget {
   const _AnimatedTabPage({
     required this.child,
@@ -1175,169 +1172,86 @@ class _AnimatedTabPageState extends State<_AnimatedTabPage>
   }
 }
 
-class _ClassicTabBar extends StatelessWidget {
-  const _ClassicTabBar({
+class _LiquidGlassDock extends StatelessWidget {
+  const _LiquidGlassDock({
     super.key,
-    required this.items,
-    required this.tabs,
     required this.selectedIndex,
     required this.onSelected,
   });
 
-  final List<_DockItemData> items;
-  final List<GButton> tabs;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
 
+  static const List<LiquidGlassTabBarItem> _dockItems = [
+    LiquidGlassTabBarItem(
+      icon: CupertinoIcons.calendar,
+      selectedIcon: CupertinoIcons.calendar,
+      label: '课表',
+    ),
+    LiquidGlassTabBarItem(
+      icon: CupertinoIcons.square_grid_2x2,
+      selectedIcon: CupertinoIcons.square_grid_2x2_fill,
+      label: '功能',
+    ),
+    LiquidGlassTabBarItem(
+      icon: CupertinoIcons.person,
+      selectedIcon: CupertinoIcons.person_fill,
+      label: '我的',
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final disableAnimations = MediaQuery.maybeOf(context)?.disableAnimations;
-    // Perf: TabBar 是常驻浮层，且页面切换时下层内容会随 SlideTransition
-    // 移动 —— 一旦它开启 BackdropFilter，每帧都要重新采样，是头号掉帧元凶。
-    // 改为读 AppGlassPerformanceScope：lite 模式（Android / 切换动画期间）
-    // 直接关掉 BackdropFilter，把 surface 透明度上提到 0.78 保持视觉浮岛感。
-    final useLiteEffects = AppGlassPerformanceScope.isLiteOf(context);
-    final panelRadius = BorderRadius.circular(28);
-    final panelGradient =
-        useLiteEffects
-            ? LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Colors.white.withValues(alpha: isDark ? 0.10 : 0.84),
-                colorScheme.surface.withValues(alpha: isDark ? 0.34 : 0.78),
-                Colors.white.withValues(alpha: isDark ? 0.10 : 0.84),
-              ],
-              stops: const [0, 0.5, 1],
-            )
-            : LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Colors.white.withValues(alpha: isDark ? 0.16 : 0.28),
-                colorScheme.surface.withValues(alpha: isDark ? 0.14 : 0.22),
-                Colors.white.withValues(alpha: isDark ? 0.16 : 0.28),
-              ],
-              stops: const [0, 0.5, 1],
-            );
-    final activeBackground = colorScheme.primary.withValues(
-      alpha: isDark ? 0.22 : 0.12,
-    );
-    final panelBorder = Colors.white.withValues(alpha: isDark ? 0.10 : 0.24);
-    // Perf: 双层 BoxShadow 在长方形区域上的成本接近一次小型模糊。
-    // lite 模式下合并为一层，并把 blurRadius 从 27/32 降到 16/20。
-    final panelShadow =
-        useLiteEffects
-            ? <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.12),
-                blurRadius: isDark ? 20 : 16,
-                offset: const Offset(0, 8),
-                spreadRadius: -4,
-              ),
-            ]
-            : <BoxShadow>[
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.18),
-                blurRadius: isDark ? 32 : 27,
-                offset: Offset(0, isDark ? 14 : 11),
-                spreadRadius: -10,
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.10),
-                blurRadius: isDark ? 12 : 10,
-                offset: const Offset(0, 3),
-                spreadRadius: -2,
-              ),
-            ];
-    final navAnimationDuration =
-        disableAnimations == true
-            ? Duration.zero
-            : useLiteEffects
-            ? const Duration(milliseconds: 90)
-            : const Duration(milliseconds: 180);
+    final glass = context.glassTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final dockBottom = (bottomInset > 12 ? bottomInset : 12.0) + 24;
+    final tabBarWidth = math.min(screenWidth - 48, 320.0);
 
-    return RepaintBoundary(
-      child: GlassPanel(
-        key: const ValueKey<String>('home-bottom-nav-panel-stable'),
-        style: GlassPanelStyle.floating,
-        blur: isDark ? 18 : 24,
-        useBackdropFilter: !useLiteEffects,
-        borderRadius: panelRadius,
-        gradient: panelGradient,
-        borderColor: panelBorder,
-        boxShadow: panelShadow,
-        padding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              child: ExcludeSemantics(
-                child: IgnorePointer(
-                  child: GNav(
-                    selectedIndex: selectedIndex,
-                    onTabChange: onSelected,
-                    gap: 8,
-                    rippleColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    haptic: true,
-                    backgroundColor: Colors.transparent,
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    color: colorScheme.onSurfaceVariant.withValues(
-                      alpha: isDark ? 0.86 : 0.78,
-                    ),
-                    activeColor: colorScheme.primary,
-                    tabBackgroundColor: activeBackground,
-                    tabBorderRadius: 18,
-                    iconSize: 20,
-                    duration: navAnimationDuration,
-                    curve: Curves.easeOutCubic,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    textStyle: theme.textTheme.labelMedium?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.2,
-                    ),
-                    tabs: tabs,
-                  ),
+    // LiquidGlassTabBar 自带 InkWell 点击；这层等宽 hit-zone 只用于
+    // 提供稳定的语义节点与测试 key（home-hit-zone-*），正常命中时
+    // InkWell 先收到事件，hit-zone 透明且不拦截。
+    final hitZones = Positioned.fill(
+      child: Row(
+        children: [
+          for (var index = 0; index < _dockItems.length; index++)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: index == selectedIndex,
+                label: _dockItems[index].label,
+                child: GestureDetector(
+                  key: ValueKey<String>('home-hit-zone-${_dockItems[index].label}'),
+                  behavior: HitTestBehavior.deferToChild,
+                  onTap: () => onSelected(index),
+                  child: const SizedBox.expand(),
                 ),
               ),
             ),
-            Positioned.fill(
-              child: Row(
-                children: [
-                  for (var index = 0; index < items.length; index++)
-                    _buildHitZone(index),
-                ],
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
-  }
 
-  Widget _buildHitZone(int index) {
-    final item = items[index];
-    return Expanded(
-      child: Semantics(
-        button: true,
-        selected: index == selectedIndex,
-        label: item.label,
-        child: GestureDetector(
-          key: ValueKey<String>('home-hit-zone-${item.label}'),
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onSelected(index);
-          },
-          child: const SizedBox.expand(),
+    return Padding(
+      padding: EdgeInsets.only(bottom: dockBottom),
+      child: SizedBox(
+        width: tabBarWidth,
+        height: 64,
+        child: Stack(
+          children: [
+            LiquidGlassTabBar(
+              items: _dockItems,
+              selectedIndex: selectedIndex,
+              onChanged: onSelected,
+              style: glass.tabBarStyle,
+              itemStyle: glass.tabItemStyleOf(colorScheme),
+              pillStyle: glass.tabPillStyle,
+              width: tabBarWidth,
+              height: 64,
+            ),
+            hitZones,
+          ],
         ),
       ),
     );

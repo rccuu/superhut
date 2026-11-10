@@ -5092,7 +5092,7 @@ void main() {
       r'void _onTabChange\(int index\) \{[\s\S]*?\n  \}',
     ).firstMatch(homeView)?.group(0);
     final animatedTabPageState = RegExp(
-      r'class _AnimatedTabPageState extends State<_AnimatedTabPage>[\s\S]*?\nclass _ClassicTabBar',
+      r'class _AnimatedTabPageState extends State<_AnimatedTabPage>[\s\S]*?\nclass _LiquidGlassDock',
     ).firstMatch(homeView)?.group(0);
     final didUpdateWidgetMethod = RegExp(
       r'void didUpdateWidget\(covariant _AnimatedTabPage oldWidget\) \{[\s\S]*?\n  @override\n  void dispose',
@@ -5100,19 +5100,19 @@ void main() {
     final transitionSetterMethod = RegExp(
       r'void _setTransitioning\(bool value\) \{[\s\S]*?\n  void _startTransition',
     ).firstMatch(homeView)?.group(0);
-    final classicTabBarClass = RegExp(
-      r'class _ClassicTabBar extends StatelessWidget \{[\s\S]*?\n\}',
+    final liquidGlassDockClass = RegExp(
+      r'class _LiquidGlassDock extends StatelessWidget \{[\s\S]*?\n\}',
     ).firstMatch(homeView)?.group(0);
 
     expect(
       homeView,
-      contains('static const List<GButton> _dockTabs = ['),
-      reason: '首页底部导航的 GButton 列表应静态复用，避免每次切 tab 重新构造。',
+      contains('static const List<LiquidGlassTabBarItem> _dockItems = ['),
+      reason: '首页底部导航的玻璃条目列表应静态复用，避免每次 build 重新构造。',
     );
     expect(
       homeView,
-      contains('tabs: _dockTabs,'),
-      reason: '首页底部导航应把稳定 tabs 传给 _ClassicTabBar。',
+      contains('items: _dockItems,'),
+      reason: '首页底部导航应把稳定条目传给 LiquidGlassTabBar。',
     );
     expect(
       homeView,
@@ -5135,16 +5135,11 @@ void main() {
       isNot(contains('late final List<bool> _loadedPages')),
       reason: '已加载 tab 状态应封装到 _HomeTabState 中统一通知局部 builder。',
     );
-    expect(classicTabBarClass, isNotNull);
+    expect(liquidGlassDockClass, isNotNull);
     expect(
-      classicTabBarClass,
-      contains('final List<GButton> tabs;'),
-      reason: '_ClassicTabBar 应接收稳定 tabs，而不是在 build 内从 items 生成。',
-    );
-    expect(
-      classicTabBarClass,
-      contains('tabs: tabs,'),
-      reason: 'GNav 应直接使用外部传入的稳定 tabs。',
+      liquidGlassDockClass,
+      contains('items: _dockItems,'),
+      reason: 'LiquidGlassTabBar 应直接使用外部静态条目列表。',
     );
     expect(animatedTabPageState, isNotNull);
     expect(
@@ -5260,25 +5255,19 @@ void main() {
       reason: '首页 tab 点击不应 setState 重建整个首页 shell。',
     );
     expect(
-      classicTabBarClass,
+      liquidGlassDockClass,
       isNot(contains('.map(')),
-      reason: '_ClassicTabBar build 不应通过 map/toList 重建 GButton 列表。',
+      reason: '_LiquidGlassDock build 不应通过 map/toList 重建条目列表。',
     );
     expect(
-      classicTabBarClass,
-      isNot(contains('toList(growable: false)')),
-      reason: '_ClassicTabBar build 不应物化新的 GButton 列表。',
-    );
-    expect(
-      classicTabBarClass,
-      contains('for (var index = 0; index < items.length; index++)'),
+      liquidGlassDockClass,
+      contains('for (var index = 0; index < _dockItems.length; index++)'),
       reason: '首页底部导航透明点击热区应直接按下标构建，避免每次 build 走 List.generate 闭包。',
     );
-    expect(classicTabBarClass, contains('_buildHitZone(index)'));
     expect(
-      classicTabBarClass,
-      isNot(contains('List.generate(items.length')),
-      reason: '_ClassicTabBar build 不应通过 List.generate 重建透明点击热区。',
+      liquidGlassDockClass,
+      isNot(contains('List.generate(_dockItems.length')),
+      reason: '_LiquidGlassDock build 不应通过 List.generate 重建透明点击热区。',
     );
   });
 

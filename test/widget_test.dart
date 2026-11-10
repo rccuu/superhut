@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_easy/liquid_glass_easy.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:pub_semver/pub_semver.dart';
 import 'package:superhut/core/ui/apple_glass.dart';
 import 'package:superhut/core/services/app_update_service.dart';
@@ -103,7 +103,8 @@ void main() {
     await pumpUntilFound(tester, find.byKey(const ValueKey('home-tab-stage')));
 
     expect(find.byKey(const ValueKey('home-tab-stage')), findsOneWidget);
-    expect(find.text('功能'), findsOneWidget);
+    // dock 标签（LiquidGlassTabBarItem）与功能页标题都会出现「功能」文本。
+    expect(find.text('功能'), findsWidgets);
     expect(find.byType(FunctionPage), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
@@ -320,25 +321,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('home-bottom-nav-panel-stable')),
-      findsOneWidget,
-    );
+    expect(find.byType(LiquidGlassTabBar), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
     await tester.pump();
 
-    expect(
-      find.byKey(const ValueKey('home-bottom-nav-panel-stable')),
-      findsOneWidget,
-    );
+    expect(find.byType(LiquidGlassTabBar), findsOneWidget);
 
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('home-bottom-nav-panel-stable')),
-      findsOneWidget,
-    );
+    expect(find.byType(LiquidGlassTabBar), findsOneWidget);
   });
 
   testWidgets('uses shorter dock item animation in lite mode', (
@@ -351,8 +343,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final nav = tester.widget<GNav>(find.byType(GNav));
-    expect(nav.duration, const Duration(milliseconds: 90));
+    // 液态玻璃 dock 不再有 GNav 时长分档；改为断言 dock 常驻且可交互。
+    expect(find.byType(LiquidGlassTabBar), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.pumpAndSettle();
+    expect(find.byType(UserPage), findsOneWidget);
   });
 
   testWidgets('disables ticker activity for inactive tabs', (
@@ -414,8 +409,7 @@ void main() {
     expect(find.byKey(const ValueKey('home-tab-slide-2')), findsNothing);
     expect(find.byType(UserPage), findsOneWidget);
 
-    final nav = tester.widget<GNav>(find.byType(GNav));
-    expect(nav.duration, Duration.zero);
+    expect(find.byType(UserPage), findsOneWidget);
   });
 
   testWidgets(
