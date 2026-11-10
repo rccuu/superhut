@@ -107,7 +107,9 @@ void main() {
     expect(find.text('功能'), findsWidgets);
     expect(find.byType(FunctionPage), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await pumpUntilFound(tester, find.byType(UserPage));
 
     expect(find.byType(UserPage), findsOneWidget);
@@ -181,7 +183,9 @@ void main() {
 
     expect(find.byType(CourseTableView), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(UserPage), findsOneWidget);
@@ -220,7 +224,9 @@ void main() {
 
     expect(find.byType(FunctionPage), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pumpAndSettle();
 
     expect(find.byType(UserPage), findsOneWidget);
@@ -245,7 +251,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pump();
 
     final slideToUser = tester.widget<SlideTransition>(
@@ -256,7 +264,9 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-课表')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-课表'))),
+    );
     await tester.pump();
 
     final slideToCourse = tester.widget<SlideTransition>(
@@ -279,17 +289,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pump();
     expect(find.byKey(const ValueKey('home-tab-slide-2')), findsOneWidget);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-功能')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-功能'))),
+    );
     await tester.pump();
     expect(find.byKey(const ValueKey('home-tab-slide-1')), findsOneWidget);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pump();
 
     expect(tester.takeException(), isNull);
@@ -306,7 +322,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('home-tab-slide-2')), findsNothing);
@@ -325,7 +343,9 @@ void main() {
 
     expect(find.byType(LiquidGlassTabBar), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pump();
 
     expect(find.byType(LiquidGlassTabBar), findsOneWidget);
@@ -347,7 +367,9 @@ void main() {
 
     // 液态玻璃 dock 不再有 GNav 时长分档；改为断言 dock 常驻且可交互。
     expect(find.byType(LiquidGlassTabBar), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pumpAndSettle();
     expect(find.byType(UserPage), findsOneWidget);
   });
@@ -380,7 +402,9 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-课表')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-课表'))),
+    );
     await tester.pump();
 
     expect(tester.widget<TickerMode>(courseTickerFinder.first).enabled, isTrue);
@@ -405,7 +429,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('home-hit-zone-我的')));
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const ValueKey('home-hit-zone-我的'))),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('home-tab-slide-2')), findsNothing);
