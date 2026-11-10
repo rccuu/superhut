@@ -154,8 +154,10 @@ void main() {
     expect(find.byKey(const ValueKey('home-bottom-nav')), findsOneWidget);
     expect(find.byKey(const ValueKey('home-hit-zone-我的')), findsOneWidget);
 
+    // 修复后 _LiquidGlassDock 是全屏自放置 overlay（含 hit-zone 定位层），
+    // bar 本体按其内部几何放置；dock 位置改由 hit-zone rect 断言。
     final navRect = tester.getRect(
-      find.byKey(const ValueKey('home-bottom-nav')),
+      find.byKey(const ValueKey('home-hit-zone-我的')),
     );
     expect(navRect.center.dy, greaterThan(740));
     expect(navRect.bottom, lessThanOrEqualTo(844));

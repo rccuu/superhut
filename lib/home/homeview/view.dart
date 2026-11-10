@@ -595,14 +595,14 @@ class _HomeviewPageState extends State<HomeviewPage> {
                   ),
                 );
               },
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                heightFactor: 1,
-                child: _LiquidGlassDock(
-                  key: const ValueKey<String>('home-bottom-nav'),
-                  selectedIndex: _tabStateNotifier.value.selectedIndex,
-                  onSelected: _onTabChange,
-                ),
+              // LiquidGlassTabBar（Impeller 玻璃 pill 档）是全屏自放置
+              // overlay：必须作为 Stack 的直接 child 放开一切约束，
+              // bottom 间距走它自己的 margin（safe-area 包内自加）。
+              // hit-zone 层按同样的几何在 _LiquidGlassDock 内对齐。
+              child: _LiquidGlassDock(
+                key: const ValueKey<String>('home-bottom-nav'),
+                selectedIndex: _tabStateNotifier.value.selectedIndex,
+                onSelected: _onTabChange,
               ),
             ),
           ],
@@ -1209,10 +1209,15 @@ class _LiquidGlassDock extends StatelessWidget {
     final dockBottom = (bottomInset > 12 ? bottomInset : 12.0) + 24;
     final tabBarWidth = math.min(screenWidth - 48, 320.0);
 
-    // LiquidGlassTabBar 自带 InkWell 点击；这层等宽 hit-zone 只用于
-    // 提供稳定的语义节点与测试 key（home-hit-zone-*），正常命中时
-    // InkWell 先收到事件，hit-zone 透明且不拦截。
-    final hitZones = Positioned.fill(
+    // LiquidGlassTabBar（Impeller 玻璃 pill 档）是全屏自放置 overlay：
+    // 直接放开渲染，bottom 间距走 margin（包内叠加 safe-area）。
+    // hit-zone 层按 bar 的自放置几何对齐（底部居中、bar 尺寸），
+    // 提供稳定的语义节点与测试 key（home-hit-zone-*）。
+    final hitZones = Positioned(
+      left: (screenWidth - tabBarWidth) / 2,
+      right: (screenWidth - tabBarWidth) / 2,
+      bottom: dockBottom + bottomInset,
+      height: 64,
       child: Row(
         children: [
           for (var index = 0; index < _dockItems.length; index++)
@@ -1223,7 +1228,7 @@ class _LiquidGlassDock extends StatelessWidget {
                 label: _dockItems[index].label,
                 child: GestureDetector(
                   key: ValueKey<String>('home-hit-zone-${_dockItems[index].label}'),
-                  behavior: HitTestBehavior.deferToChild,
+                  behavior: HitTestBehavior.opaque,
                   onTap: () => onSelected(index),
                   child: const SizedBox.expand(),
                 ),
@@ -1233,27 +1238,22 @@ class _LiquidGlassDock extends StatelessWidget {
       ),
     );
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: dockBottom),
-      child: SizedBox(
-        width: tabBarWidth,
-        height: 64,
-        child: Stack(
-          children: [
-            LiquidGlassTabBar(
-              items: _dockItems,
-              selectedIndex: selectedIndex,
-              onChanged: onSelected,
-              style: glass.tabBarStyle,
-              itemStyle: glass.tabItemStyleOf(colorScheme),
-              pillStyle: glass.tabPillStyle,
-              width: tabBarWidth,
-              height: 64,
-            ),
-            hitZones,
-          ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        LiquidGlassTabBar(
+          items: _dockItems,
+          selectedIndex: selectedIndex,
+          onChanged: onSelected,
+          style: glass.tabBarStyle,
+          itemStyle: glass.tabItemStyleOf(colorScheme),
+          pillStyle: glass.tabPillStyle,
+          width: tabBarWidth,
+          height: 64,
+          margin: EdgeInsets.only(bottom: dockBottom),
         ),
-      ),
+        hitZones,
+      ],
     );
   }
 }
