@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -12,7 +15,8 @@ import 'campus_card_api.dart';
 ///
 /// 承载完美校园（17wanxiao）校园卡 H5 轻应用：金额输入、支付方式
 /// （微信 / 农行掌银）与收银台均为 H5 内建能力，本页只做承载、
-/// 外部支付 scheme 放行与加载失败回落（brief Source coverage S12–S15）。
+/// 外部支付 scheme 放行、Android 收银台 Referer 补齐与加载失败回落
+/// （brief Source coverage S12–S15；fix-wechat-pay-merchant-error）。
 class CampusCardRechargePage extends StatefulWidget {
   const CampusCardRechargePage({
     super.key,
@@ -39,6 +43,12 @@ class _CampusCardRechargePageState extends State<CampusCardRechargePage> {
   bool _pageLoading = true;
   String? _loadErrorMessage;
   bool _isLaunchingExternal = false;
+
+  /// 是否运行于 Android：决定微信收银台请求是否需显式补 Referer。
+  ///
+  /// iOS WKWebView 自动携带页面来源 Referer，无需干预；web 端不取
+  /// `Platform.isAndroid`（dart:io 在 web 上抛错），统一按不干预处理。
+  late final bool _isAndroid = !kIsWeb && Platform.isAndroid;
 
   Future<bool> _openExternal(Uri url) async {
     final opener = widget.openExternalUrl ?? launchUrl;
@@ -210,7 +220,24 @@ class _CampusCardRechargePageState extends State<CampusCardRechargePage> {
               }
               final scheme = url.scheme.toLowerCase();
               if (scheme == 'http' || scheme == 'https') {
-                return NavigationActionPolicy.ALLOW;
+                // 微信 H5 收银台（MWEB）校验请求 Referer 是否为商户配置的
+                // H5 支付域名，缺失即报「商户配置错误」。iOS WebView 自动
+                // 携带页面来源 Referer；Android WebView 需取消原导航并显式
+                // 附加后重载（loadUrl 发起的加载不再触发本回调，无循环）。
+                final referer = CampusCardApi.wechatPayRefererHeader(
+                  url,
+                  androidPlatform: _isAndroid,
+                );
+                if (referer == null) {
+                  return NavigationActionPolicy.ALLOW;
+                }
+                await controller.loadUrl(
+                  urlRequest: URLRequest(
+                    url: url,
+                    headers: <String, String>{'Referer': referer},
+                  ),
+                );
+                return NavigationActionPolicy.CANCEL;
               }
               // 微信 / 支付宝 / 掌银等外部 scheme：交由系统打开（微信 H5
               // 支付收银台 wx.tenpay.com 仍为 https 页面，在 WebView 内打开）。

@@ -19,6 +19,35 @@ class CampusCardApi {
   static const String alipayFallbackUrl =
       'alipays://platformapi/startapp?appId=2019030163398604&page=pages/index/index';
 
+  /// 微信 H5 支付（MWEB）收银台域名。
+  static const String wechatPayHost = 'wx.tenpay.com';
+
+  /// 商户平台配置的 H5 支付授权域名（收银台 Referer 校验值）。
+  ///
+  /// 微信 H5 支付校验收银台请求的 `Referer` 是否为商户平台【开发配置】
+  /// 中的「H5 支付域名」，缺失或不匹配时报「商户配置错误，请联系商户
+  /// 解决」。iOS WKWebView 页面内跳转自动携带该来源 Referer 并实测走通，
+  /// 说明商户配置包含 `ecardh5.17wanxiao.com`；Android WebView 不会自动
+  /// 携带，需显式附加（2026-11-21 fix-wechat-pay-merchant-error）。
+  static const String wechatPayRefererOrigin = 'https://ecardh5.17wanxiao.com/';
+
+  /// 返回微信收银台请求应附加的 Referer；null 表示不需要干预、直接放行。
+  ///
+  /// [androidPlatform] 由调用方按运行平台传入（`Platform.isAndroid`）：
+  /// 仅 Android WebView 需要；iOS 等平台 WebView 自动携带页面来源
+  /// Referer，行为保持现状。收银台域名含子域一并命中，其余域不干预。
+  static String? wechatPayRefererHeader(
+    Uri url, {
+    required bool androidPlatform,
+  }) {
+    if (!androidPlatform) {
+      return null;
+    }
+    final host = url.host.toLowerCase();
+    final isTenpay = host == wechatPayHost || host.endsWith('.$wechatPayHost');
+    return isTenpay ? wechatPayRefererOrigin : null;
+  }
+
   /// 用当前登录态 [token] 构建校园卡 H5 入口 URL。
   ///
   /// [token] 为空或纯空白时抛出 [CampusCardTokenMissingException]。
