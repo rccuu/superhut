@@ -56,6 +56,63 @@ void main() {
     });
   });
 
+  group('微信 H5 收银台 Referer 决策（A1 / A2 / A4）', () {
+    const expectedReferer = 'https://ecardh5.17wanxiao.com/';
+
+    test('Android + wx.tenpay.com 收银台返回商户域名 Referer（A1）', () {
+      final referer = CampusCardApi.wechatPayRefererHeader(
+        Uri.parse(
+          'https://wx.tenpay.com/cgi-bin/mmpayweb-bin/checkmweb'
+          '?prepay_id=wx20261121&package=1234567890',
+        ),
+        androidPlatform: true,
+      );
+      expect(referer, expectedReferer);
+    });
+
+    test('Android + wx.tenpay.com 子域同样命中（A1）', () {
+      final referer = CampusCardApi.wechatPayRefererHeader(
+        Uri.parse('https://api.wx.tenpay.com/cgi-bin/mmpayweb-bin/checkmweb'),
+        androidPlatform: true,
+      );
+      expect(referer, expectedReferer);
+    });
+
+    test('Android + 其他域不干预（A3）', () {
+      // 校园卡 H5 页面本身不附加头，保持 WebView 内直接放行。
+      expect(
+        CampusCardApi.wechatPayRefererHeader(
+          Uri.parse('https://ecardh5.17wanxiao.com/recharge.html#/payWays'),
+          androidPlatform: true,
+        ),
+        isNull,
+      );
+      // 仅匹配 wx.tenpay.com 及其子域，前缀相似域不误判。
+      expect(
+        CampusCardApi.wechatPayRefererHeader(
+          Uri.parse('https://notwx.tenpay.com.example.com/'),
+          androidPlatform: true,
+        ),
+        isNull,
+      );
+    });
+
+    test('非 Android 平台不干预（A2：iOS 行为保持现状）', () {
+      expect(
+        CampusCardApi.wechatPayRefererHeader(
+          Uri.parse('https://wx.tenpay.com/cgi-bin/mmpayweb-bin/checkmweb'),
+          androidPlatform: false,
+        ),
+        isNull,
+      );
+    });
+
+    test('Referer 域名为商户 H5 支付配置常量', () {
+      expect(CampusCardApi.wechatPayHost, 'wx.tenpay.com');
+      expect(CampusCardApi.wechatPayRefererOrigin, expectedReferer);
+    });
+  });
+
   group('CampusCardErrorView（A7 UI）', () {
     testWidgets('展示失败信息与重试、支付宝兜底按钮', (tester) async {
       var retryCalls = 0;
