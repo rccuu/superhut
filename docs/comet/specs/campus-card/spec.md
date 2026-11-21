@@ -1,6 +1,6 @@
 # 校园卡充值能力规格
 
-本规格描述 superhut 中「校园卡充值」能力的完整目标行为。
+本规格描述 superhut 中「校园卡充值」能力的完整目标行为（本 change 后的基线）。
 
 ## 目的
 
@@ -62,6 +62,20 @@ Scenario: 用户在 WebView 内选择微信支付
   THEN H5 跳转 `wx.tenpay.com` 微信 H5 支付收银台，系统唤起微信完成支付（微信 H5 支付 / MWEB，无需原生 SDK）
   AND superhut 的 WebView 允许该外部跳转（不拦截 `wx.tenpay.com` 与微信 scheme）
 
+Scenario: Android 端微信 H5 收银台携带商户域名 Referer
+  WHEN Android 平台上 WebView 内发生目标为 `wx.tenpay.com`（含其子域）的 http(s) 顶层导航
+  THEN superhut 取消该导航，并以附加请求头 `Referer: https://ecardh5.17wanxiao.com/` 的 URLRequest 重新加载收银台
+  AND 微信收银台的 Referer 校验（商户平台配置的 H5 支付域名）因此通过，不再报「商户配置错误，请联系商户解决」
+  AND 重载后的收银台页面按原链路重定向 `weixin://wap/pay` 深链唤起微信
+
+Scenario: 非 Android 平台收银台导航不变
+  WHEN iOS 等非 Android 平台上 WebView 内发生目标为 `wx.tenpay.com` 的 http(s) 顶层导航
+  THEN superhut 不附加任何请求头，保持 WebView 内直接放行（WKWebView 自动携带页面来源 Referer，行为维持现状）
+
+Scenario: 其余 http(s) 导航不受影响
+  WHEN WebView 内发生目标为 `wx.tenpay.com` 以外的 http(s) 顶层导航
+  THEN superhut 不附加任何请求头，WebView 内直接放行
+
 Scenario: 用户支付完成返回 superhut
   WHEN 用户从微信支付流程返回 superhut
   THEN 用户可返回校园卡 H5 页面查看最新余额（H5 自行刷新）
@@ -71,11 +85,17 @@ Scenario: 用户选择农行掌银
   WHEN 用户在 H5 支付方式页选择农行掌银
   THEN 按 H5 内建流程处理（跳转掌银或其收银台），superhut 不拦截
 
+## 外部 scheme 放行（不变式）
+
+Scenario: WebView 内遇到外部 scheme
+  WHEN WebView 内导航目标为非 http(s) scheme（`weixin://`、`alipays://`、掌银 scheme 等）
+  THEN superhut 拦截该导航并交由系统打开对应应用；打开失败时提示用户
+
 ## 安全约束
 
 - 入口会话只使用现有 `X-Id-Token` 凭证体系；不得引入第二套凭证存储。
 - 不硬编码任何支付密钥；V8 的 DES/SM2/SM4 与 Synpay 的 APP_KEY 不属于本能力。
-- WebView 不注入任何脚本去操纵 H5 行为；superhut 只做承载与跳转放行。
+- WebView 不注入任何脚本去操纵 H5 行为；superhut 只做承载、跳转放行与 Android 收银台 Referer 补齐。
 - 所有失败路径（构建失败、加载失败）都向用户展示可读原因并提供回落。
 
 ## 非目标
@@ -84,3 +104,4 @@ Scenario: 用户选择农行掌银
 - 不实现 Synpay 聚合支付 SDK。
 - 不接入农行掌银或微信支付原生 SDK（H5 收银台无需原生 SDK；官方 App 的原生桥方案实测崩溃）。
 - 不在 superhut 内实现金额输入、支付方式列表或收银台 UI。
+- 不调整 WebView User-Agent（如 Referer 修复后 Android 仍报错，另行立项排查）。
