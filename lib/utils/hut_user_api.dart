@@ -430,6 +430,11 @@ abstract class _HutUserApiCore {
   Future<List<String>> getOpenid();
 
   Future<_HutOpenIdSession> _getOpenIdSession();
+
+  /// Drops the cached v8mobile session so the next [_getOpenIdSession]
+  /// re-runs the zdRedirect bootstrap. Called when the service reports the
+  /// cached session is no longer accepted.
+  void _invalidateOpenIdSession();
 }
 
 class HutUserApi extends _HutUserApiCore

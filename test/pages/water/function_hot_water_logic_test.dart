@@ -362,7 +362,7 @@ void main() {
   test(
     'concurrent startWater calls share a single in-flight request',
     () async {
-      final startCompleter = Completer<Map>();
+      final startCompleter = Completer<Map<String, dynamic>>();
       final api = _FakeHotWaterApi(
         deviceResponses: const <Future<Map<String, dynamic>>>[],
         startResponses: [startCompleter.future],
@@ -395,7 +395,7 @@ void main() {
   );
 
   test('concurrent endWater calls share a single in-flight request', () async {
-    final stopCompleter = Completer<bool>();
+    final stopCompleter = Completer<Map<String, dynamic>>();
     final api = _FakeHotWaterApi(
       deviceResponses: const <Future<Map<String, dynamic>>>[],
       stopResponses: [stopCompleter.future],
@@ -416,11 +416,104 @@ void main() {
 
     expect(api.stopHotWaterCalls, 1);
 
-    stopCompleter.complete(true);
+    stopCompleter.complete({'success': true, 'result': '000000'});
     await Future.wait([firstStop, secondStop]);
 
     expect(api.stopHotWaterCalls, 1);
     expect(logic.state.waterStatus.value, isFalse);
+    expect(logic.state.isLoading.value, isFalse);
+  });
+
+  test('hot water failure message prefers the server-provided message', () {
+    expect(
+      hotWaterFailureMessage({
+        'success': true,
+        'result': 'CORE35108',
+        'message': '无卡开阀失败,当前设备忙,请稍候再试',
+      }, hotWaterStartFailureMessage),
+      '无卡开阀失败,当前设备忙,请稍候再试',
+    );
+    expect(
+      hotWaterFailureMessage({
+        'success': true,
+        'result': 'CORE35106',
+        'message': '无卡关阀失败,网络或设备通讯异常，请稍候再试',
+      }, hotWaterStopFailureMessage),
+      '无卡关阀失败,网络或设备通讯异常，请稍候再试',
+    );
+  });
+
+  test('hot water failure message falls back when server message is empty', () {
+    expect(
+      hotWaterFailureMessage(
+        const {'success': false, 'message': ''},
+        hotWaterStopFailureMessage,
+      ),
+      hotWaterStopFailureMessage,
+    );
+    expect(
+      hotWaterFailureMessage(
+        const {'message': 'null'},
+        hotWaterStartFailureMessage,
+      ),
+      hotWaterStartFailureMessage,
+    );
+    expect(
+      hotWaterFailureMessage(const {}, hotWaterStartFailureMessage),
+      hotWaterStartFailureMessage,
+    );
+  });
+
+  test('startWater failure keeps device state unchanged', () async {
+    final api = _FakeHotWaterApi(
+      deviceResponses: const <Future<Map<String, dynamic>>>[],
+      startResponses: [
+        Future.value({
+          'success': true,
+          'result': 'CORE35108',
+          'message': '无卡开阀失败,当前设备忙,请稍候再试',
+        }),
+      ],
+    );
+    final storage = _FakeHotWaterAuthStorage(isLoggedIn: true);
+    final logic = FunctionHotWaterLogic(hotWaterApi: api, authStorage: storage);
+    addTearDown(logic.onClose);
+
+    logic.state.deviceList.value = [
+      {'poscode': '100001', 'posname': '一栋热水'},
+    ];
+    logic.state.choiceDevice.value = 0;
+
+    await logic.startWater();
+
+    expect(logic.state.waterStatus.value, isFalse);
+    expect(logic.state.isLoading.value, isFalse);
+  });
+
+  test('endWater failure keeps water status on', () async {
+    final api = _FakeHotWaterApi(
+      deviceResponses: const <Future<Map<String, dynamic>>>[],
+      stopResponses: [
+        Future.value({
+          'success': true,
+          'result': 'CORE35106',
+          'message': '无卡关阀失败,网络或设备通讯异常，请稍候再试',
+        }),
+      ],
+    );
+    final storage = _FakeHotWaterAuthStorage(isLoggedIn: true);
+    final logic = FunctionHotWaterLogic(hotWaterApi: api, authStorage: storage);
+    addTearDown(logic.onClose);
+
+    logic.state.deviceList.value = [
+      {'poscode': '100001', 'posname': '一栋热水'},
+    ];
+    logic.state.choiceDevice.value = 0;
+    logic.state.waterStatus.value = true;
+
+    await logic.endWater();
+
+    expect(logic.state.waterStatus.value, isTrue);
     expect(logic.state.isLoading.value, isFalse);
   });
 
@@ -771,8 +864,8 @@ class _FakeHotWaterApi implements HotWaterApiClient {
     required List<Future<Map<String, dynamic>>> deviceResponses,
     List<Future<List>>? openDeviceResponses,
     List<Future<String>>? balanceResponses,
-    List<Future<Map>>? startResponses,
-    List<Future<bool>>? stopResponses,
+    List<Future<Map<String, dynamic>>>? startResponses,
+    List<Future<Map<String, dynamic>>>? stopResponses,
     List<Future<Map>>? addResponses,
     List<Future<Map<String, dynamic>>>? deleteResponses,
     this.openDevices = const [],
@@ -788,8 +881,8 @@ class _FakeHotWaterApi implements HotWaterApiClient {
   final List<Future<Map<String, dynamic>>> _deviceResponses;
   final List<Future<List>> _openDeviceResponses;
   final List<Future<String>> _balanceResponses;
-  final List<Future<Map>> _startResponses;
-  final List<Future<bool>> _stopResponses;
+  final List<Future<Map<String, dynamic>>> _startResponses;
+  final List<Future<Map<String, dynamic>>> _stopResponses;
   final List<Future<Map>> _addResponses;
   final List<Future<Map<String, dynamic>>> _deleteResponses;
   final List openDevices;
@@ -837,21 +930,21 @@ class _FakeHotWaterApi implements HotWaterApiClient {
   }
 
   @override
-  Future<Map> startHotWater({required String device}) {
+  Future<Map<String, dynamic>> startHotWater({required String device}) async {
     startHotWaterCalls++;
     if (_startResponses.isNotEmpty) {
-      return _startResponses.removeAt(0);
+      return await _startResponses.removeAt(0);
     }
-    return Future.value({'success': true, 'result': '000000'});
+    return {'success': true, 'result': '000000'};
   }
 
   @override
-  Future<bool> stopHotWater({required String device}) {
+  Future<Map<String, dynamic>> stopHotWater({required String device}) async {
     stopHotWaterCalls++;
     if (_stopResponses.isNotEmpty) {
-      return _stopResponses.removeAt(0);
+      return await _stopResponses.removeAt(0);
     }
-    return Future.value(true);
+    return {'success': true, 'result': '000000'};
   }
 
   @override

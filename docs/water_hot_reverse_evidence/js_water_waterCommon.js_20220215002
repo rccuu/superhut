@@ -1,0 +1,297 @@
+/**获取浴室、已预订单、历史订单列表信息**/
+function getBathroomList() {
+    dkyw.request.post("/bathroom/getBathroomList", {sex: "0,1"}, function (data) {
+            if (data != null) {
+                var currDate = getCurrentDate();//当天日期（yyyy-MM-dd）
+                var grouptimeDate = data.grouptime;//浴室预约时间段间隔时间
+                var bantimeJson = data.bantime;//浴室预约时间段间隔时间
+                var mysex = data.mysex;//当前登录人性别
+                var bathroomlist = data.data;
+                var currTime = data.currTime;//当前时分  hhmm
+                var openStartTime = 10000;
+                var openEndTime = 0;
+                if (bathroomlist.length > 0) {
+                    var htmlstr = "";
+                    htmlstr += "<div class=\"divHeight\"></div>";
+                    for (var i = 0; i < bathroomlist.length; i++) {
+                        var bathroom = bathroomlist[i];
+                        var bathroomname = bathroom.bathroomname;//浴室名称
+                        if (bathroomname.length > 10) {
+                            bathroomname = bathroomname.substring(0, 8) + "...";
+                        }
+                        var bathroomcode = bathroom.bathroomcode;//浴室代码
+                        var bathroomsex = bathroom.sex;//浴室所属性别
+                        var businessopentime = bathroom.businessopentime;//浴室营业开始时间（HH:mm）
+                        var businessclosetime = bathroom.businessclosetime;//浴室营业结束时间（HH:mm）
+                        if (openStartTime > parseInt(businessopentime.replace(":", ""))) {
+                            openStartTime = parseInt(businessopentime.replace(":", ""));
+                        }
+                        if (openEndTime < parseInt(businessclosetime.replace(":", ""))) {
+                            openStartTime = parseInt(businessclosetime.replace(":", ""));
+                        }
+                        mysex = bathroomsex;//如果需要按男女浴室分开预约，可以直接注释此行代码
+                        if ("2" != bathroomsex && mysex == bathroomsex) {
+                            var grouptime = "";//分隔时间时长（单位：分钟）
+                            var bantime = "";//浴室开放时间中途关闭时间段  例如：开放时间07:00-22:00  中午12:00-13:00关闭
+                            var delaytime = grouptimeDate.delay;//间隔时间，两个预约时间段中间留空时间（单位：分钟）
+                            if ("0" == bathroomsex) {//浴室取对应性别的参数设置
+                                grouptime = grouptimeDate.girl + delaytime;
+                                bantime = bantimeJson.girl;
+                            } else if ("1" == bathroomsex) {
+                                grouptime = grouptimeDate.boy + delaytime;
+                                bantime = bantimeJson.boy;
+                            }
+
+                            htmlstr += '<li >';
+                            htmlstr += '<span style="cursor: pointer;" ><p>' + bathroomname + '</p><p2>查看详情</p2></span>';
+                            htmlstr += '<div>';
+
+                            htmlstr += '<box>';
+                            htmlstr += '<p1>开放时间：</p1>';
+                            htmlstr += '<input type="text" name="opentime" id="opentime" value="' + businessopentime + '-' + businessclosetime + '" style="width:180px;text-align:right;margin: 0;" readonly>';
+                            htmlstr += '</box>';
+
+                            htmlstr += '<box>';
+                            htmlstr += '<p1>预约日期：</p1>';
+                            htmlstr += '<input type="text" name="orderdate" id="orderdate" value="' + getCurrentDate() + '" style="width:180px;text-align:right;margin: 0;" readonly>';
+                            htmlstr += '</box>';
+
+                            /* htmlstr += '<box>';
+                             htmlstr += '<p1>预约开始时间：</p1>';
+                             htmlstr += '<input type="time" id="orderbegintime" name="orderbegintime"  style="margin-right: -3px" value="'+getCurrentTime()+'" onchange="onchangehalf(\''+i+'\')">';
+                             htmlstr += '</box>';*/
+
+                            /*htmlstr += '<box>';
+                            htmlstr += '<p1>预约爽约时间：</p1>';
+                            htmlstr += '<input name="orderendtime" id="orderendtime" value="' + getHalfTime() + '" readonly>';
+                            htmlstr += '</box>';*/
+
+                            htmlstr += '<box>';
+                            htmlstr += '<p1>可预约时间段：</p1>';
+                            htmlstr += '<select name="periodtime" id="periodtime' + bathroomcode + '" style="width: 100px;" onchange="getNumberTerminals(this.options[this.options.selectedIndex].value,' + bathroomcode + ')">';
+                            var period = getTimeGroupPoint(currDate, grouptime, delaytime, businessopentime, businessclosetime, bantime);
+
+                            for (var k = 0; k < period.length; k++) {
+                                htmlstr += '<option >' + period[k] + ' </option>';
+                                if (k == 0) {
+                                    var selectvalue = period[0];
+                                    getNumberTerminals(selectvalue, bathroomcode);
+                                }
+
+                            }
+                            htmlstr += '</select>';
+                            htmlstr += '</box>';
+
+                            htmlstr += '<box>';
+                            htmlstr += '<p1>剩余喷头数量：</p1>';
+                            htmlstr += '<input type="text" readonly id="number' + bathroomcode + '">';
+                            htmlstr += '</box>';
+
+                            htmlstr += '<box>';
+                            htmlstr += '<p1>验证方式：</p1>';
+                            htmlstr += '<select name="verficationtype" id="verficationtype" style="text-align-last:right;margin: 0px;">';
+                            htmlstr += '<option value="1">预约码</option>';
+                            htmlstr += '<option value="2">校园卡号后4位+消费密码</option>';
+                            /* htmlstr += '<option value="3">手机号+消费密码</option>';*/
+                            htmlstr += '</select>';
+                            htmlstr += '</box>';
+
+                            htmlstr += '<a bcode="' + bathroomlist[i].bathroomcode + '" class="submit-r clk tosl" onclick="submitmake(this);" >提交预约</a>';
+                            htmlstr += '</div>';
+                            htmlstr += '</li>';
+                            htmlstr += '<div class="divHeight"></div>';
+
+                        }
+                    }
+                    $("#bathroom_nodata").hide();
+                    $("#bathroomlist").empty().append(htmlstr);//向前台展示数据
+                } else {
+                    //无开放浴室
+                    $("#bathroom_nodata").show();
+                }
+            }
+        }
+    );
+}
+
+/**
+ * 获取浴室预约时间分组时间点集合
+ * @param orderDate 预约日期
+ * @param grouptime 分组间隔时间
+ * @param delaytime 延时间隔时间
+ * @param startdate 浴室开放时间
+ * @param enddate   浴室关闭时间
+ * @param bantime   浴室禁止开放时间
+ * @returns {*}
+ */
+function getTimeGroupPoint(orderDate, grouptime, delaytime, startdate, enddate, bantime) {
+
+    var timeList = [];//所有开放关闭浴室时间点集合
+    timeList.unshift(startdate);
+    timeList.unshift(enddate);
+    //将浴室禁止开放时间分割
+    var timeArr = bantime.split(";");
+    for (var i in timeArr) {
+        var timeStr = timeArr[i].split("-");
+        if (timeStr[0] != timeStr[1]) {
+            timeList.unshift(timeStr[0]);
+            timeList.unshift(timeStr[1]);
+        }
+    }
+    //将时间段按从小到大排序 ["01:00", "12:00", "16:00", "23:30"]
+    for (var i = 0; i < timeList.length - 1; i++) {
+        for (var j = 0; j < timeList.length - i - 1; j++) {
+            var one = timeList[j].replace(":", "");
+            var two = timeList[j + 1].replace(":", "");
+            if (one > two) {
+                var temp = timeList[j];
+                timeList[j] = timeList[j + 1];
+                timeList[j + 1] = temp;
+            }
+        }
+    }
+    //console.log(timeList);
+
+    //将上面排序的时间点两两组合分成时间段["16:00-23:30", "06:30-12:00"]
+    var openTimeList = [];
+    for (var i = 0; i < timeList.length / 2; i++) {
+        var start = timeList[(i + 1) * 2 - 2];
+        var end = timeList[(i + 1) * 2 - 1];
+        openTimeList.unshift(start + "-" + end);
+    }
+    // console.log(openTimeList);
+
+    //按照时间间隔，取各个开放时间段固定间隔时间点集合
+    var dateList = [];
+    for (var i = openTimeList.length - 1; i >= 0; i--) {
+        var openTimeArr = openTimeList[i].split("-");
+        var startTime = new Date(orderDate.replace("-", "/").replace("-", "/") + " " + openTimeArr[0]);
+        var endTime = new Date(orderDate.replace("-", "/").replace("-", "/") + " " + openTimeArr[1]);
+        while (endTime >= startTime) {
+            var hour = startTime.getHours();
+            var minute = startTime.getMinutes();
+            if (minute == 60) {
+                hour = hour + 1;
+                minute = '00';
+            }
+            if (hour < 10) {
+                hour = "0" + hour;
+            }
+            if (minute.toString().length == 1) {
+                minute = "0" + minute;
+            }
+            dateList.unshift(hour + ':' + minute);
+            startTime = new Date(startTime.getTime() + grouptime * 60 * 1000);
+        }
+        //dateList.unshift(openTimeArr[0]);
+    }
+    // console.log(dateList);
+    return getTimeGroupSlot(dateList, openTimeList, orderDate, delaytime);
+}
+
+/**
+ * 获取浴室预约时间分组时间段集合
+ * @param dateList        分组时间点集合
+ * @param openTimeList    开放时间段集合
+ * @param orderDate       预约日期
+ * @param delaytime       预留清场时间（每个预约时间段减去x分组，例如：07:00-07:30, 预留5分钟后预约时间段为07:00-07:25）
+ * @returns {*[]}
+ */
+function getTimeGroupSlot(dateList, openTimeList, orderDate, delaytime) {
+    var newdateList = [];
+    if (dateList != null && dateList.length > 0) {
+        for (var i = dateList.length - 1; i >= 0; i--) {
+            var currTime = new Date();//当前时间
+            var timeStr = orderDate.replace("-", "/").replace("-", "/") + " " + dateList[i];
+            var timeDate = new Date(new Date(timeStr).getTime() - delaytime * 60 * 1000);//分组时间点
+            if (currTime < timeDate) {
+                if (openTimeList != null && openTimeList.length > 0) {
+                    for (var j = openTimeList.length - 1; j >= 0; j--) {
+                        var openTimeArr = openTimeList[j].split("-");
+                        var startTime = openTimeArr[0].replace(":", "");//new Date(orderDate + " " + openTimeArr[0]);
+                        var endTime = openTimeArr[1].replace(":", "");//new Date(orderDate + " " + openTimeArr[1]);
+
+                        var result = dateList[i + 1].replace(":", "");
+                        var resultend = dateList[i].replace(":", "");
+                        if (result >= startTime && result < endTime && resultend > startTime && resultend <= endTime) {
+                            newdateList.unshift(dateList[i + 1] + " - " + dateList[i]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (newdateList.length == 0) {
+        newdateList.unshift("不在浴室开放时间");
+    }
+    // console.log(newdateList);
+    return newdateList.reverse();
+}
+
+//获取当前日期
+function getCurrentDate() {
+    var time = new Date()
+    var day = ('0' + time.getDate()).slice(-2)
+    var month = ('0' + (time.getMonth() + 1)).slice(-2)
+    var today = time.getFullYear() + '-' + month + '-' + day
+    return today;
+}
+
+//根据时间段动态展示剩余终端龙头数量
+function getNumberTerminals(selectvalue, bathroomcode) {
+    var satatdate = selectvalue.substring(0, 5);
+    var enddate = selectvalue.substring(8, selectvalue.length);
+    var param = new Object();
+    param.bathroomcode = bathroomcode;
+    param.startdate = satatdate.replace(" ", "");
+    param.enddate = enddate.replace(" ", "");
+    dkyw.request.post("/bathroom/getNumberTerminals", param, function (response) {
+        if (response.success) {
+            var data = response.resultData;
+            if ("000000" == data.result) {
+                $("#number" + bathroomcode + "").val(data.data.number);
+            } else {
+                $("#number" + bathroomcode + "").val("龙头数量异常");
+            }
+        } else {
+            $("#number" + bathroomcode + "").val("龙头数量异常");
+        }
+    })
+}
+
+/**
+ * 关闭弹窗
+ */
+function back() {
+    $(".alert-page").hide();
+}
+
+/**查询常用终端列表信息**/
+function getOftenUsetermList() {
+    var openid = $("#openid").val();
+    dkyw.request.post("/bathroom/getOftenUsetermList", {
+        "openid": openid
+    }, function (response) {
+        if (response.success) {
+            var data = response.resultData;
+            if (data.result == '000000') {
+                var htmlstr = "";
+                var arr = data.data;
+                htmlstr += '<option value="">--请选择设备--</option>';
+                if (arr.length > 0) {
+                    for (var i = 0; i < arr.length; i++) {
+                        var poscode = arr[i].poscode;
+                        htmlstr += '<option value=\'' + poscode + '\'>设备号：' + poscode + '</option>';
+                    }
+                    htmlstr += '<option value="0">管理我的设备</option>';
+                    $("#oftenusetermlist").empty().append(htmlstr);
+                } else {
+                    htmlstr += '<option value="-1">暂无绑定设备</option>';
+                    htmlstr += '<option value="0">管理我的设备</option>';
+                    $("#oftenusetermlist").empty().append(htmlstr);
+                }
+
+            }
+        }
+    })
+}

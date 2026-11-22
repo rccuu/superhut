@@ -1,0 +1,234 @@
+$(function () {
+    var ua = navigator.userAgent.toLowerCase();
+    var isSuperapp = ua.indexOf('superapp') != -1;
+    if (isSuperapp){
+        $("#flid").css('visibility', 'hidden');
+    }
+    getWaterOpenClose();
+    getBathroomList();//获取浴室、已预订单、历史订单列表信息
+    getOftenUsetermList();//获取常用终端列表信息
+
+    $("#saoyisao").unbind("click").click(function () {
+        var ua = navigator.userAgent.toLowerCase();
+        var isWanxiao = ua.indexOf('wanxiao') != -1;
+        var isalipay = ua.indexOf('alipay') != -1;
+        if (isWanxiao) {
+            wanxiao.scanBarcode(scanQRCode)
+        } else if (isalipay) {
+            //玩校支付宝小程序
+            my.postMessage({$type: "scan"});
+            my.onMessage = function (e) {
+                var url = e.code;
+                if (url.indexOf(".s:ws") >= 0) {
+                    scanQRCode(url);
+                } else {
+                    mh_dialogShow('mh_warning', "请对准扫码!", 2, true);
+                }
+            }
+       /* }else if(isSuperapp){
+            superApp.scanCode({
+                success: function(data) {
+                    console.log(JSON.stringify(data))
+                    that.scanQRCode(data.ScanCode)
+                }
+            })*/
+        } else {
+            getJssdk();
+        }
+    });
+
+    $(".number-box input").keyup(function () {
+        if ($(this).index() == 5) {
+            var inputval = 0;
+            $(".number-box input").each(function () {
+                if ($(this).val() != "") {
+                    inputval++;
+                }
+                if (inputval == 6) {
+                    var poscode = $("#code1").val() + $("#code2").val() + $("#code3").val() + $("#code4").val() + $("#code5").val() + $("#code6").val();
+                    $("#poscode").text(poscode);
+                    $(".a-add-page").fadeIn("fast");
+                }
+            });
+        } else {
+            $(this).next("input").focus();
+        }
+    });
+
+    $(".number-box input").focusin(function () {
+        $(this).val("");
+    });
+
+    //点击取消隐藏确认弹窗
+    $(".b-btn").click(function () {
+        $(this).parents(".alert-page").css("display", "none");
+    });
+
+    $(".btn-box select").change(function () {
+        var eqval = $(this).val();
+        //alert(eqval);
+        //选择管理我的设备跳转到设置页
+        if (eqval == '0' || eqval == '-1') {
+            var openid = $("#openid").val();
+            window.location.href = "/waterpage/waterManagePage?openid=" + openid;
+        } else if (eqval == '-1') {
+            alert("请绑定设备！");
+        } else {
+            var eqn0 = eqval.substring(0, 1);
+            var eqn1 = eqval.substring(1, 2);
+            var eqn2 = eqval.substring(2, 3);
+            var eqn3 = eqval.substring(3, 4);
+            var eqn4 = eqval.substring(4, 5);
+            var eqn5 = eqval.substring(5, 6);
+            $(".number-box input").eq(0).val(eqn0);
+            $(".number-box input").eq(1).val(eqn1);
+            $(".number-box input").eq(2).val(eqn2);
+            $(".number-box input").eq(3).val(eqn3);
+            $(".number-box input").eq(4).val(eqn4);
+            $(".number-box input").eq(5).val(eqn5);
+            //20191224输入设备号开始确认弹窗
+            $(".a-add-page").fadeIn("fast");
+        }
+    });
+});
+
+/**
+ * 微信公众号扫一扫开阀
+ */
+function getJssdk() {
+    //查看当前页面url
+    var openid = $("#openid").val();
+    var appId = $("#appId").val();
+    var param = new Object();
+    param.jssdkurl = encodeURIComponent(window.location.href.split('#')[0]);
+    param.openid = openid;
+    dkyw.request.get("/wxpay/getJssdk", param, function (data) {
+        if (data.success) {
+            var retJson = data.resultData;
+            wp.config({
+                whistle: {
+                    appId: appId  //必填，i大工ms创建应用时生成的app key
+                },
+                weixin: {
+                    debug: false, // 开启调试模式,调用的所有api的返回值会在客户端alert出来，若要查看传入的参数，可以在pc端打开，参数信息会通过log打出，仅在pc端时才会打印。
+                    appId: retJson.appid, // 必填，公众号的唯一标识
+                    timestamp: retJson.timestamp, // 必填，生成签名的时间戳
+                    nonceStr: retJson.nonceStr, // 必填，生成签名的随机串
+                    signature: retJson.signature,// 必填，签名，见附录1
+                    jsApiList: ['scanQRCode'] // 必填，需要使用的JS接口列表，所有JS接口列表见附录2
+                }
+            });
+            wp.ready(function () {
+                scanQRCodeConsume();
+            })
+        } else {
+            mh_dialogShow('mh_warning', data.message, 2, true);
+        }
+    });
+};
+
+/**
+ * 微信公众号扫一扫开阀
+ */
+function scanQRCodeConsume() {
+    wp.scanQRCode({
+        needResult: 1,//默认为0，扫描结果由i大工处理，1则直接返回扫描结果
+        scanType: ["qrCode"],//可以指定扫二维码还是一维码，默认是两者都有
+        success: function (res) {
+            //扫码后获取结果参数赋值给Input
+            var qrcode = res.resultStr;
+            scanQRCode(qrcode);
+        },
+        fail: function (err) {
+            alert("调用微信jsapi返回的状态:" + err.errMsg);
+        },
+        cancel: function (err) {
+
+        }
+    });
+    //调用微信jsapi返回的状态
+    wp.error(function (res) {
+        alert("调用微信jsapi返回的状态:" + res.errMsg);
+        mh_dialogShow('mh_loading', "打开异常", 1, true);
+    });
+};
+
+//扫描二维码开阀提交后台
+function scanQRCode(code) {
+    var openid = $("#openid").val();
+    dkyw.request.post("/boiling/scanQRCode", {
+        "openid": openid,
+        "barCode": code
+    }, function (data) {
+        if (data != "" && data != null) {
+            var flag = data.returncode;
+            if (flag == '000000') {
+                window.location.href = "/waterpage/waterUsingPage?openid=" + openid + "&poscode=" + code;//进入使用中页面
+            } else {
+                $("#openfail").show();
+                $("#openfailmsg").text(queryI18n(flag))
+            }
+        } else {
+            $("#openfail").show();
+        }
+    })
+}
+
+/**输入6位设备号开阀**/
+function termcodeOpenValve() {
+    var openid = $("#openid").val();
+    if (openid == "" || openid == null) {
+        mh_dialogShow('mh_warning', "获取用户信息异常！", 3, true);
+    }
+    var code1 = $("#code1").val();
+    var code2 = $("#code2").val();
+    var code3 = $("#code3").val();
+    var code4 = $("#code4").val();
+    var code5 = $("#code5").val();
+    var code6 = $("#code6").val();
+    var poscode = code1 + code2 + code3 + code4 + code5 + code6;//设备号
+    if (poscode == "" || poscode == null) {
+        mh_dialogShow('mh_warning', "请输入终端右侧设备号！", 3, true);
+        return false;
+    }
+    if (poscode.length != 6) {
+        mh_dialogShow('mh_warning', "请重新检查输入的设备号！", 3, true);
+        return false;
+    }
+    dkyw.request.post("/boiling/termcodeOpenValve", {
+        "openid": openid,
+        "poscode": poscode
+    }, function (response) {
+        if (response.success) {
+            var data = response.resultData;
+            if ("000000" == data.result) {
+                window.location.href = "/waterpage/waterUsingPage?openid=" + openid + "&poscode=" + poscode;//进入使用中页面
+            } else {
+                $("#openfailmsg").html(queryI18n(data.result));
+                $("#openfail").show();
+            }
+        } else {
+            $("#openfail").show();
+        }
+    })
+}
+
+
+/**用水记录**/
+function getWaterOpenClose() {
+    var openid = $("#openid").val();
+    dkyw.request.post("/bathroom/selectCloseDeviceValve", {
+        "openid": openid
+    }, function (data) {
+        if (data != null && data != "") {
+            var list = data.data;
+            if (list.length > 0) {
+                $("#openclose").show();
+            }
+        }
+    });
+}
+/**关闭提示框**/
+function openclose(){
+    $("#openclose").hide();
+}

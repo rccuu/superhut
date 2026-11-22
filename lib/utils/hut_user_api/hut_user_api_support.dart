@@ -478,6 +478,47 @@ class _HutOpenIdSession {
   List<dynamic> toLegacyList() => [openid, jSessionId];
 }
 
+/// Minimal TTL cache. The official water H5 reuses a single v8mobile session
+/// for the whole page lifetime; superhut previously re-ran the zdRedirect
+/// bootstrap for every single request (extra hop, extra failure point — see
+/// docs/water_hot_reverse_findings.md §4 P1). Generic so tests can exercise it
+/// without the private session type.
+class ExpiringValueCache<T> {
+  ExpiringValueCache({
+    this.ttl = const Duration(minutes: 10),
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
+
+  final Duration ttl;
+  final DateTime Function() _now;
+
+  T? _value;
+  DateTime? _storedAt;
+
+  /// Returns the cached value when it exists and is younger than [ttl].
+  T? readValid() {
+    final value = _value;
+    final storedAt = _storedAt;
+    if (value == null || storedAt == null) {
+      return null;
+    }
+    if (_now().difference(storedAt) >= ttl) {
+      return null;
+    }
+    return value;
+  }
+
+  void store(T value) {
+    _value = value;
+    _storedAt = _now();
+  }
+
+  void invalidate() {
+    _value = null;
+    _storedAt = null;
+  }
+}
+
 Dio _createConfiguredDio({
   required String baseUrl,
   required Map<String, dynamic> headers,
