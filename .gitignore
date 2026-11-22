@@ -59,6 +59,8 @@ docs/*
 !docs/requirements/
 !docs/trust-and-privacy.md
 !docs/comet/
+!docs/water_hot_reverse_findings.md
+!docs/water_hot_reverse_evidence/
 outputs/
 .serena
 docs/plans

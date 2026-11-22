@@ -1,0 +1,173 @@
+<!doctype html>
+<html>
+<head>
+    <title>&nbsp;</title>
+    <meta charset="utf-8">
+    <meta name="format-detection" content="telephone=no">
+    <meta content="width=device-width, initial-scale=1.0, user-scalable=0, maximum-scale=1.0" name="viewport">
+    <!-- 上述3个meta标签*必须*放在最前面，任何其他内容都*必须*跟随其后！ -->
+    <meta content="no-cache" http-equiv="pragma"/>
+    <meta content="no-cache" http-equiv="cache-control"/>
+    <meta content="0" http-equiv="expires"/>
+    <meta content="keyword1,keyword2,keyword3" http-equiv="keywords"/>
+    <meta content="" http-equiv="description"/>
+
+    <link rel="stylesheet" href="/css/water/style.css?8">
+    <script src="/js/common/jquery-1.11.3.min.js" type="text/javascript"></script>
+    <script src="/js/i18njs.js" type="text/javascript"></script>
+    <!--<script th:src="@{//res.wx.qq.com/open/js/jweixin-1.6.0.js}" type="text/javascript"></script>-->
+    <script src="/js/ws/jweixin-1.6.0.js" type="text/javascript"></script>
+    <!--wp-1.0.js 是微哨提供的集成和支持微信浏览器和微哨i大工app内置浏览器的js  -->
+    <script type="text/javascript" src="/js/ws/wp-1.0.js?9" charset="utf-8"></script>
+    <!--campushoy-1.2.js 是今日校园提供的H5页面jspa使用的js-->
+<!--    <script th:src="@{/js/jrxy/campushoy-1.2.js}" type="text/javascript"></script>
+    <script th:src="@{/js/jrxy/cpdaily.js}" type="text/javascript"></script>-->
+
+    <script src="/js/common/common.js" type="text/javascript" }></script>
+    <!--<script th:src="@{/js/common/DateUtil.js}" type="text/javascript" }></script>-->
+    <script src="/js/common/dkyw.js" type="text/javascript"></script>
+    <!--隐藏微信右上角按钮-->
+    <script src="/js/common/wxhide.js?2" type="text/javascript"></script>
+    <script src="/js/mhdialog/js/mhdialog.js" type="text/javascript"></script>
+    <script type="text/javascript">
+        var i18n_language_session = 'zh_CN';//获取session
+        if (i18n_language_session == null || i18n_language_session == "") {
+            i18n_language_session = "zh_CN";
+        }
+        document.oncontextmenu=function(e){
+            e.preventDefault();
+        };
+    </script>
+<script src="/js/water/waterCommon.js?20220215002"></script>
+<script src="/js/common/wanxiao-js-api.js?202101261"></script>
+<script src="/js/water/waterHomePage.js?20221122"></script>
+<style>
+        #oftenusetermlist option {
+            color: #0173BC;
+        }
+    </style>
+<script>
+        if (navigator.userAgent.indexOf('AliApp') > -1) {
+            document.writeln('<script src="https://appx/web-view.min.js"' + '>' + '<' + '/' + 'script>');
+        }
+    </script>
+</head>
+<input id="openid" value="<OPENID-REDACTED>" type="hidden">
+<body>
+<div class="top gradient2">
+    <h1 class="c1" id="backid">
+        <a id="flid" class="fl" href="/home/openHomePage?openid=<OPENID-REDACTED>&amp;usertype=1"><img
+                src="/images/white-black.png"></a>
+        <!--水控预约-->
+        <p1 class="fl">用水服务
+        </p1>
+    </h1>
+</div>
+<!--当前时段有预约时显示提醒,无预约时有隐藏-->
+<div class="news" id="orderrecording" style="display:none;">
+    <a href="/waterpage/bathroomOrderRecordPage?openid=<OPENID-REDACTED>">
+        <p1>当前正处于您的预约时段内</p1>
+        <p2>点击查看</p2>
+    </a>
+</div>
+<!--输入设备号模块-->
+<div class="idx-num">
+    <img src="/images/water/guide2.png" alt="">
+    <p>请扫描设备二维码或输入右侧的6位数字</p>
+    <form action="" class="number-box">
+        <input type="tel" maxlength="1" id="code1">
+        <input type="tel" maxlength="1" id="code2">
+        <input type="tel" maxlength="1" id="code3">
+        <input type="tel" maxlength="1" id="code4">
+        <input type="tel" maxlength="1" id="code5">
+        <input type="tel" maxlength="1" id="code6">
+        <div class="" id="saoyisao">扫描二维码</div>
+        <!--<div class="" onclick="termcodeOpenValve();">开始使用</div>-->
+    </form>
+</div>
+
+
+<!--20191224输入设备号开始确认弹窗-->
+<div class="alert-page a-add-page">
+    <div>
+        <box class="alert-top" id="poscode"></box>
+        <p>是否开始使用？</p>
+        <div class="a-h-btn clk b-btn">返回</div>
+        <div class="a-h-btn clk b-btn" onclick="termcodeOpenValve();">开始</div>
+    </div>
+</div>
+
+<!--输入设备号模块-->
+<!--<div class="idx-num">
+    <img th:src="@{/images/water/guident.png}" alt="">
+</div>-->
+
+<!--按钮链接-->
+<!--<div class="btn-box">
+    <div><a th:href="@{/waterpage/bathroomOrderPage(openid=${openid},usertype=${usertype})}">使用绑定</a></div>
+    <div><a th:href="@{/waterpage/bathroomOrderRecordPage(openid=${openid},usertype=${usertype})}">用水设置</a></div>
+</div>-->
+<div class="btn-box">
+    <div>使用绑定设备</div>
+    <div><a href="/waterpage/waterManagePage?openid=<OPENID-REDACTED>&amp;usertype=1">用水设置</a></div>
+   <div><a href="/waterpage/bathroomOrderPage?openid=<OPENID-REDACTED>&amp;usertype=1">预约浴室</a></div>
+    <div><a href="/waterpage/bathroomOrderRecordPage?openid=<OPENID-REDACTED>&amp;usertype=1">我的预约</a></div>
+    <select name="" id="oftenusetermlist">
+        <!--<option value="111111">设备号：111111</option>
+        <option value="222222">设备号：222222</option>
+        <option value="333333">设备号：333333</option>
+        <option value="444444">设备号：444444</option>
+        <option value="555555">设备号：555555</option>
+        <option value="666666">设备号：666666</option>
+        <option value="0">管理我的设备</option>-->
+    </select>
+
+
+    <h2 class="c0">用水使用须知</h2>
+    <ul class="notice">
+        <!--<li><p>预约码：<b class="c2">预约码仅在您所预约时段内输入有效</b></p></li>-->
+        <!--<li><p>爽约次数：<b class="c2">每月累计“爽约”达3次的用户，将无法在当月使用预约功能，次月恢复正常</b></p></li>-->
+        <!--<li><p>提示：<b class="c2">请节约用水！如遇各种原因导致无法在预约时间内使用的情况，请在预约时段内主动取消您的预约，否则视为“爽约”行为。</b></p></li>-->
+        <li><p>温馨提示：<b class="c2">请您节约用水！</b></p></li>
+        <li><p>用水单价：<b class="c2">38元/吨</b></p></li>
+        <li><p>热水房间编号具体规则如下：</p>
+            <b class="c2">
+            <p class="">东苑：6+楼栋号+房间号(东苑1-10栋)</p>
+            <p class="">北苑：7+楼栋号+房间号 (北苑1-6栋)</p>
+            <p class="">南苑：8+楼栋号+房间号(南苑1-10栋)</p>
+            <p class="">西苑：9+楼栋号+房间号 (西苑1-9)</p>
+            <p class="">示例如下： (北苑1栋101编码：701101) ，可在手机绑定房间使用</p></b>
+        </li>
+    </ul>
+</div>
+
+
+<!--成功弹窗-->
+<div class="alert-page a-s-page" id="openfail">
+    <div>
+        <img src="/images/water/fail-icon.png" alt="">
+        <p id="openfailmsg">开阀失败</p>
+        <div class="a-h-btn clk b-btn">返回</div>
+        <div class="a-h-btn clk"><a href="/waterpage/waterHomePage?openid=<OPENID-REDACTED>" style="color: white;">退出</a>
+        </div>
+    </div>
+    <input type="hidden" id="openid" value="<OPENID-REDACTED>"/>
+</div>
+
+
+<!--查询当天未关阀的设备-->
+<div class="alert-page a-s-page" id="openclose">
+    <div>
+        <p id="openclosemsg">您有未关阀的设备，请关阀。</p>
+        <div class="a-h-btn clk b-btn" onclick="openclose();">关闭</div>
+        <div class="a-h-btn clk"><a href="/waterpage/waterOpenClose?openid=<OPENID-REDACTED>" style="color: white;">进入</a>
+        </div>
+    </div>
+</div>
+
+
+</div>
+
+
+</body>
+

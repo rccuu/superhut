@@ -1,0 +1,8 @@
+HTTP/1.1 302 
+Server: nginx/1.24.0
+Date: Sun, 22 Nov 2026 14:15:18 GMT
+Content-Length: 0
+Connection: keep-alive
+Set-Cookie: JSESSIONID=<JSESSIONID-REDACTED>; Path=/; HttpOnly
+Location: https://v8mobile.hut.edu.cn/waterpage/waterHomePage?openid=<OPENID-REDACTED>
+

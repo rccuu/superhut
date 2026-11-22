@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+<head>
+    <title>当天未关阀的设备</title>
+    <meta charset="utf-8">
+    <meta name="format-detection" content="telephone=no">
+    <meta content="width=device-width, initial-scale=1.0, user-scalable=0, maximum-scale=1.0" name="viewport">
+    <!-- 上述3个meta标签*必须*放在最前面，任何其他内容都*必须*跟随其后！ -->
+    <meta content="no-cache" http-equiv="pragma"/>
+    <meta content="no-cache" http-equiv="cache-control"/>
+    <meta content="0" http-equiv="expires"/>
+    <meta content="keyword1,keyword2,keyword3" http-equiv="keywords"/>
+    <meta content="" http-equiv="description"/>
+
+    <link rel="stylesheet" href="/css/water/style.css?8">
+    <script src="/js/common/jquery-1.11.3.min.js" type="text/javascript"></script>
+    <script src="/js/i18njs.js" type="text/javascript"></script>
+    <!--<script th:src="@{//res.wx.qq.com/open/js/jweixin-1.6.0.js}" type="text/javascript"></script>-->
+    <script src="/js/ws/jweixin-1.6.0.js" type="text/javascript"></script>
+    <!--wp-1.0.js 是微哨提供的集成和支持微信浏览器和微哨i大工app内置浏览器的js  -->
+    <script type="text/javascript" src="/js/ws/wp-1.0.js?9" charset="utf-8"></script>
+    <!--campushoy-1.2.js 是今日校园提供的H5页面jspa使用的js-->
+<!--    <script th:src="@{/js/jrxy/campushoy-1.2.js}" type="text/javascript"></script>
+    <script th:src="@{/js/jrxy/cpdaily.js}" type="text/javascript"></script>-->
+
+    <script src="/js/common/common.js" type="text/javascript" }></script>
+    <!--<script th:src="@{/js/common/DateUtil.js}" type="text/javascript" }></script>-->
+    <script src="/js/common/dkyw.js" type="text/javascript"></script>
+    <!--隐藏微信右上角按钮-->
+    <script src="/js/common/wxhide.js?2" type="text/javascript"></script>
+    <script src="/js/mhdialog/js/mhdialog.js" type="text/javascript"></script>
+    <script type="text/javascript">
+        var i18n_language_session = 'zh_CN';//获取session
+        if (i18n_language_session == null || i18n_language_session == "") {
+            i18n_language_session = "zh_CN";
+        }
+        document.oncontextmenu=function(e){
+            e.preventDefault();
+        };
+    </script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="/js/water/waterCommon.js?20220215002"></script>
+<script src="/js/water/waterOpenClose.js?20210326"></script>
+</head>
+<input id="openid" value="<OPENID-REDACTED>" type="hidden">
+<body class="bg1">
+<!--顶部标题-->
+<!--<div class="top1">
+    <a th:href="@{/waterpage/waterHomePage?openid=}+${openid}" class="top1-a-left">
+        <img th:src="@{/images/water/back.png}" alt="" class="back">
+    </a>
+    <p>用水记录</p>
+</div>-->
+<div class="top gradient2">
+    <h1 class="c1">
+        <a class="fl" href="/waterpage/waterHomePage?openid=<OPENID-REDACTED>&amp;usertype=1"><img src="/images/white-black.png"></a>
+        <!--水控预约-->
+        <p1 class="fl" >当天未关阀的设备
+        </p1>
+    </h1>
+</div>
+    <!-- 内容主体 -->
+    <div class="content-w" id="recordlist">
+        <div id="usewater-nodata">
+            <img src="/images/water/no-data.png" alt="">
+            <p>暂无记录</p>
+        </div>
+    </div>
+    <input type="hidden" id="openid" value="<OPENID-REDACTED>"/>
+    <input type="hidden" id="usertype" value="1"/>
+</body>
+
+

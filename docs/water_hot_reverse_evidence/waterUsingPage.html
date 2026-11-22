@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+    <title>热水使用中</title>
+    <meta charset="utf-8">
+    <meta name="format-detection" content="telephone=no">
+    <meta content="width=device-width, initial-scale=1.0, user-scalable=0, maximum-scale=1.0" name="viewport">
+    <!-- 上述3个meta标签*必须*放在最前面，任何其他内容都*必须*跟随其后！ -->
+    <meta content="no-cache" http-equiv="pragma"/>
+    <meta content="no-cache" http-equiv="cache-control"/>
+    <meta content="0" http-equiv="expires"/>
+    <meta content="keyword1,keyword2,keyword3" http-equiv="keywords"/>
+    <meta content="" http-equiv="description"/>
+
+    <link rel="stylesheet" href="/css/water/style.css?8">
+    <script src="/js/common/jquery-1.11.3.min.js" type="text/javascript"></script>
+    <script src="/js/i18njs.js" type="text/javascript"></script>
+    <!--<script th:src="@{//res.wx.qq.com/open/js/jweixin-1.6.0.js}" type="text/javascript"></script>-->
+    <script src="/js/ws/jweixin-1.6.0.js" type="text/javascript"></script>
+    <!--wp-1.0.js 是微哨提供的集成和支持微信浏览器和微哨i大工app内置浏览器的js  -->
+    <script type="text/javascript" src="/js/ws/wp-1.0.js?9" charset="utf-8"></script>
+    <!--campushoy-1.2.js 是今日校园提供的H5页面jspa使用的js-->
+<!--    <script th:src="@{/js/jrxy/campushoy-1.2.js}" type="text/javascript"></script>
+    <script th:src="@{/js/jrxy/cpdaily.js}" type="text/javascript"></script>-->
+
+    <script src="/js/common/common.js" type="text/javascript" }></script>
+    <!--<script th:src="@{/js/common/DateUtil.js}" type="text/javascript" }></script>-->
+    <script src="/js/common/dkyw.js" type="text/javascript"></script>
+    <!--隐藏微信右上角按钮-->
+    <script src="/js/common/wxhide.js?2" type="text/javascript"></script>
+    <script src="/js/mhdialog/js/mhdialog.js" type="text/javascript"></script>
+    <script type="text/javascript">
+        var i18n_language_session = 'zh_CN';//获取session
+        if (i18n_language_session == null || i18n_language_session == "") {
+            i18n_language_session = "zh_CN";
+        }
+        document.oncontextmenu=function(e){
+            e.preventDefault();
+        };
+    </script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="/js/water/waterCommon.js?20220215002"></script>
+<script src="/js/water/waterUsing.js?202101261"></script>
+</head>
+<input id="openid" value="<OPENID-REDACTED>" type="hidden">
+<body>
+<!--顶部标题-->
+<!--<div class="top1">
+    <a th:href="@{/waterpage/waterHomePage?openid=}+${openid}" class="top1-a-left">
+        <img th:src="@{/images/water/back.png}" alt="" class="back">
+    </a>
+    <p>热水服务</p>
+    <a href="" class="top1-a-right">
+        <img th:src="@{/images/water/history.png}" alt="" class="history">
+    </a>
+</div>-->
+
+<div class="top gradient2">
+    <h1 class="c1">
+        <a class="fl" href="/waterpage/waterHomePage?openid=<OPENID-REDACTED>&amp;usertype=">
+            <img src="/images/white-black.png">
+        </a>
+        <!--水控预约-->
+        <p1 class="fl">热水服务
+        </p1>
+    </h1>
+</div>
+
+<!--使用中-->
+<div class="work-box">
+    <img src="/images/water/working.png" alt="" class="working">
+    <box>
+        <p1>使用中...</p1>
+        <p2 id="poscodestr">设备号:000000</p2><!--设备号：295040-->
+    </box>
+    <span>
+		<p3>按下设备“开始/暂停”键开始使用</p3>
+		<p3>按下设备“取消”键或点击下方“结束使用”结束使用。</p3>
+	</span>
+</div>
+<div class="stop-btn clk tosl">结束使用</div>
+
+<!--结束使用确认弹窗-->
+<div class="alert-page a-sl-page">
+    <div>
+        <p>结束使用？</p>
+        <div class="a-h-btn clk b-btn">取消</div>
+        <div class="a-h-btn clk c-btn" onclick="endUse();">确认</div>
+    </div>
+</div>
+
+<!--成功弹窗-->
+<div class="alert-page a-s-page">
+    <div id="closesuc" style="display: none;">
+        <img src="/images/water/suc.png" alt="">
+        <p>本次使用已结束</p>
+        </box>
+        <div class="a-h-btn clk">
+            <a href="/waterpage/waterUseRecordPage?openid=<OPENID-REDACTED>" style="color: white;">查看用水记录</a>
+        </div>
+        <div class="a-h-btn clk">
+            <a href="/waterpage/waterHomePage?openid=<OPENID-REDACTED>" style="color: white;">退出</a>
+        </div>
+    </div>
+    <div id="closefail" style="display: none;">
+        <img src="/images/water/fail-icon.png" alt="">
+        <p id="closefailmsg">关阀失败，请终端关阀</p>
+        <div class="a-h-btn clk">
+            <a href="/waterpage/waterUseRecordPage?openid=<OPENID-REDACTED>" style="color: white;">查看用水记录</a>
+        </div>
+        <div class="a-h-btn clk">
+            <a href="/waterpage/waterHomePage?openid=<OPENID-REDACTED>" style="color: white;">退出</a>
+        </div>
+    </div>
+</div>
+    <input type="hidden" id="openappid" value=""/>
+</body>
+
