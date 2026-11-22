@@ -1,6 +1,17 @@
 part of '../hut_user_api.dart';
 
 mixin _HutSessionMixin on _HutUserApiCore {
+  /// Cached zdRedirect session, reused across water/electricity calls.
+  ///
+  /// The official H5 keeps a single JSESSIONID for the whole page lifetime,
+  /// while re-running the bootstrap for every operation adds a network hop and
+  /// a failure point in front of each valve command (reverse-engineering
+  /// findings §4, P1). The cached session is dropped by
+  /// [_invalidateOpenIdSession] when the service reports it is no longer
+  /// accepted.
+  final ExpiringValueCache<_HutOpenIdSession> _openIdSessionCache =
+      ExpiringValueCache<_HutOpenIdSession>();
+
   @override
   Future<List<String>> getOpenid() async {
     final token = await getToken();
@@ -36,8 +47,22 @@ mixin _HutSessionMixin on _HutUserApiCore {
 
   @override
   Future<_HutOpenIdSession> _getOpenIdSession() async {
+    final cached = _openIdSessionCache.readValid();
+    if (cached != null) {
+      return cached;
+    }
     final openIdData = await getOpenid();
-    return _HutOpenIdSession(openid: openIdData[0], jSessionId: openIdData[1]);
+    final session = _HutOpenIdSession(
+      openid: openIdData[0],
+      jSessionId: openIdData[1],
+    );
+    _openIdSessionCache.store(session);
+    return session;
+  }
+
+  @override
+  void _invalidateOpenIdSession() {
+    _openIdSessionCache.invalidate();
   }
 }
 

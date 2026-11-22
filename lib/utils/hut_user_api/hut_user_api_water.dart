@@ -1,5 +1,145 @@
 part of '../hut_user_api.dart';
 
+/// Water-service timeouts, derived from the reverse-engineering captures in
+/// docs/water_hot_reverse_findings.md (§2.3): list ~0.1s, valve operations
+/// 0.5–2.9s under load. The previous 3s receive timeout cut off real
+/// responses; 15s keeps a 5x margin while staying far below the official
+/// client, which sets no timeout at all.
+const Duration kWaterConnectTimeout = Duration(seconds: 5);
+const Duration kWaterReceiveTimeout = Duration(seconds: 15);
+
+/// Server "busy" codes whose official copy literally says 请稍候再试
+/// (CORE35106 设备或者网络忙 / CORE35108 设备忙). Real captures show
+/// open-valve failing twice with CORE35108 and succeeding on a third attempt
+/// seconds later — transient by design.
+const Set<String> _kWaterBusyResultCodes = {'CORE35106', 'CORE35108'};
+
+/// The session bootstrap answers `{"message":"资源受限，页面丢失!","success":false}`
+/// once the JSESSIONID is no longer accepted (verified against the live
+/// service with a missing/wrong session).
+bool waterResponseIndicatesSessionLost(Map<String, dynamic> value) {
+  if (value['success'] != false) {
+    return false;
+  }
+  final message = value['message']?.toString() ?? '';
+  return message.contains('资源受限') || message.contains('页面丢失');
+}
+
+/// True for transport failures worth retrying: timeouts and connection-level
+/// errors. HTTP-level rejections (4xx/5xx responses) are business verdicts and
+/// are not retried.
+bool isWaterValveTransientError(Object error) {
+  if (error is DioException) {
+    switch (error.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+        return true;
+      default:
+        return false;
+    }
+  }
+  return false;
+}
+
+/// True when the business result code itself says "busy, try again".
+bool isWaterValveRetryableResult(Map<String, dynamic> value) {
+  final code = value['result']?.toString();
+  return code != null && _kWaterBusyResultCodes.contains(code);
+}
+
+Future<void> _defaultWaterRetryDelay(Duration duration) {
+  return Future<void>.delayed(duration);
+}
+
+/// Retry wrapper for open/close valve calls.
+///
+/// Retries transport-transient failures and the two server "busy" codes with a
+/// 2s → 4s backoff, at most [maxRetries] times (i.e. three attempts total),
+/// mirroring the server's own “请稍候再试” guidance and the observed
+/// fail→fail→success sequence. A lost v8mobile session is recovered by calling
+/// [onSessionLost] (invalidates the cached session so the next attempt
+/// rebuilds it) and retrying within the same budget.
+Future<Map<String, dynamic>> runWaterValveOperation(
+  Future<Map<String, dynamic>> Function() attempt, {
+  int maxRetries = 2,
+  List<Duration> retryDelays = const [
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+  ],
+  Future<void> Function(Duration duration)? delay,
+  void Function()? onSessionLost,
+}) async {
+  final wait = delay ?? _defaultWaterRetryDelay;
+  var index = 0;
+  while (true) {
+    Map<String, dynamic> value;
+    try {
+      value = await attempt();
+    } on DioException catch (error) {
+      if (index >= maxRetries || !isWaterValveTransientError(error)) {
+        rethrow;
+      }
+      index += 1;
+      await wait(retryDelays[index - 1]);
+      continue;
+    }
+
+    if (waterResponseIndicatesSessionLost(value)) {
+      onSessionLost?.call();
+      if (index >= maxRetries) {
+        return value;
+      }
+      index += 1;
+      await wait(retryDelays[index - 1]);
+      continue;
+    }
+
+    if (index < maxRetries && isWaterValveRetryableResult(value)) {
+      index += 1;
+      await wait(retryDelays[index - 1]);
+      continue;
+    }
+    return value;
+  }
+}
+
+Map<String, dynamic> _waterValveResultFromResponse(Response response) {
+  Map<String, dynamic> data;
+  try {
+    final raw = response.data;
+    if (raw is String) {
+      final decoded = jsonDecode(raw);
+      data = decoded is Map ? Map<String, dynamic>.from(decoded) : <String, dynamic>{};
+    } else if (raw is Map) {
+      data = Map<String, dynamic>.from(raw);
+    } else {
+      data = <String, dynamic>{};
+    }
+  } catch (_) {
+    return <String, dynamic>{'result': '', 'message': '响应解析失败', 'success': false};
+  }
+
+  // Business envelope: {"message":..., "resultData":{result,message,data},
+  // "success":true}. Session-loss responses carry no resultData; the
+  // top-level message is the only hint ("资源受限，页面丢失!").
+  final resultData = data['resultData'];
+  if (resultData is Map) {
+    final map = Map<String, dynamic>.from(resultData);
+    return <String, dynamic>{
+      'result': map['result']?.toString() ?? '',
+      'message': map['message']?.toString() ?? '',
+      'success': data['success'] == true,
+    };
+  }
+  return <String, dynamic>{
+    'result': data['result']?.toString() ?? '',
+    'message': data['message']?.toString() ?? '',
+    'success': data['success'] == true,
+  };
+}
+
 mixin _HutWaterMixin on _HutUserApiCore {
   Options _buildV8RequestOptions({
     required _HutOpenIdSession session,
@@ -29,8 +169,48 @@ mixin _HutWaterMixin on _HutUserApiCore {
         token: token,
         referer: referer,
       ),
+      connectTimeout: kWaterConnectTimeout,
+      receiveTimeout: kWaterReceiveTimeout,
       followRedirects: true,
       validateStatus: _defaultValidateStatus,
+    );
+  }
+
+  /// One open/close valve operation with the reverse-engineered retry policy.
+  ///
+  /// Valve commands relay through the campus terminal gateway and are the
+  /// slowest water endpoints (measured 0.5–2.9s), so each attempt uses a
+  /// dedicated Dio with the widened [kWaterReceiveTimeout] instead of the
+  /// shared request manager.
+  Future<Map<String, dynamic>> _runValveOperation({
+    required String path,
+    required Map<String, dynamic> Function(_HutOpenIdSession session) bodyBuilder,
+  }) {
+    return runWaterValveOperation(
+      () async {
+        final token = await getToken();
+        final session = await _getOpenIdSession();
+        final dio = _createConfiguredDio(
+          baseUrl: _kV8MobileBaseUrl,
+          headers: _buildV8MobileHeaders(
+            session: session,
+            token: token,
+            referer: '$_kV8MobileBaseUrl$path?openid=${session.openid}',
+            includeOpenIdHeader: true,
+          ),
+          connectTimeout: kWaterConnectTimeout,
+          receiveTimeout: kWaterReceiveTimeout,
+          followRedirects: true,
+          validateStatus: _defaultValidateStatus,
+        );
+        final response = await dio.post(
+          path,
+          queryParameters: <String, dynamic>{'openid': session.openid},
+          data: bodyBuilder(session),
+        );
+        return _waterValveResultFromResponse(response);
+      },
+      onSessionLost: _invalidateOpenIdSession,
     );
   }
 
@@ -94,60 +274,30 @@ mixin _HutWaterMixin on _HutUserApiCore {
     return responseData.isNotEmpty ? openCodeList : [];
   }
 
-  Future<Map> startHotWater({required String device}) async {
-    final token = await getToken();
-    final session = await _getOpenIdSession();
-    const url = 'https://v8mobile.hut.edu.cn/boiling/termcodeOpenValve';
-    final options = _buildV8RequestOptions(
-      session: session,
-      token: token,
-      referer:
-          'https://v8mobile.hut.edu.cn/boiling/termcodeOpenValve?openid=${session.openid}',
-      includeOpenIdHeader: true,
+  Future<Map<String, dynamic>> startHotWater({required String device}) {
+    return _runValveOperation(
+      path: '/boiling/termcodeOpenValve',
+      bodyBuilder:
+          (session) => <String, dynamic>{
+            'openid': session.openid,
+            'poscode': device,
+          },
     );
-    final params = <String, dynamic>{'openid': session.openid};
-    final data = <String, dynamic>{'openid': session.openid, 'poscode': device};
-
-    final response = await _request.post(
-      url,
-      params: params,
-      data: data,
-      options: options,
-    );
-    final responseData = ResponseUtils.transformObj(response);
-    return {
-      'result': responseData['resultData']['result'],
-      'message': responseData['resultData']['message'],
-      'success': responseData['success'],
-    };
   }
 
-  Future<bool> stopHotWater({required String device}) async {
-    final token = await getToken();
-    final session = await _getOpenIdSession();
-    const url = 'https://v8mobile.hut.edu.cn/boiling/endUse';
-    final options = _buildV8RequestOptions(
-      session: session,
-      token: token,
-      referer:
-          'https://v8mobile.hut.edu.cn/boiling/endUse?openid=${session.openid}',
-      includeOpenIdHeader: true,
+  /// openappid stays empty for the regular open-by-code → close flow, matching
+  /// the official H5 (waterUsingPage renders it empty unless the user arrives
+  /// via the “未关阀设备” page, which superhut does not implement).
+  Future<Map<String, dynamic>> stopHotWater({required String device}) {
+    return _runValveOperation(
+      path: '/boiling/endUse',
+      bodyBuilder:
+          (session) => <String, dynamic>{
+            'openid': session.openid,
+            'poscode': device,
+            'openappid': '',
+          },
     );
-    final params = <String, dynamic>{'openid': session.openid};
-    final data = <String, dynamic>{
-      'openid': session.openid,
-      'poscode': device,
-      'openappid': '',
-    };
-
-    final response = await _request.post(
-      url,
-      params: params,
-      data: data,
-      options: options,
-    );
-    final responseData = ResponseUtils.transformObj(response);
-    return responseData['resultData']['result'] == '000000';
   }
 
   Future<Map> addWaterDevice(String bindCode) async {

@@ -12,7 +12,20 @@ import 'default_device_store.dart';
 import 'state.dart';
 
 const String hotWaterStartFailureMessage = '设备开启失败，请稍后重试';
+const String hotWaterStopFailureMessage = '设备关闭失败，请稍后重试';
 const String hotWaterAddDeviceFailureMessage = '添加设备失败，请稍后重试';
+
+/// 失败提示优先透传服务端返回的具体 `message`
+/// （如「无卡开阀失败,当前设备忙,请稍候再试」），服务端未给出 message 时回退
+/// 通用文案。逆向结论见 docs/water_hot_reverse_findings.md：官方 H5 每种
+/// 错误码都有专属提示，通用文案会让用户无法判断该不该重试。
+String hotWaterFailureMessage(Map<String, dynamic> value, String fallback) {
+  final message = value['message']?.toString().trim() ?? '';
+  if (message.isEmpty || message == 'null') {
+    return fallback;
+  }
+  return message;
+}
 const String hotWaterDeleteDeviceFailureMessage = '删除设备失败，请稍后重试';
 const String hotWaterDefaultDeviceFailureMessage = '默认设备设置失败，请稍后重试';
 
@@ -25,9 +38,9 @@ abstract class HotWaterApiClient {
 
   Future<List> checkHotWaterDevice();
 
-  Future<Map> startHotWater({required String device});
+  Future<Map<String, dynamic>> startHotWater({required String device});
 
-  Future<bool> stopHotWater({required String device});
+  Future<Map<String, dynamic>> stopHotWater({required String device});
 
   Future<Map> addWaterDevice(String bindCode);
 
@@ -60,12 +73,12 @@ class HutHotWaterApiClient implements HotWaterApiClient {
   }
 
   @override
-  Future<Map> startHotWater({required String device}) {
+  Future<Map<String, dynamic>> startHotWater({required String device}) {
     return _api.startHotWater(device: device);
   }
 
   @override
-  Future<bool> stopHotWater({required String device}) {
+  Future<Map<String, dynamic>> stopHotWater({required String device}) {
     return _api.stopHotWater(device: device);
   }
 
@@ -626,11 +639,15 @@ class FunctionHotWaterLogic extends GetxController {
         return;
       }
 
-      if (value['success'] && value['result'] == "000000") {
+      if (value['success'] == true && value['result'] == "000000") {
         _showStatusSnackBar('操作成功', '设备已开启');
         state.waterStatus.value = true;
       } else {
-        _showStatusSnackBar('操作失败', hotWaterStartFailureMessage, isError: true);
+        _showStatusSnackBar(
+          '操作失败',
+          hotWaterFailureMessage(value, hotWaterStartFailureMessage),
+          isError: true,
+        );
       }
     } catch (error, stackTrace) {
       AppLogger.error(
@@ -666,11 +683,15 @@ class FunctionHotWaterLogic extends GetxController {
         return;
       }
 
-      if (value) {
+      if (value['success'] == true && value['result'] == "000000") {
         _showStatusSnackBar('操作成功', '设备已关闭');
         state.waterStatus.value = false;
       } else {
-        _showStatusSnackBar('操作失败', '设备关闭失败，请稍后重试', isError: true);
+        _showStatusSnackBar(
+          '操作失败',
+          hotWaterFailureMessage(value, hotWaterStopFailureMessage),
+          isError: true,
+        );
       }
     } catch (error, stackTrace) {
       AppLogger.error(

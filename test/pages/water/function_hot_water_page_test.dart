@@ -431,6 +431,71 @@ void main() {
       expect(submitCalls, 2);
     },
   );
+
+  testWidgets('startWater failure toast shows the server-provided message', (
+    tester,
+  ) async {
+    final api = _FakeHotWaterApi(
+      startResult: {
+        'success': true,
+        'result': 'CORE35108',
+        'message': '无卡开阀失败,当前设备忙,请稍候再试',
+      },
+    );
+    final logic = FunctionHotWaterLogic(
+      hotWaterApi: api,
+      authStorage: _FakePageAuthStorage(),
+      devicePreferenceStore: _FakeHotWaterDevicePreferenceStore(),
+    );
+    logic.state.deviceList.value = [
+      {'poscode': '100001', 'posname': '一栋热水'},
+    ];
+    logic.state.choiceDevice.value = 0;
+    logic.state.deviceCheckComplete.value = true;
+    addTearDown(logic.onClose);
+
+    await tester.pumpWidget(
+      GetMaterialApp(home: Scaffold(body: Container())),
+    );
+
+    await logic.startWater();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('无卡开阀失败,当前设备忙,请稍候再试'), findsOneWidget);
+  });
+
+  testWidgets('endWater failure toast shows the server-provided message', (
+    tester,
+  ) async {
+    final api = _FakeHotWaterApi(
+      stopResult: {
+        'success': true,
+        'result': 'CORE35106',
+        'message': '无卡关阀失败,网络或设备通讯异常，请稍候再试',
+      },
+    );
+    final logic = FunctionHotWaterLogic(
+      hotWaterApi: api,
+      authStorage: _FakePageAuthStorage(),
+      devicePreferenceStore: _FakeHotWaterDevicePreferenceStore(),
+    );
+    logic.state.deviceList.value = [
+      {'poscode': '100001', 'posname': '一栋热水'},
+    ];
+    logic.state.choiceDevice.value = 0;
+    logic.state.deviceCheckComplete.value = true;
+    logic.state.waterStatus.value = true;
+    addTearDown(logic.onClose);
+
+    await tester.pumpWidget(
+      GetMaterialApp(home: Scaffold(body: Container())),
+    );
+
+    await logic.endWater();
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('无卡关阀失败,网络或设备通讯异常，请稍候再试'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpUntil(
@@ -462,14 +527,38 @@ class _FakeHotWaterDevicePreferenceStore
   }
 }
 
+class _FakePageAuthStorage implements HotWaterAuthStorage {
+  @override
+  Future<String> readHutToken() async => 'token';
+
+  @override
+  Future<String> readHutDeviceId() async => 'device-id';
+
+  @override
+  Future<String> readHutUsername() async => 'hut-user';
+
+  @override
+  Future<String> readHutPassword() async => 'hut-pass';
+
+  @override
+  Future<bool> isHutLoggedIn() async => true;
+
+  @override
+  Future<void> setHutLoginStatus(bool value) async {}
+}
+
 class _FakeHotWaterApi implements HotWaterApiClient {
   const _FakeHotWaterApi({
     this.deleteResult = true,
     this.deleteMessage = '删除失败',
+    this.startResult,
+    this.stopResult,
   });
 
   final bool deleteResult;
   final String deleteMessage;
+  final Map<String, dynamic>? startResult;
+  final Map<String, dynamic>? stopResult;
 
   @override
   Future<Map> addWaterDevice(String bindCode) async => {'result': true};
@@ -496,12 +585,14 @@ class _FakeHotWaterApi implements HotWaterApiClient {
   }
 
   @override
-  Future<Map> startHotWater({required String device}) async {
-    return {'success': true, 'result': '000000'};
+  Future<Map<String, dynamic>> startHotWater({required String device}) async {
+    return startResult ?? {'success': true, 'result': '000000'};
   }
 
   @override
-  Future<bool> stopHotWater({required String device}) async => true;
+  Future<Map<String, dynamic>> stopHotWater({required String device}) async {
+    return stopResult ?? {'success': true, 'result': '000000'};
+  }
 
   @override
   Future<bool> userLogin({
