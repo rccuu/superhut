@@ -452,6 +452,23 @@ class _FunctionHotWaterPageState extends State<FunctionHotWaterPage> {
                               onTap: _showDeviceSelectionDialog,
                             );
                           }),
+                          Obx(() {
+                            final records = logic.state.openValveRecords;
+                            if (records.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: HotWaterUnclosedDeviceBanner(
+                                records: List<Map<String, String>>.from(
+                                  records,
+                                ),
+                                busy: logic.state.isLoading.value,
+                                onClose: logic.closeUnclosedDevice,
+                              ),
+                            );
+                          }),
                           SizedBox(height: compactHeight ? 20 : 28),
                           Obx(() {
                             final state = logic.state;

@@ -13,6 +13,10 @@ class FunctionHotWaterState {
   // 洗澡按钮状态
   RxBool waterStatus = false.obs;
 
+  // 未关阀记录明细（selectCloseDeviceValve 返回项：poscode/recordId/begintime），
+  // 供未关阀 banner 展示与补关（openappid=recordId）
+  RxList openValveRecords = [].obs;
+
   // 余额
   RxString balance = "null".obs;
 

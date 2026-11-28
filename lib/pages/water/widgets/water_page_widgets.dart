@@ -1612,3 +1612,134 @@ class _EmptyDeviceState extends StatelessWidget {
     );
   }
 }
+
+/// 未关阀设备补关 banner：列出每条未关阀记录（设备号 + 开始时间），
+/// 供用户对不在当前会话开启的设备（含不在常用列表的设备）执行补关。
+/// 补关请求携带开阀记录 id 作为 openappid（官方 waterOpenClose 补关路径语义）。
+class HotWaterUnclosedDeviceBanner extends StatelessWidget {
+  const HotWaterUnclosedDeviceBanner({
+    super.key,
+    required this.records,
+    required this.busy,
+    required this.onClose,
+  });
+
+  final List<Map<String, String>> records;
+  final bool busy;
+  final Future<void> Function(int index) onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final bool isDark = colorScheme.isDarkMode;
+    final Color warning = HotWaterPalette.coral(context);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.floatingSurface,
+            HotWaterPalette.softSurface(
+              context,
+            ).withValues(alpha: isDark ? 0.36 : 0.66),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: colorScheme.subtleBorder),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withValues(alpha: isDark ? 0.16 : 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.report_problem, size: 18, color: warning),
+                const SizedBox(width: 8),
+                Text(
+                  '有设备尚未关闭',
+                  style: TextStyle(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '长时间未关阀会持续计费；服务端将在最长 30 分钟自动关阀',
+              style: TextStyle(
+                color: colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 8),
+            for (var i = 0; i < records.length; i++)
+              _UnclosedDeviceRow(
+                poscode: records[i]['poscode'] ?? '',
+                begintime: records[i]['begintime'] ?? '',
+                busy: busy,
+                onClose: () => onClose(i),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnclosedDeviceRow extends StatelessWidget {
+  const _UnclosedDeviceRow({
+    required this.poscode,
+    required this.begintime,
+    required this.busy,
+    required this.onClose,
+  });
+
+  final String poscode;
+  final String begintime;
+  final bool busy;
+  final Future<void> Function() onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final Color accent = HotWaterPalette.accentStrong(context);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              begintime.isEmpty ? '设备号 $poscode' : '设备号 $poscode · $begintime 起',
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 10),
+          TextButton(
+            onPressed: busy ? null : onClose,
+            style: TextButton.styleFrom(
+              foregroundColor: accent,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('补关'),
+          ),
+        ],
+      ),
+    );
+  }
+}
