@@ -1,0 +1,164 @@
+schema: comet.native.v4
+name: simplify-login-page
+language: zh-CN
+phase: archive
+status: done
+state_version: 12
+brief: brief.md
+document_constraints_version: 1
+shape_confirmation_hash: e037f91bafef131de34cb60cb9b96729c7ddec5a8a35686762bd7d6cc9d2386b
+spec_changes:
+  - capability: unified-login
+    operation: create
+    source: specs/unified-login/spec.md
+workspace:
+  isolation: current
+  change_branch: main
+  target_branch: main
+  finish: null
+loop:
+  stage: done
+  goal_cycle: 1
+  iteration: 3
+  attempt: 1
+  retry_epoch: 0
+  failed_iteration_count: 0
+  no_progress_count: 0
+  execution_failure_count: 0
+  previous_unresolved_ids: []
+  next_action: null
+acceptance:
+  - id: A1
+    source: brief.md
+    text: A1：打开登录页，左上角只显示「工大盒子」，不再出现副标题。
+    result: passed
+    reason:
+      text: 页面左上角只渲染「工大盒子」标题，其下不再有副标题；测试断言该标题恰好一次，且原副标题找不到。
+      truncated: false
+  - id: A2
+    source: brief.md
+    text: A2：登录页不再显示插画、卡片内「登录」标题和两段说明文字。
+    result: passed
+    reason:
+      text: 登录区域不再使用插画，卡片内不再渲染「登录」标题与两段说明文字，对应断言均为找不到。
+      truncated: false
+  - id: A3
+    source: brief.md
+    text: A3：首次进入登录页时展示的是验证码登录（手机号输入）。
+    result: passed
+    reason:
+      text: 默认模式取验证码登录，首屏只有手机号输入框，主按钮为「获取验证码」，测试直接进入即断言该状态。
+      truncated: false
+  - id: A4
+    source: brief.md
+    text: A4：页面上能明确看出当前是「验证码登录」，并且有清晰入口可以切到「密码登录」，反之亦然。
+    result: passed
+    reason:
+      text: 两种方式以分段按钮并列展示并反映当前选中项，测试验证从验证码切到密码再切回，输入框数量随之变化。
+      truncated: false
+  - id: A5
+    source: brief.md
+    text: A5：验证码登录、密码登录、游客入口的登录流程与跳转结果和改动前一致。
+    result: passed
+    reason:
+      text: 验证码登录、密码登录与游客入口的流程和跳转均有测试覆盖，行为与规格一致且测试通过。
+      truncated: false
+builder_handoff:
+  candidate_id: 89254ee0-f037-41f7-b29b-f172503c30ab
+  identity_provider: skill-coordinated
+  builder_execution_ref: skill-coordinated:builder:86f028a6-a8a3-48ff-b7af-264d7c422988
+  iteration: 3
+  summary:
+    text: 精简统一登录页：移除副标题、卡片内登录标题与两段说明文字、底部说明文字和插画；默认验证码登录；用 SegmentedButton
+      明确标注并切换验证码登录与密码登录。登录、游客入口与官方登录兜底行为未改。
+    truncated: false
+  addressed_acceptance_ids:
+    - A1
+    - A2
+    - A3
+    - A4
+    - A5
+  checks:
+    - name:
+        text: flutter test test/login (unified_login_page)
+        truncated: false
+      result: passed
+      note:
+        text: 15 tests passed
+        truncated: false
+    - name:
+        text: flutter analyze lib/login/unified_login_page.dart
+        truncated: false
+      result: passed
+      note:
+        text: No issues found
+        truncated: false
+  checks_truncated: false
+  known_limits:
+    - text: kHutSmsLoginEnabled 为编译期常量且当前为 true，关闭分支未由测试覆盖，仅代码路径确认。
+      truncated: false
+  known_limits_truncated: false
+  review: null
+  submitted_at: 2026-09-22T13:10:15.631Z
+blockers: []
+verification:
+  candidate_id: 89254ee0-f037-41f7-b29b-f172503c30ab
+  identity_provider: skill-coordinated
+  verifier_execution_ref: skill-coordinated:verifier:1b084c84-447c-45cc-b4ce-bf61b49e7e58
+  iteration: 3
+  attempt: 1
+  assurance: skill-coordinated
+  verdict: pass
+  checks: []
+  summary:
+    text: 登录页已按规格精简，五项验收全部通过；独立重跑测试 15 项通过、静态分析无问题。
+    truncated: false
+  risks:
+    - text: 短信登录开关为编译期常量且当前为 true，关闭后只展示密码登录的分支本次未覆盖。
+      truncated: false
+  risks_truncated: false
+  completed_at: 2026-09-22T13:12:38.781Z
+history:
+  - goal_cycle: 1
+    iteration: 1
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native check input changed after the candidate was built; a new Builder
+        candidate is required before checks can run again.
+      truncated: false
+    completed_at: 2026-09-22T13:06:15.924Z
+  - goal_cycle: 1
+    iteration: 2
+    attempt: 0
+    outcome: recovery
+    unresolved_ids: []
+    summary:
+      text: Native check input changed after the candidate was built; a new Builder
+        candidate is required before checks can run again.
+      truncated: false
+    completed_at: 2026-09-22T13:07:25.959Z
+  - goal_cycle: 1
+    iteration: 3
+    attempt: 1
+    outcome: pass
+    unresolved_ids: []
+    summary:
+      text: 登录页已按规格精简，五项验收全部通过；独立重跑测试 15 项通过、静态分析无问题。
+      truncated: false
+    completed_at: 2026-09-22T13:12:38.781Z
+history_overflow:
+  dropped_entries: 0
+  first_dropped_at: null
+  last_dropped_at: null
+  outcome_counts:
+    pass: 0
+    fail: 0
+    blocked: 0
+    execution-error: 0
+    recovery: 0
+verification_result: pass
+verification_report: verification.md
+archived: true
+created_at: 2026-09-22T12:47:57.779Z

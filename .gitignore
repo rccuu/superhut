@@ -33,6 +33,7 @@ migrate_working_dir/
 .pub/
 /build/
 /releases/
+*.ipa
 /ios/.symlinks/
 /ios/Pods/
 /android/.gradle/
@@ -93,3 +94,7 @@ CLAUDE.md
 .comet-state.lock
 .comet-state-transaction.json
 # <<< Comet managed project state <<<
+.comet
+.agents
+.claude
+.codex
