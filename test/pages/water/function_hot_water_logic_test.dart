@@ -930,6 +930,24 @@ class _FakeHotWaterApi implements HotWaterApiClient {
   }
 
   @override
+  Future<List<Map<String, String>>> getOpenValveRecords() async {
+    checkHotWaterDeviceCalls++;
+    List items;
+    if (_openDeviceResponses.isNotEmpty) {
+      items = await _openDeviceResponses.removeAt(0);
+    } else {
+      items = openDevices;
+    }
+    return [
+      for (final item in items)
+        if (item is Map)
+          item.map((k, v) => MapEntry(k.toString(), v.toString()))
+        else
+          {'poscode': item.toString(), 'recordId': '', 'begintime': ''},
+    ];
+  }
+
+  @override
   Future<Map<String, dynamic>> startHotWater({required String device}) async {
     startHotWaterCalls++;
     if (_startResponses.isNotEmpty) {
@@ -939,7 +957,10 @@ class _FakeHotWaterApi implements HotWaterApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>> stopHotWater({required String device}) async {
+  Future<Map<String, dynamic>> stopHotWater({
+    required String device,
+    String openappid = '',
+  }) async {
     stopHotWaterCalls++;
     if (_stopResponses.isNotEmpty) {
       return await _stopResponses.removeAt(0);

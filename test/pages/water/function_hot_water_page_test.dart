@@ -567,6 +567,9 @@ class _FakeHotWaterApi implements HotWaterApiClient {
   Future<List> checkHotWaterDevice() async => const [];
 
   @override
+  Future<List<Map<String, String>>> getOpenValveRecords() async => const [];
+
+  @override
   Future<Map<String, dynamic>> delWaterDevice(String bindCode) async {
     return {'result': deleteResult, 'msg': deleteMessage};
   }
@@ -590,7 +593,10 @@ class _FakeHotWaterApi implements HotWaterApiClient {
   }
 
   @override
-  Future<Map<String, dynamic>> stopHotWater({required String device}) async {
+  Future<Map<String, dynamic>> stopHotWater({
+    required String device,
+    String openappid = '',
+  }) async {
     return stopResult ?? {'success': true, 'result': '000000'};
   }
 

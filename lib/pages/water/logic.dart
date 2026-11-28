@@ -15,6 +15,16 @@ const String hotWaterStartFailureMessage = '设备开启失败，请稍后重试
 const String hotWaterStopFailureMessage = '设备关闭失败，请稍后重试';
 const String hotWaterAddDeviceFailureMessage = '添加设备失败，请稍后重试';
 
+/// 关阀未确认时的服务端兜底提示。
+/// 第四轮活体事件证实：关阀接口可能长时间故障（开阀正常），期间用户无法主动
+/// 停止计费；`maxtimelimit=30 分钟` 终端到点自动关阀与 `maxfarelimit` 金额上限
+/// 由服务端强制（第一轮 openparam + 设备列表字段），客户端不可覆盖。
+const String hotWaterCloseFallbackHint = '水阀将在最长 30 分钟由服务端自动关闭，请留意余额扣费';
+
+/// 重复开阀的确定性拒绝码（第二轮 F-04 实测：已开阀再开返回 CORE35104
+/// 「网络或设备通讯异常」，与 i18n 表声称的 CORE35107 不符）。不加入自动重试。
+const String _kWaterAlreadyOpenResultCode = 'CORE35104';
+
 /// 失败提示优先透传服务端返回的具体 `message`
 /// （如「无卡开阀失败,当前设备忙,请稍候再试」），服务端未给出 message 时回退
 /// 通用文案。逆向结论见 docs/water_hot_reverse_findings.md：官方 H5 每种
@@ -38,9 +48,15 @@ abstract class HotWaterApiClient {
 
   Future<List> checkHotWaterDevice();
 
+  /// 未关阀记录明细（含补关所需的开阀记录 id）。
+  Future<List<Map<String, String>>> getOpenValveRecords();
+
   Future<Map<String, dynamic>> startHotWater({required String device});
 
-  Future<Map<String, dynamic>> stopHotWater({required String device});
+  Future<Map<String, dynamic>> stopHotWater({
+    required String device,
+    String openappid = '',
+  });
 
   Future<Map> addWaterDevice(String bindCode);
 
@@ -73,13 +89,21 @@ class HutHotWaterApiClient implements HotWaterApiClient {
   }
 
   @override
+  Future<List<Map<String, String>>> getOpenValveRecords() {
+    return _api.getOpenValveRecords();
+  }
+
+  @override
   Future<Map<String, dynamic>> startHotWater({required String device}) {
     return _api.startHotWater(device: device);
   }
 
   @override
-  Future<Map<String, dynamic>> stopHotWater({required String device}) {
-    return _api.stopHotWater(device: device);
+  Future<Map<String, dynamic>> stopHotWater({
+    required String device,
+    String openappid = '',
+  }) {
+    return _api.stopHotWater(device: device, openappid: openappid);
   }
 
   @override
@@ -499,13 +523,13 @@ class FunctionHotWaterLogic extends GetxController {
     }
 
     try {
-      final value = await hutUserApi.checkHotWaterDevice();
+      final records = await hutUserApi.getOpenValveRecords();
       if (_isDisposed) {
         return;
       }
 
-      AppLogger.debug('Open hot water devices: $value');
-      _applyOpenDeviceState(value);
+      AppLogger.debug('Open hot water devices: $records');
+      _applyOpenDeviceState(records);
     } catch (error, stackTrace) {
       AppLogger.error(
         'Failed to check open hot water devices',
@@ -520,16 +544,24 @@ class FunctionHotWaterLogic extends GetxController {
     }
   }
 
-  void _applyOpenDeviceState(List value) {
-    if (value.isEmpty) {
+  void _applyOpenDeviceState(List<Map<String, String>> records) {
+    state.openValveRecords.assignAll(records);
+    if (records.isEmpty) {
       state.waterStatus.value = false;
       return;
     }
 
+    final poscode = records.first['poscode'];
+    if (poscode == null) {
+      state.waterStatus.value = false;
+      return;
+    }
     final deviceIndex = state.deviceList.indexWhere(
-      (element) => element["poscode"] == value.first,
+      (element) => element["poscode"] == poscode,
     );
     if (deviceIndex == -1) {
+      // 未关阀设备不在常用列表中：主开关不误报"使用中"（旧状态照常清理），
+      // 由补关 banner 展示明细（设备号 + 开始时间）供用户直接补关。
       state.waterStatus.value = false;
       return;
     }
@@ -632,9 +664,10 @@ class FunctionHotWaterLogic extends GetxController {
     state.isLoading.value = true;
 
     try {
-      final value = await hutUserApi.startHotWater(
-        device: state.deviceList[state.choiceDevice.value]["poscode"],
-      );
+      final deviceCode =
+          state.deviceList[state.choiceDevice.value]["poscode"]?.toString() ??
+          '';
+      final value = await hutUserApi.startHotWater(device: deviceCode);
       if (_isDisposed) {
         return;
       }
@@ -642,6 +675,23 @@ class FunctionHotWaterLogic extends GetxController {
       if (value['success'] == true && value['result'] == "000000") {
         _showStatusSnackBar('操作成功', '设备已开启');
         state.waterStatus.value = true;
+      } else if (value['result'] == _kWaterAlreadyOpenResultCode) {
+        // 服务端把"已开阀"的确定性拒绝归类为 CORE35104（网络异常文案），
+        // 直接透传会误导用户重试。复查未关阀记录，确认已开则按已在用水处理。
+        final alreadyOpen = await _isDeviceAlreadyOpen(deviceCode);
+        if (_isDisposed) {
+          return;
+        }
+        if (alreadyOpen) {
+          _showStatusSnackBar('设备状态提醒', '设备已在用水中', isWarning: true);
+          state.waterStatus.value = true;
+        } else {
+          _showStatusSnackBar(
+            '操作失败',
+            hotWaterFailureMessage(value, hotWaterStartFailureMessage),
+            isError: true,
+          );
+        }
       } else {
         _showStatusSnackBar(
           '操作失败',
@@ -666,6 +716,24 @@ class FunctionHotWaterLogic extends GetxController {
     }
   }
 
+  /// 复查未关阀记录，判断 [deviceCode] 是否已在用水。
+  Future<bool> _isDeviceAlreadyOpen(String deviceCode) async {
+    if (deviceCode.isEmpty) {
+      return false;
+    }
+    try {
+      final records = await hutUserApi.getOpenValveRecords();
+      return records.any((record) => record['poscode'] == deviceCode);
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to recheck open valve records',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
+  }
+
   /// 结束洗澡
   Future<void> endWater() async {
     if (_waterOperationInFlight) {
@@ -686,10 +754,13 @@ class FunctionHotWaterLogic extends GetxController {
       if (value['success'] == true && value['result'] == "000000") {
         _showStatusSnackBar('操作成功', '设备已关闭');
         state.waterStatus.value = false;
+        // 关阀成功后刷新未关阀记录，保持补关 banner 与状态一致
+        await _refreshOpenDeviceState();
       } else {
         _showStatusSnackBar(
           '操作失败',
-          hotWaterFailureMessage(value, hotWaterStopFailureMessage),
+          '${hotWaterFailureMessage(value, hotWaterStopFailureMessage)}；'
+          '$hotWaterCloseFallbackHint',
           isError: true,
         );
       }
@@ -700,7 +771,68 @@ class FunctionHotWaterLogic extends GetxController {
         stackTrace: stackTrace,
       );
       if (!_isDisposed) {
-        _showStatusSnackBar('操作失败', '操作失败，请稍后重试', isError: true);
+        _showStatusSnackBar(
+          '操作失败',
+          '操作失败，请稍后重试；$hotWaterCloseFallbackHint',
+          isError: true,
+        );
+      }
+    } finally {
+      if (!_isDisposed) {
+        _waterOperationInFlight = false;
+        state.isLoading.value = false;
+      }
+    }
+  }
+
+  /// 补关未关阀记录（openappid=开阀记录 id，官方 waterOpenClose 补关路径语义）。
+  /// [index] 为 [FunctionHotWaterState.openValveRecords] 下标。
+  Future<void> closeUnclosedDevice(int index) async {
+    if (index < 0 || index >= state.openValveRecords.length) {
+      return;
+    }
+    final record = state.openValveRecords[index];
+    final device = record['poscode'] ?? '';
+    final openappid = record['recordId'] ?? '';
+    if (device.isEmpty || openappid.isEmpty || _waterOperationInFlight) {
+      return;
+    }
+
+    _waterOperationInFlight = true;
+    state.isLoading.value = true;
+
+    try {
+      final value = await hutUserApi.stopHotWater(
+        device: device,
+        openappid: openappid,
+      );
+      if (_isDisposed) {
+        return;
+      }
+
+      if (value['success'] == true && value['result'] == "000000") {
+        _showStatusSnackBar('操作成功', '设备 $device 已关闭');
+        await _refreshOpenDeviceState();
+      } else {
+        _showStatusSnackBar(
+          '操作失败',
+          '${hotWaterFailureMessage(value, hotWaterStopFailureMessage)}；'
+          '$hotWaterCloseFallbackHint',
+          isError: true,
+        );
+      }
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Failed to close unclosed hot water device',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!_isDisposed) {
+        _showStatusSnackBar(
+          '操作失败',
+          '操作失败，请稍后重试；$hotWaterCloseFallbackHint',
+          isError: true,
+        );
       }
     } finally {
       if (!_isDisposed) {

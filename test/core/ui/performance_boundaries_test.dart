@@ -4087,7 +4087,7 @@ void main() {
       r'Future<void> _refreshOpenDeviceState\(\) async \{[\s\S]*?\n  /// 改变选中的设备值',
     ).firstMatch(logic)?.group(0);
     final applyOpenDeviceStateMethod = RegExp(
-      r'void _applyOpenDeviceState\(List value\) \{[\s\S]*?\n  /// 改变选中的设备值',
+      r'void _applyOpenDeviceState\(List<Map<String, String>> records\) \{[\s\S]*?\n  /// 改变选中的设备值',
     ).firstMatch(logic)?.group(0);
     final hotWaterDeviceMethod = RegExp(
       r'Future<Map<String, dynamic>> getHotWaterDevice\(\) async \{[\s\S]*?\n  Future<List> checkHotWaterDevice',
@@ -4202,7 +4202,7 @@ void main() {
     );
     expect(
       openDeviceMethod,
-      contains('_applyOpenDeviceState(value);'),
+      contains('_applyOpenDeviceState(records);'),
       reason: '未关设备状态应用应集中处理空列表和未知设备，避免状态残留。',
     );
     expect(
@@ -4212,7 +4212,7 @@ void main() {
     );
 
     expect(applyOpenDeviceStateMethod, isNotNull);
-    expect(applyOpenDeviceStateMethod, contains('if (value.isEmpty)'));
+    expect(applyOpenDeviceStateMethod, contains('if (records.isEmpty)'));
     expect(
       applyOpenDeviceStateMethod,
       contains('state.waterStatus.value = false;'),

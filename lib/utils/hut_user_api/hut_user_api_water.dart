@@ -244,6 +244,16 @@ mixin _HutWaterMixin on _HutUserApiCore {
   }
 
   Future<List> checkHotWaterDevice() async {
+    final records = await getOpenValveRecords();
+    return records.map((record) => record['poscode'] ?? '').toList();
+  }
+
+  /// 未关阀记录明细（`selectCloseDeviceValve` 返回 data 项）。
+  ///
+  /// 每项含 `poscode`（设备号）、`recordId`（开阀记录 id）、`begintime`；
+  /// 记录 id 是官方「未关阀设备」补关路径传给 endUse 的 openappid
+  /// （waterOpenClose.js 的 submitOpenClose(poscode, appid)）。
+  Future<List<Map<String, String>>> getOpenValveRecords() async {
     final token = await getToken();
     final session = await _getOpenIdSession();
     final url = 'https://v8mobile.hut.edu.cn/bathroom/selectCloseDeviceValve';
@@ -267,11 +277,14 @@ mixin _HutWaterMixin on _HutUserApiCore {
       return [];
     }
     final List responseData = response.data['data'];
-    final openCodeList = <String>[];
-    for (var i = 0; i < responseData.length; i++) {
-      openCodeList.add(responseData[i]['poscode'].toString());
-    }
-    return responseData.isNotEmpty ? openCodeList : [];
+    return <Map<String, String>>[
+      for (final item in responseData)
+        {
+          'poscode': item['poscode']?.toString() ?? '',
+          'recordId': item['id']?.toString() ?? '',
+          'begintime': item['begintime']?.toString() ?? '',
+        },
+    ];
   }
 
   Future<Map<String, dynamic>> startHotWater({required String device}) {
@@ -287,15 +300,19 @@ mixin _HutWaterMixin on _HutUserApiCore {
 
   /// openappid stays empty for the regular open-by-code → close flow, matching
   /// the official H5 (waterUsingPage renders it empty unless the user arrives
-  /// via the “未关阀设备” page, which superhut does not implement).
-  Future<Map<String, dynamic>> stopHotWater({required String device}) {
+  /// via the “未关阀设备” page). 补关历史未关阀记录时传入开阀记录 id
+  /// （[getOpenValveRecords] 的 recordId），与 waterOpenClose.js 一致。
+  Future<Map<String, dynamic>> stopHotWater({
+    required String device,
+    String openappid = '',
+  }) {
     return _runValveOperation(
       path: '/boiling/endUse',
       bodyBuilder:
           (session) => <String, dynamic>{
             'openid': session.openid,
             'poscode': device,
-            'openappid': '',
+            'openappid': openappid,
           },
     );
   }
